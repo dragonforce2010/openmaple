@@ -1,0 +1,210 @@
+<title>AWS Bedrock AgentCore 平台核心组件 OpenAPI 梳理（2026-06-04）</title>
+
+<h1>AWS Bedrock AgentCore 平台核心组件 OpenAPI 梳理（2026-06-04）</h1>
+
+<callout background-color="light-blue" border-color="blue">
+  <p>结论：AgentCore 不是一个单体 Agent API，而是一组可独立使用、也可组合编排的控制面和数据面服务。公开 API 可以按 Runtime、Memory、Gateway、Identity、Browser、Code Interpreter、Evaluations、Payments、Policy、Registry、Harness 分层整理；Gateway 的实际调用面是 MCP endpoint，不应伪造成普通 REST path。</p>
+</callout>
+
+<h2>1. API 面分层</h2>
+
+<whiteboard type="mermaid">flowchart LR
+  Client[SDK / CLI / Console] --&gt; CP[Control Plane&lt;br/&gt;bedrock-agentcore-control]
+  Client --&gt; DP[Data Plane&lt;br/&gt;bedrock-agentcore]
+  Agent[MCP Client / Agent Runtime] --&gt; GP[Gateway Data Plane&lt;br/&gt;gateway URL]
+  CP --&gt; Runtime[Runtime / Harness]
+  CP --&gt; Memory[Memory]
+  CP --&gt; Gateway[Gateway / Targets / Rules]
+  CP --&gt; Identity[Identity / Token Vault]
+  CP --&gt; Tools[Browser / Code Interpreter]
+  CP --&gt; Gov[Policy / Registry / Evaluations / Payments]
+  DP --&gt; RuntimeInvoke[Invoke Runtime / Harness]
+  DP --&gt; MemoryEvents[Events / Records / Extraction]
+  DP --&gt; ToolInvoke[Browser / Code Sessions]
+  DP --&gt; EvalRun[Evaluation Jobs / A/B Tests]
+  GP --&gt; ToolsList[tools/list]
+  GP --&gt; ToolsCall[tools/call]
+</whiteboard>
+
+<table>
+  <thead>
+    <tr><th background-color="light-gray">面</th><th background-color="light-gray">Endpoint 形态</th><th background-color="light-gray">定位</th><th background-color="light-gray">OpenAPI 表达方式</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Control plane</td><td><code>bedrock-agentcore-control.{region}.amazonaws.com</code></td><td>创建、更新、删除资源</td><td>按 AWS API Reference 的 method/path/request/response 直接整理</td></tr>
+    <tr><td>Data plane</td><td><code>bedrock-agentcore.{region}.amazonaws.com</code></td><td>运行调用、事件、记忆检索、工具会话、评测任务</td><td>普通 JSON/Binary API 可表达；streaming/binary 需扩展说明</td></tr>
+    <tr><td>Gateway data plane</td><td><code>{gatewayId}.gateway.bedrock-agentcore.{region}.amazonaws.com</code></td><td>MCP 工具发现和调用</td><td>官方未展开为普通 REST operation；以 MCP endpoint 契约表达</td></tr>
+  </tbody>
+</table>
+
+<h2>2. 核心组件资源与操作</h2>
+
+<table>
+  <thead>
+    <tr><th background-color="light-gray">组件</th><th background-color="light-gray">资源</th><th background-color="light-gray">Control plane</th><th background-color="light-gray">Data plane</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Runtime</td><td>runtime、runtime-endpoint、runtime-version、runtime-session</td><td><code>Create/Get/Update/DeleteAgentRuntime</code>、<code>Create/Get/Update/DeleteAgentRuntimeEndpoint</code>、<code>ListAgentRuntimes</code>、<code>ListAgentRuntimeVersions</code></td><td><code>InvokeAgentRuntime</code>、<code>InvokeAgentRuntimeCommand</code>、<code>StopRuntimeSession</code>、<code>GetAgentCard</code></td></tr>
+    <tr><td>Harness</td><td>harness</td><td><code>Create/Get/Update/DeleteHarness</code>、<code>ListHarnesses</code></td><td><code>InvokeHarness</code></td></tr>
+    <tr><td>Memory</td><td>memory、event、actor、session、memory-record、extraction-job</td><td><code>Create/Get/Update/DeleteMemory</code>、<code>ListMemories</code></td><td><code>Create/Get/Delete/ListEvent</code>、<code>ListActors</code>、<code>ListSessions</code>、<code>BatchCreate/Update/DeleteMemoryRecords</code>、<code>RetrieveMemoryRecords</code>、<code>Start/ListMemoryExtractionJob</code></td></tr>
+    <tr><td>Gateway</td><td>gateway、target、rule、policy-engine</td><td><code>Create/Get/Update/DeleteGateway</code>、<code>Create/Get/Update/DeleteGatewayTarget</code>、<code>Create/Get/DeleteGatewayRule</code>、<code>SynchronizeGatewayTargets</code>、resource policy</td><td>MCP <code>tools/list</code>、<code>tools/call</code> 通过 gateway URL 执行；IAM 中有 <code>InvokeGateway</code> 权限动作</td></tr>
+    <tr><td>Identity</td><td>workload-identity、token-vault、OAuth2/API key/payment credential provider</td><td><code>Create/Get/DeleteWorkloadIdentity</code>、credential provider CRUD、<code>SetTokenVaultCMK</code></td><td><code>GetWorkloadAccessToken*</code>、<code>GetResourceOauth2Token</code>、<code>GetResourceApiKey</code>、<code>CompleteResourceTokenAuth</code></td></tr>
+    <tr><td>Browser</td><td>browser、browser-profile、browser-session</td><td><code>Create/Get/DeleteBrowser</code>、<code>Create/Get/DeleteBrowserProfile</code>、list 操作</td><td><code>Start/Get/List/StopBrowserSession</code>、<code>InvokeBrowser</code>、<code>UpdateBrowserStream</code>、<code>SaveBrowserSessionProfile</code></td></tr>
+    <tr><td>Code Interpreter</td><td>code-interpreter、session、tool</td><td><code>Create/Get/DeleteCodeInterpreter</code>、<code>ListCodeInterpreters</code></td><td><code>Start/Get/List/StopCodeInterpreterSession</code>、<code>InvokeCodeInterpreter</code></td></tr>
+    <tr><td>Evaluations</td><td>evaluator、online-evaluation-config、batch evaluation、A/B test、recommendation</td><td>evaluator CRUD、online config CRUD、configuration bundle、policy/eval 资源</td><td><code>Evaluate</code>、batch evaluation start/get/list/stop/delete、A/B test CRUD、recommendation start/get/list/delete</td></tr>
+    <tr><td>Payments</td><td>payment-manager、payment-connector、payment-credential-provider、instrument、session</td><td>manager/connector/credential provider CRUD</td><td><code>CreatePaymentInstrument</code>、<code>CreatePaymentSession</code>、<code>ProcessPayment</code>、余额与会话查询</td></tr>
+    <tr><td>Policy / Registry</td><td>policy、policy-engine、registry、registry-record</td><td>policy/policy-engine/registry CRUD、policy generation、registry approval</td><td><code>SearchRegistryRecords</code></td></tr>
+  </tbody>
+</table>
+
+<h2>3. 关键 API 草图</h2>
+
+<h3>3.1 Runtime</h3>
+<pre lang="yaml"><code>paths:
+  /runtimes/:
+    put:
+      operationId: CreateAgentRuntime
+      summary: Create an AgentCore Runtime
+  /runtimes/{agentRuntimeId}:
+    get:
+      operationId: GetAgentRuntime
+    put:
+      operationId: UpdateAgentRuntime
+    delete:
+      operationId: DeleteAgentRuntime
+  /runtimes/{agentRuntimeArn}/invocations:
+    post:
+      operationId: InvokeAgentRuntime
+      parameters:
+        - name: accountId
+          in: query
+        - name: qualifier
+          in: query
+        - name: X-Amzn-Bedrock-AgentCore-Runtime-Session-Id
+          in: header
+        - name: X-Amzn-Bedrock-AgentCore-Runtime-User-Id
+          in: header
+      requestBody:
+        content:
+          application/octet-stream: {}
+          application/json: {}
+      x-agentcore-note: streaming and binary payload require SDK/HTTP adapter handling
+</code></pre>
+
+<h3>3.2 Memory</h3>
+<pre lang="yaml"><code>paths:
+  /memories/create:
+    post:
+      operationId: CreateMemory
+  /memories/{memoryId}/events:
+    post:
+      operationId: CreateEvent
+  /memories/{memoryId}/retrieve:
+    post:
+      operationId: RetrieveMemoryRecords
+  /memories/{memoryId}/memoryRecords:
+    get:
+      operationId: ListMemoryRecords
+  /memories/{memoryId}/memoryRecords/batch:
+    post:
+      operationId: BatchCreateMemoryRecords
+</code></pre>
+
+<h3>3.3 Gateway</h3>
+<pre lang="yaml"><code>paths:
+  /gateways/:
+    post:
+      operationId: CreateGateway
+    get:
+      operationId: ListGateways
+  /gateways/{gatewayIdentifier}/targets/:
+    post:
+      operationId: CreateGatewayTarget
+  /gateways/{gatewayIdentifier}/synchronizeTargets:
+    put:
+      operationId: SynchronizeGatewayTargets
+x-agentcore-gateway-data-plane:
+  endpoint: https://{gatewayId}.gateway.bedrock-agentcore.{region}.amazonaws.com
+  protocol: MCP
+  operations:
+    - tools/list
+    - tools/call
+  note: API Reference does not expose these as ordinary REST paths.
+</code></pre>
+
+<h3>3.4 Browser 与 Code Interpreter</h3>
+<pre lang="yaml"><code>paths:
+  /browsers/{browserId}/sessions/start:
+    put:
+      operationId: StartBrowserSession
+  /browsers/{browserId}/sessions/invoke:
+    post:
+      operationId: InvokeBrowser
+  /code-interpreters/{codeInterpreterId}/sessions/start:
+    put:
+      operationId: StartCodeInterpreterSession
+  /code-interpreters/{codeInterpreterId}/tools/invoke:
+    post:
+      operationId: InvokeCodeInterpreter
+</code></pre>
+
+<h2>4. OpenAPI 可表达性边界</h2>
+
+<table>
+  <thead>
+    <tr><th background-color="light-gray">类型</th><th background-color="light-gray">建议表达</th><th background-color="light-gray">注意事项</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>普通 CRUD</td><td>标准 OpenAPI path/method/schema</td><td>多数 Control plane 和 Memory/Browser/Code session API 可直接表达</td></tr>
+    <tr><td>Binary/streaming</td><td>OpenAPI + <code>x-agentcore-streaming</code> 扩展</td><td><code>InvokeAgentRuntime</code>、Browser stream、Code Interpreter 异步任务需要额外说明</td></tr>
+    <tr><td>MCP Gateway</td><td>独立协议说明 + gateway URL</td><td>不要将 <code>tools/list</code>、<code>tools/call</code> 写成官方 REST path</td></tr>
+    <tr><td>OpenAPI 作为 Gateway target</td><td>OpenAPI 3.0/3.1 schema</td><td>必须有 <code>operationId</code>；复杂 <code>oneOf/anyOf/allOf</code>、callbacks、webhooks、复杂参数序列化不适合作为第一版目标</td></tr>
+    <tr><td>Smithy 作为 Gateway target</td><td>Smithy RestJson 子集</td><td>当前公开文档强调 RestJson 和基础 HTTP binding；streaming/custom protocol 不宜纳入首版</td></tr>
+  </tbody>
+</table>
+
+<h2>5. 认证与 IAM</h2>
+
+<ul>
+  <li>常规 AWS API 使用 IAM/SigV4；Runtime 和 Gateway 可配置 inbound authorizer，例如 AWS IAM、JWT、自定义认证或仅认证模式。</li>
+  <li>创建 Runtime、Gateway、Memory、Browser、Code Interpreter、Evaluations 等资源常涉及 <code>iam:PassRole</code>。</li>
+  <li>Identity 负责 workload identity、token vault、OAuth2/API key/payment credential provider，支撑 agent 以工作负载或最终用户身份访问外部系统。</li>
+  <li>Gateway outbound auth 可以复用 Identity credential provider；这比在工具 schema 或 agent prompt 中散落密钥更适合企业治理。</li>
+  <li>Service Authorization Reference 暴露了大量 condition keys，可按 runtime authorizer、gateway authorizer、actor/session/user、network、KMS、JWT claim 进行细粒度授权。</li>
+</ul>
+
+<h2>6. 典型调用链</h2>
+
+<whiteboard type="mermaid">sequenceDiagram
+  participant Dev as Developer
+  participant CP as AgentCore Control Plane
+  participant Id as Identity
+  participant Rt as Runtime
+  participant Mem as Memory
+  participant Gw as Gateway
+  participant Obs as CloudWatch / OTEL
+  Dev-&gt;&gt;Id: CreateWorkloadIdentity
+  Dev-&gt;&gt;CP: CreateAgentRuntime
+  CP-&gt;&gt;Rt: provision runtime and endpoint
+  Dev-&gt;&gt;Gw: CreateGateway and targets
+  Dev-&gt;&gt;Mem: CreateMemory with strategies
+  Dev-&gt;&gt;Rt: InvokeAgentRuntime
+  Rt-&gt;&gt;Mem: CreateEvent / RetrieveMemoryRecords
+  Rt-&gt;&gt;Gw: MCP tools/list and tools/call
+  Rt-&gt;&gt;Obs: traces / logs / metrics
+  Rt--&gt;&gt;Dev: streaming or final response
+</whiteboard>
+
+<h2>7. 官方来源</h2>
+
+<ul>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html">Overview - Amazon Bedrock AgentCore</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_Operations.html">Actions - Amazon Bedrock AgentCore Data Plane</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_Operations.html">Actions - Amazon Bedrock AgentCore Control Plane</a></li>
+  <li><a href="https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonbedrockagentcore.html">Actions, resources, and condition keys for Amazon Bedrock AgentCore</a></li>
+  <li><a href="https://docs.aws.amazon.com/general/latest/gr/bedrock_agentcore.html">Amazon Bedrock AgentCore endpoints and quotas</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-schema-openapi.html">OpenAPI schema targets</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-building-smithy-targets.html">Smithy model targets</a></li>
+  <li><a href="https://raw.githubusercontent.com/aws/aws-sdk-go-v2/main/service/bedrockagentcore/generated.json">AWS SDK Go v2 bedrockagentcore generated.json</a></li>
+  <li><a href="https://raw.githubusercontent.com/aws/aws-sdk-go-v2/main/service/bedrockagentcorecontrol/generated.json">AWS SDK Go v2 bedrockagentcorecontrol generated.json</a></li>
+</ul>

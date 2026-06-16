@@ -1,0 +1,24 @@
+<callout background-color="light-yellow" border-color="yellow">
+  <p><b>源码校准补充（2026-06-04）：</b>当前可观测性已经有 session 事件、tool call 和 gateway usage，但还没有 AWS AgentCore Observability 那样的 trace/span/log/metric 统一模型。下一步应把现有表映射成可查询的运行轨迹。</p>
+</callout>
+<h3>20.1 当前观测事件到目标 Trace 模型</h3>
+<whiteboard type="mermaid">flowchart LR
+  UserEvent[user.message] --&gt; RunSpan[run span]
+  RunSpan --&gt; ModelSpan[model call span]
+  ModelSpan -- tool_calls --&gt; ToolSpan[tool call span]
+  ToolSpan --&gt; RuntimeSpan[runtime execution span]
+  RuntimeSpan --&gt; ArtifactSpan[artifact sync span]
+  ModelSpan -- usage --&gt; UsageMetric[gateway/model usage metric]
+  RunSpan -- status --&gt; SessionEvent[session_events / SSE]
+  RunSpan -- failure --&gt; ErrorLog[structured error log]
+  UsageMetric --&gt; Dashboard[latency / cost / error dashboard]
+</whiteboard>
+<table>
+  <thead><tr><th background-color="light-gray">当前记录</th><th background-color="light-gray">目标 trace/span 字段</th><th background-color="light-gray">价值</th></tr></thead>
+  <tbody>
+    <tr><td><code>session_events</code></td><td><code>trace_id</code>、<code>span_id</code>、<code>parent_span_id</code>、<code>event_seq</code></td><td>可回放，也可按一次 run 聚合</td></tr>
+    <tr><td><code>tool_calls</code></td><td><code>tool_name</code>、<code>duration_ms</code>、<code>exit_code</code>、<code>error_code</code></td><td>定位工具慢、失败、越权和审批等待</td></tr>
+    <tr><td><code>gateway_usage</code></td><td><code>model_config_id</code>、<code>prompt_tokens</code>、<code>completion_tokens</code>、<code>cost</code></td><td>按用户/key/model 统计成本与限额</td></tr>
+    <tr><td>workspace artifact</td><td><code>artifact_count</code>、<code>bytes_in/out</code>、<code>sync_duration_ms</code></td><td>发现同步瓶颈和大文件异常</td></tr>
+  </tbody>
+</table>

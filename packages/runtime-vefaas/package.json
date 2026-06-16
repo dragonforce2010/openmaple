@@ -1,0 +1,8 @@
+{
+  "name": "@maple/runtime-vefaas",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -1,0 +1,132 @@
+<title>AWS Bedrock AgentCore 深度调研（2026-06-04）</title>
+
+<h1>AWS Bedrock AgentCore 深度调研（2026-06-04）</h1>
+
+<callout background-color="light-blue" border-color="blue">
+  <p>一句话定位：AgentCore 是 AWS 面向企业生产化 Agent 的托管平台层，重点不在“替你写一个 agent loop”，而在运行时隔离、企业 API 工具化、身份与凭据、记忆、浏览器/代码沙箱、评测、策略、注册目录和可观测性这些生产约束。</p>
+</callout>
+
+<h2>1. 产品定位</h2>
+
+<p>AWS 官方将 AgentCore 定义为可使用任意框架、任意 foundation model 的 agentic platform。它强调两件事：第一，既兼容 CrewAI、LangGraph、LlamaIndex、Strands、OpenAI Agents SDK 等开源/生态框架，也兼容 Bedrock、Claude、OpenAI、Gemini、Nova、Llama、Mistral 等模型；第二，开发者可以独立使用各组件，也可以组合成完整生产平台。</p>
+
+<whiteboard type="mermaid">flowchart TB
+  Developer[Developer / Platform Team] --&gt; Build[Build agents with any framework]
+  Build --&gt; Runtime[Runtime / Harness]
+  Runtime --&gt; Tools[Gateway / Browser / Code Interpreter]
+  Runtime --&gt; State[Memory]
+  Runtime --&gt; Identity[Identity / Token Vault]
+  Runtime --&gt; Governance[Policy / Registry / Evaluations]
+  Runtime --&gt; Observability[CloudWatch / OTEL Observability]
+  Tools --&gt; EnterpriseAPI[Enterprise APIs / Lambda / MCP / OpenAPI / Smithy]
+  State --&gt; ShortTerm[Short-term session events]
+  State --&gt; LongTerm[Semantic / Episodic / Summary / Preference records]
+</whiteboard>
+
+<h2>2. 核心组件拆解</h2>
+
+<table>
+  <thead>
+    <tr><th background-color="light-gray">组件</th><th background-color="light-gray">解决的问题</th><th background-color="light-gray">生产化价值</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Runtime</td><td>将任意 agent 或 tool 部署到安全 serverless runtime</td><td>session isolation、长任务、MCP/A2A、冷启动、版本和 endpoint 管理</td></tr>
+    <tr><td>Harness</td><td>提供托管 agent loop</td><td>用户只定义模型、prompt、tools，平台负责工具执行、记忆和响应生成</td></tr>
+    <tr><td>Gateway</td><td>把企业 API/Lambda/MCP/OpenAPI/Smithy 转为 MCP-compatible tools</td><td>降低 tool onboarding 成本，统一 ingress/egress auth 和工具治理</td></tr>
+    <tr><td>Identity</td><td>管理 agent workload identity 和代表用户访问外部系统的凭据</td><td>避免在 prompt/runtime 里暴露密钥，支持 2LO/3LO OAuth、API key、token vault</td></tr>
+    <tr><td>Memory</td><td>把多轮上下文和跨 session 经验变成可检索状态</td><td>支持个性化、任务延续、多 agent 共享上下文和可控记忆策略</td></tr>
+    <tr><td>Browser</td><td>提供托管隔离浏览器环境</td><td>让 agent 可访问网页、填表、截图、通过 CDP/Playwright/Nova Act 等框架自动化</td></tr>
+    <tr><td>Code Interpreter</td><td>提供隔离代码执行环境</td><td>安全执行 Python/JS/TS、文件处理、shell/command、异步任务</td></tr>
+    <tr><td>Observability</td><td>追踪 agent 每一步做了什么</td><td>CloudWatch + OTEL traces/spans/logs/metrics，支持 debug、审计、延迟和错误定位</td></tr>
+    <tr><td>Evaluations</td><td>对 agent、tool、session、trace 做在线/离线评测</td><td>质量基线、A/B、推荐优化、上线前后持续验证</td></tr>
+    <tr><td>Policy / Registry / Payments</td><td>策略控制、组织级资产目录、付费 API/内容访问</td><td>把 agent 平台纳入企业治理和商业化生态</td></tr>
+  </tbody>
+</table>
+
+<h2>3. 官方视频系列要点</h2>
+
+<p>参考 AWS 官方 YouTube playlist：<a href="https://www.youtube.com/playlist?list=PLhr1KZpdzukc60dMwb86KTBl41sko_hRE">Amazon Bedrock AgentCore 系列</a>。实际 playlist 里第 12 和第 13 项是同一个 Toyota 案例重复出现。</p>
+
+<table>
+  <thead>
+    <tr><th background-color="light-gray">序号</th><th background-color="light-gray">视频</th><th background-color="light-gray">核心内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td><a href="https://www.youtube.com/watch?v=usFIb9aEd1U">Deploy &amp; Operate AI Agents</a></td><td>保险 underwriting demo：Strands agent + 任意模型；Memory 记住报价上下文；Identity/Gateway 接内部系统；Runtime 部署；Observability 看运行。</td></tr>
+    <tr><td>2</td><td><a href="https://www.youtube.com/watch?v=YDqTaZ4dpXc">Accelerate your AI Agents into Production</a></td><td>概览片，强调解决 prototype purgatory：Runtime、Gateway、Memory、Browser、Code Interpreter、Identity、Observability，以及 policy/evaluation 类生产控制。</td></tr>
+    <tr><td>3</td><td><a href="https://www.youtube.com/watch?v=4_d8lxSO9LY">Gain Complete Visibility into AI Agents</a></td><td>Observability 深 demo：CloudWatch dashboard 查看大量 agent、session、trace/span、用户输入、工具调用、模型调用、延迟和错误。</td></tr>
+    <tr><td>4</td><td><a href="https://www.youtube.com/watch?v=9LF6rz6Fe1Q">Introduction</a></td><td>8 集系列导论：Runtime、Memory、Identity、Gateway、Code Interpreter、Browser、Observability 七大 pillar。</td></tr>
+    <tr><td>5</td><td><a href="https://www.youtube.com/watch?v=ZxpImQiOzrw">Runtime</a></td><td>本地 Strands weather/calculator agent 加 <code>BedrockAgentCoreApp</code> 包装，configure 生成 Dockerfile，launch 创建 ECR 和 Runtime，ready 后 invoke。</td></tr>
+    <tr><td>6</td><td><a href="https://www.youtube.com/watch?v=l0LDvPK-W7g">Identity</a></td><td>Cognito inbound auth demo：无 token 调用失败，带 access token 成功，展示了鉴权负向路径。</td></tr>
+    <tr><td>7</td><td><a href="https://www.youtube.com/watch?v=B8FCjR8uIBI">Gateway</a></td><td>OpenAPI/Smithy/Lambda 转 MCP tools；Lambda target 暴露 <code>get_order</code>/<code>update_order</code>，由 Strands + Nova Pro 调用。</td></tr>
+    <tr><td>8</td><td><a href="https://www.youtube.com/watch?v=vYAyTwmWg1M">Memory</a></td><td>短期 raw events/session/branch；长期抽取 semantic facts、summary、user preference，并做 consolidation/dedupe/update。</td></tr>
+    <tr><td>9</td><td><a href="https://www.youtube.com/watch?v=s8ObAby4fPs">Code Interpreter Tool</a></td><td>隔离 sandbox 内写入 CSV/Python，list files 后执行 pandas <code>describe()</code>，返回 stdout/结果。</td></tr>
+    <tr><td>10</td><td><a href="https://www.youtube.com/watch?v=I9ejALS6GQQ">Browser Tool</a></td><td>托管 headless browser，把自然语言任务转浏览器动作，截图反馈；展示 CDP、Nova Act、browser-use、live viewer 组合。</td></tr>
+    <tr><td>11</td><td><a href="https://www.youtube.com/watch?v=i2Pxnck_3tY">Observability</a></td><td>OTEL 日志/指标/trace 到 CloudWatch；部署 Runtime、invoke，再看 runtime metrics、session metrics、traces。</td></tr>
+    <tr><td>12</td><td><a href="https://www.youtube.com/watch?v=2BS0_M6PZYk">Toyota Ask Engage</a></td><td>Toyota Connected 案例：服务 1,800+ 经销商、7,000+ 月交互；从官方数据源 RAG v1 迁向 AgentCore 平台能力。</td></tr>
+    <tr><td>13</td><td>同第 12 项</td><td>playlist 重复项，内容同 Toyota 案例。</td></tr>
+  </tbody>
+</table>
+
+<h2>4. 典型生产化链路</h2>
+
+<whiteboard type="mermaid">sequenceDiagram
+  participant Local as Local Agent Project
+  participant SDK as AgentCore SDK / CLI
+  participant ECR as ECR / Container Artifact
+  participant RT as Runtime
+  participant ID as Identity
+  participant GW as Gateway
+  participant MEM as Memory
+  participant OBS as Observability
+  Local-&gt;&gt;SDK: add AgentCore wrapper and entrypoint
+  SDK-&gt;&gt;Local: generate Dockerfile / config
+  SDK-&gt;&gt;ECR: build and push image
+  SDK-&gt;&gt;RT: create runtime and endpoint
+  SDK-&gt;&gt;ID: configure workload / user auth
+  SDK-&gt;&gt;GW: create gateway targets
+  SDK-&gt;&gt;MEM: create memory strategies
+  Local-&gt;&gt;RT: invoke runtime
+  RT-&gt;&gt;GW: call enterprise tools
+  RT-&gt;&gt;MEM: write events and retrieve records
+  RT-&gt;&gt;OBS: emit traces and metrics
+  RT--&gt;&gt;Local: response / stream
+</whiteboard>
+
+<h2>5. 产品策略判断</h2>
+
+<ul>
+  <li><b>受众：</b>企业内部平台团队、云上应用团队、agent framework 用户、已有 AWS/IAM/CloudWatch/ECR/Lambda 投入的组织。</li>
+  <li><b>商业化：</b>消费式云服务定价，无前置承诺；自然吃到 AWS Marketplace、IAM、CloudWatch、Bedrock、ECR、Lambda、VPC/KMS 等生态红利。</li>
+  <li><b>核心竞争力：</b>不是某一个 agent loop，而是把 agent 的身份、权限、工具、状态、运行、评测、观测、策略、注册目录做成企业级平台。</li>
+  <li><b>生态打法：</b>兼容任意框架和模型，避免与 LangGraph/Strands/CrewAI/OpenAI Agents SDK 直接竞争；把自身放在生产运维与治理层。</li>
+  <li><b>风险：</b>当前 AgentCore 仍有 preview/快速演进特征，API/能力边界可能变化；OpenAPI/Smithy target 限制较多，不能假设所有企业 API 都能无损转换。</li>
+</ul>
+
+<h2>6. 对自研 managed-agents-platform 的直接启发</h2>
+
+<table>
+  <thead>
+    <tr><th background-color="light-gray">方向</th><th background-color="light-gray">AgentCore 做法</th><th background-color="light-gray">自研平台建议</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Runtime</td><td>runtime/session/endpoint/version 独立建模，支持长任务和强隔离</td><td>将当前 session runtime 抽象升级为 runtime provider + runtime endpoint + version；补 stop/timeout/retry/job queue</td></tr>
+    <tr><td>Gateway</td><td>OpenAPI/Smithy/Lambda/MCP target 统一转 MCP tools</td><td>把当前 model gateway 与 tool gateway 解耦，新增 OpenAPI import、tool catalog、target sync、tool auth policy</td></tr>
+    <tr><td>Identity</td><td>workload identity + token vault + OAuth2/API key credential provider</td><td>Vault 不只存密钥，还要建 credential provider、用户代理授权、token refresh、审计记录</td></tr>
+    <tr><td>Memory</td><td>短期 events + 长期 semantic/episodic/summary/preference strategies</td><td>将 memory_stores 从 path/value 扩展为 actor/session/event/record/strategy/extraction job</td></tr>
+    <tr><td>Observability</td><td>OTEL spans/logs/metrics 到 CloudWatch</td><td>新增 trace/span/tool-call/model-call 结构化观测，SSE 事件只是 UI 层，不应是唯一运行记录</td></tr>
+    <tr><td>Evaluations</td><td>online/on-demand/batch evaluation，A/B 与 recommendation</td><td>新增 session replay、golden task、tool success rate、model config A/B、prompt/agent version regression</td></tr>
+    <tr><td>Registry/Policy</td><td>资源目录、审批、Cedar/natural-language policy</td><td>技能、模板、工具、agent deployment 进入组织级 registry；把 inbound policy 和 tool policy 做成一等资源</td></tr>
+  </tbody>
+</table>
+
+<h2>7. 官方来源</h2>
+<ul>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html">Overview - Amazon Bedrock AgentCore</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_Operations.html">AgentCore Data Plane API Reference</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_Operations.html">AgentCore Control Plane API Reference</a></li>
+  <li><a href="https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonbedrockagentcore.html">Service Authorization Reference</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-schema-openapi.html">Gateway OpenAPI schema targets</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-building-smithy-targets.html">Gateway Smithy targets</a></li>
+  <li><a href="https://www.youtube.com/playlist?list=PLhr1KZpdzukc60dMwb86KTBl41sko_hRE">AWS AgentCore YouTube playlist</a></li>
+</ul>

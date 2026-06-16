@@ -1,0 +1,20 @@
+{
+  "default_provider": "e2b",
+  "e2b": {
+    "api_key": "",
+    "template": "base",
+    "workspace_path": "/workspace",
+    "timeout_ms": 3600000,
+    "envs": {}
+  },
+  "local_docker": {
+    "image": "node:22-bookworm",
+    "networking": {
+      "mode": "limited",
+      "allowed_hosts": ["api.anthropic.com"],
+      "allow_mcp_servers": true,
+      "allow_package_managers": true
+    },
+    "sandbox_options": ["docker", "colima", "local_process_fallback"]
+  }
+}

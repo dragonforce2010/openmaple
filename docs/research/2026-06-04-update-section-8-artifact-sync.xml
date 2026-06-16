@@ -1,0 +1,14 @@
+<callout background-color="light-blue" border-color="blue">
+  <p><b>补图：</b>当前 Artifact 与 Workspace 同步是 runtime 内部能力，不是独立 API 资源模型。Docker 走 host workspace，E2B 走 host 到 sandbox、sandbox 到 host 的双向同步；最终由 artifacts API 提供列表和下载。</p>
+</callout>
+<whiteboard type="mermaid">flowchart LR
+  Session[Session] -- ensureSessionRuntime --&gt; Runtime{Runtime Provider}
+  Runtime -- type=docker --&gt; HostWs[Host workspace directory]
+  Runtime -- type=e2b --&gt; E2BSandbox[E2B sandbox]
+  HostWs -- initial copy --&gt; E2BSandbox
+  E2BSandbox -- changed files --&gt; HostWs
+  HostWs -- scan --&gt; ArtifactIndex[Artifact Index]
+  API[Express API] -- GET /v1/artifacts --&gt; ArtifactIndex
+  API -- GET /v1/sessions/{id}/artifacts/*path/download --&gt; HostWs
+  UI[Console Artifacts View] -- list/download --&gt; API
+</whiteboard>

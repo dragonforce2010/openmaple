@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenMaple · Open Managed Agent Platform</title>
+    <meta name="description" content="OpenMaple is an open managed agent platform for building, running, and observing cloud-portable AI agents." />
+    <link rel="icon" href="./docs/assets/openmaple-mascot.svg" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #090b0a;
+        --ink: #f7f2e8;
+        --muted: #b8b0a2;
+        --soft: #746d63;
+        --line: rgba(247, 242, 232, .15);
+        --panel: #111412;
+        --panel-2: #171b18;
+        --leaf: #66d19f;
+        --ember: #e35b42;
+        --gold: #e1b15d;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(255,255,255,.035) 1px, transparent 1px),
+          radial-gradient(circle at 16% 8%, rgba(227,91,66,.14), transparent 28%),
+          var(--bg);
+        background-size: 48px 48px, 48px 48px, auto, auto;
+        font: 16px/1.56 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      a { color: inherit; text-decoration: none; }
+      a:hover { color: var(--leaf); }
+      img { max-width: 100%; }
+      .wrap { width: min(1220px, calc(100% - 40px)); margin: 0 auto; }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid var(--line);
+        background: rgba(9, 11, 10, .82);
+        backdrop-filter: blur(18px);
+      }
+      .nav { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+      .brand { display: inline-flex; align-items: center; gap: 11px; font-size: 22px; font-weight: 900; }
+      .brand img { width: 36px; height: 36px; }
+      .navlinks { display: flex; align-items: center; gap: 20px; color: var(--muted); font-weight: 760; }
+      .navlinks .repo {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--ink);
+        background: rgba(255,255,255,.05);
+      }
+      .hero {
+        min-height: calc(100vh - 74px);
+        display: grid;
+        grid-template-columns: minmax(0, .9fr) minmax(420px, 1.1fr);
+        gap: 42px;
+        align-items: center;
+        padding: 54px 0 38px;
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--leaf);
+        font-weight: 900;
+        letter-spacing: .02em;
+        margin-bottom: 18px;
+      }
+      .eyebrow::before { content: ""; width: 32px; height: 2px; background: var(--ember); }
+      h1 {
+        max-width: 760px;
+        margin: 0;
+        font-size: 78px;
+        line-height: .9;
+        letter-spacing: 0;
+      }
+      .lead {
+        max-width: 650px;
+        margin: 24px 0 0;
+        color: var(--muted);
+        font-size: 22px;
+      }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+      .btn {
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255,255,255,.05);
+        font-weight: 860;
+      }
+      .btn.primary { color: #120e0a; background: var(--leaf); border-color: var(--leaf); }
+      .hero-stage {
+        position: relative;
+        display: grid;
+        gap: 14px;
+      }
+      .hero-main {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--panel);
+        box-shadow: 0 28px 90px rgba(0,0,0,.38);
+      }
+      .hero-main img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        object-fit: contain;
+        object-position: center top;
+        padding: 8px;
+        background: #0c0f0d;
+      }
+      .hero-main img, .shot-grid img, .visual-banner img { cursor: zoom-in; }
+      .visual-banner { display: grid; grid-template-columns: 1.12fr .88fr; gap: 16px; margin: -8px 0 72px; }
+      .banner-shot { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #0c0f0d; box-shadow: 0 24px 80px rgba(0,0,0,.34); }
+      .banner-shot.hero-banner { grid-column: 1 / -1; }
+      .banner-shot img { display: block; width: 100%; height: 430px; object-fit: contain; object-position: center top; padding: 10px; background: #0c0f0d; }
+      .banner-shot.hero-banner img { height: 540px; }
+      .lightbox[hidden] { display: none; }
+      .lightbox { position: fixed; inset: 0; z-index: 80; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; padding: 24px; background: rgba(0,0,0,.86); backdrop-filter: blur(14px); }
+      .lightbox img { max-width: min(1400px, 100%); max-height: 100%; align-self: center; justify-self: center; border: 1px solid var(--line); border-radius: 8px; background: #0c0f0d; box-shadow: 0 30px 100px rgba(0,0,0,.5); }
+      .zoom-close { justify-self: end; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: rgba(255,255,255,.08); font: inherit; font-size: 24px; cursor: pointer; }
+      .zoom-caption { margin: 0 auto; color: var(--muted); text-align: center; }
+      .command { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: rgba(17,20,18,.9); }
+      .prompt { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; color: #120e0a; background: var(--gold); font-weight: 900; }
+      code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .command code { color: #e8dbc8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+      .stat { min-height: 120px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.045); }
+      .stat span { display: block; color: var(--soft); font-weight: 780; margin-bottom: 12px; }
+      .stat b { font-size: 23px; line-height: 1.1; }
+      .section { border-top: 1px solid var(--line); padding: 72px 0; }
+      .section-head { display: grid; grid-template-columns: minmax(0, .75fr) minmax(280px, .25fr); gap: 34px; align-items: end; margin-bottom: 26px; }
+      h2 { margin: 0; font-size: 50px; line-height: 1; letter-spacing: 0; }
+      .section-head p { margin: 0; color: var(--muted); }
+      .planes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+      .features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .plane, .feature { border: 1px solid var(--line); border-radius: 8px; background: rgba(17,20,18,.82); overflow: hidden; }
+      .plane { min-height: 300px; padding: 24px; display: grid; align-content: space-between; }
+      .plane small, .feature small { color: var(--ember); font-weight: 900; }
+      .plane h3, .feature h3 { margin: 14px 0 10px; font-size: 25px; line-height: 1.08; }
+      .plane p, .feature p { margin: 0; color: var(--muted); }
+      .plane ul { margin: 26px 0 0; padding: 0; list-style: none; color: var(--muted); }
+      .plane li { padding: 9px 0; border-top: 1px solid var(--line); }
+      .feature { display: grid; grid-template-rows: auto 1fr; }
+      .feature.text-only { min-height: 210px; align-content: start; }
+      .feature.wide { grid-column: 1 / -1; }
+      .feature-copy { padding: 22px; }
+      .shot-grid { display: grid; gap: 8px; padding: 8px; background: #0c0f0d; }
+      .shot-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .shot-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .shot-grid.three img:first-child { grid-column: 1 / -1; }
+      .shot-grid img { width: 100%; height: 260px; object-fit: contain; object-position: center top; padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.1); background: #151815; }
+      .shot-grid.three img:first-child { height: 300px; }
+      .feature.wide .shot-grid img { height: 340px; }
+      .system-map { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+      .code-card { margin: 0; min-height: 100%; padding: 24px; color: #f2dfc2; border: 1px solid var(--line); border-radius: 8px; background: #12100d; overflow: auto; }
+      .provider-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .provider { min-height: 116px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.045); }
+      .provider b { display: block; margin-bottom: 8px; color: var(--leaf); }
+      .provider p { margin: 0; color: var(--muted); }
+      .cta { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: center; padding: 30px; border: 1px solid var(--line); border-radius: 8px; background: #f7f2e8; color: #171914; }
+      .cta h2 { color: #171914; }
+      .cta p { margin: 12px 0 0; color: #60645d; }
+      .footer { display: flex; justify-content: space-between; gap: 20px; color: var(--muted); padding: 36px 0 54px; border-top: 1px solid var(--line); }
+      @media (max-width: 980px) {
+        h1 { font-size: 58px; }
+        h2 { font-size: 38px; }
+        .navlinks { display: none; }
+        .hero, .section-head, .system-map, .cta { grid-template-columns: 1fr; }
+        .hero { min-height: auto; }
+        .planes, .features, .provider-grid, .visual-banner { grid-template-columns: 1fr; }
+        .banner-shot.hero-banner { grid-column: auto; }
+      }
+      @media (max-width: 620px) {
+        .wrap { width: min(100% - 28px, 1220px); }
+        .hero { padding-top: 36px; }
+        h1 { font-size: 44px; }
+        .lead { font-size: 18px; }
+        .stats, .shot-grid.two, .shot-grid.three { grid-template-columns: 1fr; }
+        .banner-shot.hero-banner img, .banner-shot img { height: 260px; }
+        .shot-grid.three img:first-child, .shot-grid img { height: 230px; }
+        .footer { display: grid; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="wrap nav" aria-label="Main navigation">
+        <a class="brand" href="./"><img src="./docs/assets/openmaple-mascot.svg" alt="" />OpenMaple</a>
+        <div class="navlinks">
+          <a href="#platform">Platform</a>
+          <a href="#features">Features</a>
+          <a href="#providers">Providers</a>
+          <a href="./docs/">Docs</a>
+          <a class="repo" href="https://github.com/dragonforce2010/openmaple">GitHub</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <div>
+          <div class="eyebrow">Open managed agent platform</div>
+          <h1>Run agents as cloud software.</h1>
+          <p class="lead">OpenMaple gives teams an open control plane for agents, sessions, vaults, model gateways, runtime providers, sandbox providers, SDKs, CLI workflows, and skills.</p>
+          <div class="actions">
+            <a class="btn primary" href="./docs/">Read docs</a>
+            <a class="btn" href="#features">Explore features</a>
+            <a class="btn" href="https://www.npmjs.com/package/maple-agent-cli">Install CLI</a>
+          </div>
+        </div>
+        <div class="hero-stage" aria-label="OpenMaple console preview">
+          <div class="hero-main"><img src="./docs/site/screenshots/current-console-deployments.png" alt="Current OpenMaple console deployment page" /></div>
+          <div class="command"><div class="prompt">CLI</div><code>npx maple-agent-cli session run --agent codex --workspace openmaple</code></div>
+          <div class="stats">
+            <div class="stat"><span>Agent loops</span><b>Claude Code, Codex, custom</b></div>
+            <div class="stat"><span>Provider graph</span><b>Runtime, sandbox, storage</b></div>
+            <div class="stat"><span>Interfaces</span><b>Console, REST, SDK, CLI</b></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="visual-banner" aria-label="OpenMaple product banners">
+        <figure class="banner-shot hero-banner"><img src="./docs/site/screenshots/current-console-deployments.png" alt="Current OpenMaple desktop console with deployment detail" /></figure>
+        <figure class="banner-shot"><img src="./docs/site/screenshots/current-console-quickstart-mobile.png" alt="Current OpenMaple mobile quickstart screen" /></figure>
+      </section>
+
+      <section id="platform" class="section">
+        <div class="section-head">
+          <h2>Control plane first. Execution path second.</h2>
+          <p>OpenMaple separates managed-agent resources from the runtime and sandbox providers that execute them. This keeps disaster recovery, cloud migration, and agent-loop experiments practical.</p>
+        </div>
+        <div class="planes">
+          <article class="plane"><div><small>01</small><h3>Control Plane</h3><p>Workspace truth, agents, sessions, vaults, model configs, members, API keys, and audit-ready event records.</p></div><ul><li>Tenant-scoped access</li><li>Workspace API keys</li><li>Session event timeline</li></ul></article>
+          <article class="plane"><div><small>02</small><h3>Runtime Plane</h3><p>Agent loops run behind provider adapters: veFaaS today, AWS Lambda / Alibaba FC / local runners tomorrow.</p></div><ul><li>Runtime pools</li><li>Background provisioning</li><li>Loop-level health</li></ul></article>
+          <article class="plane"><div><small>03</small><h3>Sandbox Plane</h3><p>Tool execution stays isolated from control data. Swap E2B, veFaaS Sandbox, Vercel, or Docker without rewriting agents.</p></div><ul><li>Tool calls</li><li>Artifacts</li><li>Credential references</li></ul></article>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="section-head">
+          <h2>Core workflows, visible and testable.</h2>
+          <p>Only screenshots captured from the current console are shown here. If a capability has no current console page, it is described as a platform/API capability instead of being illustrated with legacy UI.</p>
+        </div>
+        <div class="features">
+          <article class="feature wide">
+            <div class="shot-grid two"><img src="./docs/site/screenshots/current-console-deployments.png" alt="Current OpenMaple deployment workflow" /><img src="./docs/site/screenshots/current-console-quickstart-mobile.png" alt="Current OpenMaple quickstart workflow on mobile" /></div>
+            <div class="feature-copy"><small>Current console</small><h3>Real screenshots from the current system.</h3><p>These images come from the current Playwright E2E console run, not from the legacy product-manual screenshot set.</p></div>
+          </article>
+          <article class="feature text-only">
+            <div class="feature-copy"><small>Quickstart</small><h3>Build an agent from intent.</h3><p>Create a runnable workspace path: agent, environment, model, vault, and session.</p></div>
+          </article>
+          <article class="feature text-only">
+            <div class="feature-copy"><small>Sessions</small><h3>Observe every run.</h3><p>Follow user messages, agent events, sandbox metadata, artifacts, and debugging context.</p></div>
+          </article>
+          <article class="feature text-only">
+            <div class="feature-copy"><small>Agents</small><h3>Pick the right loop.</h3><p>Run Claude Code, Codex, direct model providers, or your own loop behind the same agent contract.</p></div>
+          </article>
+          <article class="feature text-only">
+            <div class="feature-copy"><small>Environments</small><h3>Prepare runtime inputs.</h3><p>Define env variables, workspace defaults, templates, and provider-specific runtime knobs.</p></div>
+          </article>
+          <article class="feature text-only">
+            <div class="feature-copy"><small>Vaults</small><h3>Keep credentials managed.</h3><p>Store MCP OAuth and API secrets as references, then attach them to sessions and agents.</p></div>
+          </article>
+          <article class="feature text-only">
+            <div class="feature-copy"><small>Skills</small><h3>Package workflows.</h3><p>Split repeatable work into CLI, provider, vault, deploy, and review skills that agents can invoke.</p></div>
+          </article>
+          <article class="feature text-only">
+            <div class="feature-copy"><small>Themes</small><h3>Switch visual modes for every workspace.</h3><p>Expose theme settings as a first-class console capability: dark mode, light mode, and workspace-level visual preference make the platform feel customizable from the first visit.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="providers" class="section">
+        <div class="section-head">
+          <h2>Provider identity unlocks multi-cloud agents.</h2>
+          <p>Tenants configure cloud identities once, then runtime, sandbox, and storage selections become provider plus focused options. This is the path toward failover and workload placement.</p>
+        </div>
+        <div class="system-map">
+          <pre class="code-card"><code>cloudProviderIdentity:
+  provider: volcengine | aliyun | aws | gcp
+  auth: aksk | oidc | role
+
+runtimeProvider:
+  type: vefaas | fc | lambda | local
+
+sandboxProvider:
+  type: vefaas_sandbox | e2b | vercel | docker
+
+storageProvider:
+  type: tos | oss | s3 | gcs</code></pre>
+          <div class="provider-grid">
+            <div class="provider"><b>Runtime portability</b><p>Move agent loops between veFaaS, Alibaba FC, AWS Lambda, or local development.</p></div>
+            <div class="provider"><b>Sandbox portability</b><p>Route tool execution to E2B, veFaaS Sandbox, Vercel, or Docker by policy.</p></div>
+            <div class="provider"><b>Storage portability</b><p>Use TOS, OSS, S3, or GCS behind one artifact and file contract.</p></div>
+            <div class="provider"><b>Loop portability</b><p>Run Claude Code and Codex chains under the same session event model.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="cta">
+          <div><h2>Ship a managed agent path today.</h2><p>Start local, publish docs, then connect a runtime provider and run a real session through the console, SDK, or CLI.</p></div>
+          <div class="actions"><a class="btn primary" href="./docs/">Open docs</a><a class="btn" href="https://github.com/dragonforce2010/openmaple">View repo</a></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="wrap footer">
+      <span>OpenMaple · open managed agent platform</span>
+      <span>Docs · Console · SDK · CLI · Skills</span>
+    </footer>
+    <div class="lightbox" data-lightbox hidden role="dialog" aria-modal="true" aria-label="Image preview"><button class="zoom-close" type="button" data-lightbox-close aria-label="Close preview">×</button><img data-lightbox-image alt="" /><p class="zoom-caption" data-lightbox-caption></p></div>
+    <script>
+      const lightbox = document.querySelector("[data-lightbox]");
+      const lightboxImage = document.querySelector("[data-lightbox-image]");
+      const lightboxCaption = document.querySelector("[data-lightbox-caption]");
+      const closeLightbox = () => { lightbox.hidden = true; document.body.style.overflow = ""; };
+      document.querySelectorAll(".hero-main img, .shot-grid img, .visual-banner img").forEach((image) => {
+        image.tabIndex = 0;
+        image.addEventListener("click", () => { lightboxImage.src = image.currentSrc || image.src; lightboxImage.alt = image.alt; lightboxCaption.textContent = image.alt; lightbox.hidden = false; document.body.style.overflow = "hidden"; });
+        image.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); image.click(); } });
+      });
+      document.querySelector("[data-lightbox-close]").addEventListener("click", closeLightbox);
+      lightbox.addEventListener("click", (event) => { if (event.target === lightbox) closeLightbox(); });
+      document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeLightbox(); });
+    </script>
+  </body>
+</html>

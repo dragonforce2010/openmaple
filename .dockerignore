@@ -1,0 +1,9 @@
+node_modules
+dist
+.managed-agents
+.DS_Store
+npm-debug.log
+*.log
+.git
+.gitignore
+docs/product-manual/screenshots

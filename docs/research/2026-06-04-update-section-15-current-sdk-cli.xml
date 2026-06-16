@@ -1,0 +1,37 @@
+<callout background-color="light-yellow" border-color="yellow">
+  <p><b>源码校准补充（2026-06-04）：</b>本节上方 SDK 设计是目标态。当前已落地的本地 SDK 和 <code>magcli</code> 更聚焦部署和 session 调用链路，核心入口是 <code>sdk/index.mjs</code> 的 <code>ManagedAgentsClient</code> 与 <code>scripts/magcli.mjs</code>。</p>
+</callout>
+<h3>15.5 当前 SDK / magcli 生命周期</h3>
+<whiteboard type="mermaid">sequenceDiagram
+  participant Dev as Developer
+  participant CLI as magcli
+  participant SDK as ManagedAgentsClient
+  participant API as Express API
+  participant Store as SQLite Store
+  participant Runner as Session Runner
+  Dev-&gt;&gt;CLI: magcli init
+  CLI-&gt;&gt;Dev: mag.manifest.json + src/harness.mjs
+  Dev-&gt;&gt;CLI: magcli build
+  CLI-&gt;&gt;CLI: validate manifest and write .mag/build/bundle.json
+  Dev-&gt;&gt;CLI: magcli deploy
+  CLI-&gt;&gt;SDK: createDeployment(bundle)
+  SDK-&gt;&gt;API: POST /v1/deployments
+  API-&gt;&gt;Store: createAgent + createEnvironment + createAgentDeployment
+  API--&gt;&gt;SDK: deployment id
+  Dev-&gt;&gt;CLI: magcli invoke message
+  CLI-&gt;&gt;SDK: invokeDeployment(deploymentId,message)
+  SDK-&gt;&gt;API: POST /v1/deployments/{id}/invoke
+  API-&gt;&gt;Store: createSession + user.message event
+  API-&gt;&gt;Runner: bootstrapSession + runUserMessage
+  CLI-&gt;&gt;SDK: poll sessionDetail or stream events
+</whiteboard>
+<table>
+  <thead><tr><th background-color="light-gray">当前 SDK 方法</th><th background-color="light-gray">实际调用</th><th background-color="light-gray">缺口</th></tr></thead>
+  <tbody>
+    <tr><td><code>health()</code> / <code>version()</code></td><td><code>/health</code>、<code>/v1/platform/version</code></td><td>无</td></tr>
+    <tr><td><code>loginLocal()</code> / <code>me()</code></td><td><code>/v1/auth/login</code>、<code>/v1/auth/me</code></td><td>目标态 OAuth SDK helper 未实现</td></tr>
+    <tr><td><code>createDeployment()</code> / <code>invokeDeployment()</code></td><td><code>/v1/deployments</code>、<code>/v1/deployments/{id}/invoke</code></td><td>缺 deployment update/delete、publish 到 Agent Hub</td></tr>
+    <tr><td><code>sessionDetail()</code> / <code>postSessionMessage()</code></td><td><code>/v1/sessions/{id}/detail</code>、<code>/v1/sessions/{id}/events</code></td><td>缺 stop/interrupt/resume helper</td></tr>
+    <tr><td><code>streamSessionEvents()</code></td><td><code>/v1/sessions/{id}/events/stream</code></td><td>当前是 EventEmitter + fetch reader；缺 Last-Event-ID、断线重连、cursor replay</td></tr>
+  </tbody>
+</table>

@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="zh" data-theme="dark" data-lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>OpenMaple Docs · Managed agent platform</title>
+    <meta name="description" content="OpenMaple documentation for managed agents, CLI, SDK, skills, provider identity, sessions, vaults, and deployment." />
+    <link rel="icon" href="./assets/openmaple-mascot.svg" />
+    <style>
+      :root { --bg: #010101; --header: rgba(17,17,17,.88); --surface: #111; --surface-2: #151515; --ink: #fff; --muted: #aeaeae; --soft: #777; --line: rgba(255,255,255,.12); --active: #293342; --hover: rgba(255,255,255,.06); --accent: #4b9eff; --leaf: #72d69f; --code: #0b0b0b; }
+      [data-theme="light"] { --bg: #fff; --header: rgba(255,255,255,.9); --surface: #fafafa; --surface-2: #f5f5f5; --ink: #1f1f1f; --muted: #646464; --soft: #8a8a8a; --line: rgba(31,31,31,.12); --active: #e8f1ff; --hover: rgba(31,31,31,.06); --accent: #2563eb; --leaf: #17684f; --code: #171717; }
+      * { box-sizing: border-box; }
+      html { color-scheme: dark; scroll-behavior: smooth; }
+      html[data-theme="light"] { color-scheme: light; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--bg);
+        font: 16px/26px Inter, "Inter Fallback", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; text-decoration: none; }
+      a:hover { color: var(--accent); }
+      code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .drawer-backdrop { display: none; }
+      .doc-header { position: sticky; top: 0; z-index: 70; height: 64px; border-bottom: 1px solid var(--line); background: var(--header); backdrop-filter: blur(18px); }
+      .header-inner { width: min(1536px, 100%); height: 64px; display: flex; align-items: center; gap: 24px; margin: 0 auto; padding: 0 32px; }
+      .header-brand { display: inline-flex; align-items: center; gap: 12px; min-width: 260px; font-size: 18px; line-height: 22.5px; font-weight: 600; }
+      .header-brand img { width: 28px; height: 28px; }
+      .header-menu { display: none; }
+      .header-spacer { flex: 1; }
+      .header-actions { display: flex; align-items: center; gap: 10px; }
+      .header-search { min-width: 224px; min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.03); font-size: 14px; line-height: 20px; }
+      .kbd { min-width: 22px; height: 22px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; color: var(--soft); font-size: 12px; line-height: 1; }
+      .seg { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.03); color: var(--muted); font: inherit; font-size: 14px; line-height: 20px; font-weight: 500; cursor: pointer; }
+      .seg[aria-pressed="true"] { color: var(--ink); background: rgba(255,255,255,.08); }
+      .shell { width: min(1536px, 100%); min-height: calc(100vh - 64px); display: grid; grid-template-columns: 288px minmax(0, 768px) 224px; gap: 48px; margin: 0 auto; padding: 0 32px; }
+      .sidebar, .toc { position: sticky; top: 64px; height: calc(100vh - 64px); overflow: auto; background: transparent; }
+      .side-inner, .toc-inner { padding: 32px 0; }
+      .brand { display: none; }
+      .brand img { width: 34px; height: 34px; }
+      .group { margin: 0 0 28px; }
+      .group-title { color: var(--ink); font-size: 12px; line-height: 16px; font-weight: 600; margin-bottom: 8px; padding: 0 12px; }
+      .nav-list { display: grid; gap: 3px; }
+      .nav-list a { min-height: 32px; display: flex; align-items: center; padding: 0 14px; border-radius: 999px; color: var(--muted); font-size: 14px; line-height: 20px; font-weight: 400; }
+      .nav-list a.active { color: #71b4ff; background: var(--active); font-weight: 600; }
+      .nav-list a:hover { color: var(--ink); background: var(--hover); }
+      main { min-width: 0; }
+      .article { width: 100%; padding: 30px 0 96px; }
+      .crumbs { color: var(--accent); font-size: 14px; line-height: 20px; font-weight: 500; margin-bottom: 16px; }
+      h1 { display: flex; align-items: flex-start; gap: 16px; margin: 0 0 16px; font-size: 36px; line-height: 45px; letter-spacing: 0; font-weight: 700; }
+      h1::before { content: "✦"; flex: 0 0 40px; width: 40px; height: 45px; display: inline-grid; place-items: center; color: var(--ink); font-size: 30px; line-height: 1; }
+      h2 { margin: 0 0 18px; font-size: 30px; line-height: 36px; letter-spacing: 0; font-weight: 600; }
+      h3 { margin: 24px 0 8px; font-size: 20px; line-height: 28px; font-weight: 700; }
+      p { margin: 0 0 14px; }
+      .lead { color: var(--muted); font-size: 18px; line-height: 28px; margin-bottom: 24px; }
+      section { padding: 36px 0; border-top: 1px solid var(--line); scroll-margin-top: 80px; }
+      #overview { border-top: 0; padding-top: 0; }
+      .callout { margin-top: 18px; }
+      .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+      .card { min-height: 132px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+      .card b { display: block; font-size: 16px; line-height: 24px; margin-bottom: 6px; }
+      .card p, .callout p, li { color: var(--muted); }
+      .mini-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+      .mini { padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+      .mini small { display: block; color: var(--leaf); font-size: 12px; line-height: 16px; font-weight: 700; margin-bottom: 6px; }
+      .mini b { display: block; margin-bottom: 4px; }
+      .steps { counter-reset: step; display: grid; gap: 12px; margin-top: 16px; }
+      .step { counter-increment: step; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+      .step::before { content: counter(step); width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: #10130f; background: var(--leaf); font-size: 14px; font-weight: 700; }
+      pre { margin: 14px 0; padding: 16px; color: #f1f1f1; background: var(--code); border: 1px solid var(--line); border-radius: 8px; overflow: auto; font-size: 14px; line-height: 22px; }
+      pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+      table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 16px 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+      th, td { padding: 12px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 14px; line-height: 22px; }
+      tr:last-child td { border-bottom: 0; }
+      th { color: var(--ink); font-weight: 600; background: var(--surface-2); }
+      .toc-title { color: var(--muted); font-size: 13px; line-height: 20px; font-weight: 600; margin-bottom: 10px; }
+      .toc a { display: block; padding: 6px 12px; border-radius: 999px; color: var(--muted); font-size: 14px; line-height: 20px; font-weight: 400; }
+      .toc a:first-of-type { color: #71b4ff; background: var(--active); }
+      .lang-en, [data-lang="en"] .lang-zh { display: none; }
+      [data-lang="en"] .lang-en { display: inline; }
+      [data-lang="en"] .block-en { display: block; }
+      .block-en, [data-lang="en"] .block-zh { display: none; }
+      .block-zh { display: block; }
+      @media (max-width: 1180px) {
+        .shell { grid-template-columns: 288px minmax(0, 768px); gap: 48px; }
+        .toc { display: none; }
+      }
+      @media (max-width: 780px) {
+        body.drawer-open { overflow: hidden; }
+        .header-inner { padding: 0 16px; gap: 12px; }
+        .header-menu { width: 38px; height: 38px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: rgba(255,255,255,.03); font: inherit; font-size: 18px; }
+        .header-brand { min-width: 0; font-size: 16px; }
+        .header-actions { gap: 6px; }
+        .header-search { display: none; }
+        .seg { min-height: 34px; padding: 0 9px; font-size: 12px; }
+        .drawer-backdrop { position: fixed; inset: 0; z-index: 55; display: block; background: rgba(0, 0, 0, .52); opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+        body.drawer-open .drawer-backdrop { opacity: 1; pointer-events: auto; }
+        .shell { display: block; }
+        .sidebar { position: fixed; top: 64px; left: 0; z-index: 60; width: min(86vw, 320px); height: calc(100vh - 64px); padding: 0 20px; border-right: 1px solid var(--line); background: var(--bg); transform: translateX(-100%); transition: transform .2s ease; box-shadow: 24px 0 70px rgba(0,0,0,.34); }
+        body.drawer-open .sidebar { transform: translateX(0); }
+        .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; font-weight: 700; }
+        .article { width: min(100% - 32px, 768px); margin: 0 auto; padding-top: 40px; }
+        h1 { font-size: 34px; line-height: 42px; }
+        .lead { font-size: 17px; line-height: 27px; }
+        .cards { grid-template-columns: 1fr; }
+        .mini-grid { grid-template-columns: 1fr; }
+        table { display: block; overflow-x: auto; white-space: nowrap; }
+        th, td { min-width: 140px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="doc-header">
+      <div class="header-inner">
+        <button class="header-menu" type="button" data-menu-toggle aria-label="Open menu">☰</button>
+        <a class="header-brand" href="../"><img src="./assets/openmaple-mascot.svg" alt="" />OpenMaple</a>
+        <div class="header-spacer"></div>
+        <div class="header-actions" aria-label="Document actions">
+          <div class="header-search"><span class="lang-zh">搜索...</span><span class="lang-en">Search...</span><span><span class="kbd">⌘</span> <span class="kbd">K</span></span></div>
+          <button class="seg" type="button" data-lang-toggle aria-pressed="true">中文 / EN</button>
+          <button class="seg" type="button" data-theme-toggle aria-pressed="true">Dark</button>
+        </div>
+      </div>
+    </header>
+    <div class="drawer-backdrop" data-drawer-backdrop></div>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-inner">
+          <a class="brand" href="../"><img src="./assets/openmaple-mascot.svg" alt="" />OpenMaple</a>
+          <nav aria-label="Documentation">
+            <div class="group"><div class="group-title">Start</div><div class="nav-list">
+              <a class="active" href="#overview"><span class="lang-zh">概览</span><span class="lang-en">Overview</span></a>
+              <a href="#quickstart"><span class="lang-zh">快速开始</span><span class="lang-en">Quickstart</span></a>
+              <a href="#architecture"><span class="lang-zh">架构</span><span class="lang-en">Architecture</span></a>
+              <a href="#providers"><span class="lang-zh">云厂商</span><span class="lang-en">Cloud providers</span></a>
+            </div></div>
+            <div class="group"><div class="group-title">Build</div><div class="nav-list">
+              <a href="#cli"><span class="lang-zh">Maple CLI</span><span class="lang-en">Maple CLI</span></a>
+              <a href="#sdk"><span class="lang-zh">Node SDK</span><span class="lang-en">Node SDK</span></a>
+              <a href="#skills"><span class="lang-zh">Skills</span><span class="lang-en">Skills</span></a>
+              <a href="#sessions"><span class="lang-zh">会话</span><span class="lang-en">Sessions</span></a>
+            </div></div>
+            <div class="group"><div class="group-title">Operate</div><div class="nav-list">
+              <a href="#vaults"><span class="lang-zh">凭证库</span><span class="lang-en">Vaults</span></a>
+              <a href="#deploy"><span class="lang-zh">发布</span><span class="lang-en">Deploy</span></a>
+              <a href="#troubleshooting"><span class="lang-zh">排障</span><span class="lang-en">Troubleshooting</span></a>
+            </div></div>
+          </nav>
+        </div>
+      </aside>
+
+      <main>
+        <article class="article">
+          <div class="crumbs"><span class="lang-zh">文档 / OpenMaple</span><span class="lang-en">Docs / OpenMaple</span></div>
+          <section id="overview">
+            <div class="block-zh">
+              <h1>OpenMaple 文档</h1>
+              <p class="lead">OpenMaple 把智能体从 demo 变成可托管、可观测、可迁移的云软件：控制面记录资源真相，运行面执行 agent loop，沙箱面隔离工具调用。</p>
+              <div class="callout"><b>核心原则</b><p>Runtime、Sandbox、Storage、Model 和 Agent Loop 都必须通过 provider 抽象接入，租户只配置云厂商 identity，工作区选择 provider 加少量配置。</p></div>
+            </div>
+            <div class="block-en">
+              <h1>OpenMaple Docs</h1>
+              <p class="lead">OpenMaple turns agent prototypes into managed, observable, and cloud-portable software. The control plane owns resource truth, the runtime plane runs loops, and the sandbox plane isolates tools.</p>
+              <div class="callout"><b>Core rule</b><p>Runtime, sandbox, storage, model, and agent-loop choices enter through provider adapters. Tenants configure cloud identity once; workspaces select provider plus focused options.</p></div>
+            </div>
+          </section>
+
+          <section id="quickstart">
+            <h2><span class="lang-zh">快速开始</span><span class="lang-en">Quickstart</span></h2>
+            <div class="block-zh"><p>开发模式由 Bun 同时启动 API 和 React 控制台。先跑通 workspace、agent、environment、vault、session，再接入真实云 provider。</p></div>
+            <div class="block-en"><p>Development mode starts the API and React console together. Validate workspace, agent, environment, vault, and session flows before attaching real cloud providers.</p></div>
+            <div class="steps">
+              <div class="step"><div><b><span class="lang-zh">安装依赖</span><span class="lang-en">Install</span></b><pre><code>bun install
+cp .env.example .env</code></pre></div></div>
+              <div class="step"><div><b><span class="lang-zh">启动控制台</span><span class="lang-en">Start console</span></b><pre><code>bun run dev
+# Web: http://127.0.0.1:5173/
+# API: http://127.0.0.1:27951/</code></pre></div></div>
+              <div class="step"><div><b><span class="lang-zh">验证链路</span><span class="lang-en">Verify path</span></b><pre><code>bun run typecheck
+bun run test:codebase-hygiene</code></pre></div></div>
+            </div>
+          </section>
+
+          <section id="architecture">
+            <h2><span class="lang-zh">架构</span><span class="lang-en">Architecture</span></h2>
+            <div class="cards">
+              <div class="card"><b>Control Plane</b><p><span class="lang-zh">管理 tenants、workspaces、agents、sessions、vaults、models、members、API keys 和事件真相。</span><span class="lang-en">Owns tenants, workspaces, agents, sessions, vaults, models, members, API keys, and event truth.</span></p></div>
+              <div class="card"><b>Runtime Plane</b><p><span class="lang-zh">通过 runtime pool 调度 agent loop，支持 veFaaS、AWS Lambda、阿里 FC、本地 runner。</span><span class="lang-en">Schedules agent loops through runtime pools: veFaaS, AWS Lambda, Alibaba FC, or local runners.</span></p></div>
+              <div class="card"><b>Sandbox Plane</b><p><span class="lang-zh">执行工具调用、文件读写、命令和 artifacts，目标是 E2B、veFaaS Sandbox、Vercel、Docker 可替换。</span><span class="lang-en">Executes tools, file operations, commands, and artifacts across E2B, veFaaS Sandbox, Vercel, or Docker.</span></p></div>
+              <div class="card"><b>Event Truth</b><p><span class="lang-zh">session_events 和 tool_calls 是调试、审计、Ask Maple 与 E2E 验收的共同事实源。</span><span class="lang-en">session_events and tool_calls are the shared source for debugging, audit, Ask Maple, and E2E checks.</span></p></div>
+            </div>
+          </section>
+
+          <section id="providers">
+            <h2><span class="lang-zh">云厂商 identity 与 provider 抽象</span><span class="lang-en">Cloud identity and provider abstraction</span></h2>
+            <div class="block-zh"><p>租户侧配置云厂商 identity，例如火山、阿里云、AWS、GCP 的 AK/SK、OIDC 或 role。之后 runtime、sandbox、storage 选择页只需要选择 provider 与关键配置。</p></div>
+            <div class="block-en"><p>Tenants configure cloud identity for Volcengine, Alibaba Cloud, AWS, or GCP through AK/SK, OIDC, or role credentials. Runtime, sandbox, and storage pages then select provider plus focused settings.</p></div>
+            <table><thead><tr><th>Layer</th><th>Providers</th><th>Contract</th></tr></thead><tbody>
+              <tr><td>Runtime</td><td>veFaaS, Alibaba FC, AWS Lambda, local</td><td>bootstrap, run, health, timeout, logs</td></tr>
+              <tr><td>Sandbox</td><td>veFaaS Sandbox, E2B, Vercel, Docker</td><td>command, file, artifact, network policy</td></tr>
+              <tr><td>Storage</td><td>Volcengine TOS, Aliyun OSS, AWS S3, GCS</td><td>artifact store, signed URL, retention</td></tr>
+              <tr><td>Agent Loop</td><td>Claude Code, Codex, direct model, custom</td><td>message in, event out, tool call, final answer</td></tr>
+            </tbody></table>
+          </section>
+
+          <section id="cli">
+            <h2>Maple CLI</h2>
+            <div class="block-zh"><p>CLI 面向 repo-native 工作流：开发者在本地仓库创建 session、上传上下文、调用 workspace agent，并把 artifacts 拉回本地。</p></div>
+            <div class="block-en"><p>The CLI targets repo-native workflows: create sessions from a local checkout, upload context, invoke workspace agents, and pull artifacts back.</p></div>
+            <pre><code>npm install -g maple-agent-cli
+maple auth login --workspace openmaple
+maple agent list
+maple session create --agent codex --env default
+maple session send --message "scan this repo and propose fixes"
+maple artifacts pull --session sess_xxx</code></pre>
+            <table><thead><tr><th>Command</th><th><span class="lang-zh">用途</span><span class="lang-en">Use</span></th></tr></thead><tbody>
+              <tr><td>maple auth</td><td><span class="lang-zh">配置 workspace API key、server URL、当前 workspace。</span><span class="lang-en">Configures workspace API key, server URL, and active workspace.</span></td></tr>
+              <tr><td>maple agent</td><td><span class="lang-zh">列出、查看、运行 agent，检查 loop 与模型配置。</span><span class="lang-en">Lists, inspects, and runs agents with loop/model settings.</span></td></tr>
+              <tr><td>maple session</td><td><span class="lang-zh">创建会话、发送消息、跟踪事件、导出 transcript。</span><span class="lang-en">Creates sessions, sends messages, follows events, exports transcripts.</span></td></tr>
+              <tr><td>maple provider</td><td><span class="lang-zh">查看 runtime、sandbox、storage provider 与健康状态。</span><span class="lang-en">Inspects runtime, sandbox, and storage providers with health.</span></td></tr>
+            </tbody></table>
+          </section>
+
+          <section id="sdk">
+            <h2>Node / TypeScript SDK</h2>
+            <div class="block-zh"><p>SDK 用于把 OpenMaple 接进后台服务、内部工具、CI 或自定义控制台。认证使用 workspace API key。</p></div>
+            <div class="block-en"><p>The SDK integrates OpenMaple with backend services, internal tools, CI, or custom consoles. Authentication uses workspace API keys.</p></div>
+            <pre><code>import { MapleClient } from "maple-agent-sdk";
+
+const maple = new MapleClient({
+  baseUrl: process.env.MAPLE_API_URL,
+  apiKey: process.env.MAPLE_WORKSPACE_API_KEY,
+});
+
+const session = await maple.sessions.create({ agentId, environmentId });
+await maple.sessions.sendMessage(session.id, { content: "run the codex path" });
+for await (const event of maple.sessions.streamEvents(session.id)) {
+  console.log(event.type, event.payload);
+}</code></pre>
+          </section>
+
+          <section id="skills">
+            <h2>Skills</h2>
+            <div class="block-zh"><p>Skills 是可复用工作流单元。参考 lark-cli 的拆分方式，OpenMaple 应该把大 skill 拆成职责清晰的子模块，避免一个 skill 同时负责 provider、CLI、部署和排障。</p></div>
+            <div class="block-en"><p>Skills are reusable workflow units. Following the lark-cli style, OpenMaple skills should be split into focused submodules instead of one broad skill that owns providers, CLI, deployment, and troubleshooting.</p></div>
+            <table><thead><tr><th>Skill</th><th>Scope</th><th>Typical triggers</th></tr></thead><tbody>
+              <tr><td>openmaple-cli</td><td>CLI auth, session run, artifacts, package publish</td><td>mapleCli, npm publish, session from repo</td></tr>
+              <tr><td>openmaple-agent</td><td>Agent definition, loop choice, model binding, prompts</td><td>agent create, codex_open_source, loop picker</td></tr>
+              <tr><td>openmaple-runtime</td><td>veFaaS, Lambda, FC, runtime adapter checks</td><td>runtime pool, bootstrap failed, timeout</td></tr>
+              <tr><td>openmaple-session</td><td>session_events, tool_calls, Ask Maple, trace export</td><td>session failed, Tools=0, event timeline</td></tr>
+              <tr><td>openmaple-vault</td><td>Credential vaults, encrypted secret references</td><td>vault credential, API key, secret_ref</td></tr>
+              <tr><td>openmaple-mcp</td><td>MCP OAuth, catalog providers, server config</td><td>GitHub MCP, OAuth callback, scopes</td></tr>
+              <tr><td>openmaple-workspace</td><td>Workspace keys, cloud identity, provider defaults</td><td>workspace onboarding, provider identity</td></tr>
+              <tr><td>openmaple-docs-site</td><td>main site, GitBook-style docs, screenshots, Pages deploy</td><td>docs too brief, main site, GitHub Pages</td></tr>
+            </tbody></table>
+          </section>
+
+          <section id="sessions">
+            <h2><span class="lang-zh">会话与观测</span><span class="lang-en">Sessions and observability</span></h2>
+            <div class="block-zh"><p>Session 是用户消息、agent loop、tool call、sandbox、artifact 的运行边界。列表页用于状态扫描，详情页用于事件审计和失败定位。</p></div>
+            <div class="block-en"><p>A session is the runtime boundary for user messages, agent loops, tool calls, sandboxes, and artifacts. Lists support status scanning; details support audit and failure diagnosis.</p></div>
+            <ul>
+              <li><span class="lang-zh">失败先看 session.status_failed 的 reason 和 error，再看最近 tool_calls。</span><span class="lang-en">For failures, inspect session.status_failed reason/error first, then recent tool_calls.</span></li>
+              <li><span class="lang-zh">Ask Maple 应读取 session_events、tool_calls、artifacts 和 sandbox metadata。</span><span class="lang-en">Ask Maple should read session_events, tool_calls, artifacts, and sandbox metadata.</span></li>
+              <li><span class="lang-zh">Codex 链路重点验证：消息发送、事件落库、工具调用、artifact、final answer。</span><span class="lang-en">Codex path checks: message send, event persistence, tool calls, artifacts, final answer.</span></li>
+            </ul>
+          </section>
+
+          <section id="vaults">
+            <h2><span class="lang-zh">Vaults 与 MCP credentials</span><span class="lang-en">Vaults and MCP credentials</span></h2>
+            <div class="block-zh"><p>Vault 保存 credential 记录，secret_ref 指向加密密文。Agent 与 session 只引用 credential，不直接暴露密钥。MCP OAuth 需要展示 provider、scope、状态、更新时间和最后使用时间。</p></div>
+            <div class="block-en"><p>Vaults store credential records while secret_ref points to encrypted secrets. Agents and sessions reference credentials without exposing raw secrets. MCP OAuth views should show provider, scopes, status, updated time, and last used time.</p></div>
+          </section>
+
+          <section id="deploy">
+            <h2><span class="lang-zh">发布与 GitHub Pages</span><span class="lang-en">Deploy and GitHub Pages</span></h2>
+            <div class="block-zh"><p>OpenMaple 有三类发布：官网文档发布到 GitHub Pages，平台控制台发布到 stable veFaaS，Agent 项目通过 CLI/API 发布成 deployment。三条链路都必须返回可追踪的 resource id，并用 session events、tool_calls、artifacts 作为验收证据。</p></div>
+            <div class="block-en"><p>OpenMaple has three deployment paths: site/docs to GitHub Pages, the console/API to stable veFaaS, and agent projects to deployment resources through CLI/API. Every path must return traceable resource ids and use session events, tool_calls, and artifacts as acceptance evidence.</p></div>
+            <div class="mini-grid">
+              <div class="mini"><small>01</small><b>GitHub Pages</b><p><span class="lang-zh">发布官网、文档、README 图和截图资源。</span><span class="lang-en">Publishes the site, docs, README images, and screenshot assets.</span></p></div>
+              <div class="mini"><small>02</small><b>Stable veFaaS</b><p><span class="lang-zh">更新真实控制台前端、后端 API、网关路由和健康探针。</span><span class="lang-en">Updates the real console frontend, backend API, gateway routes, and health probes.</span></p></div>
+              <div class="mini"><small>03</small><b>Agent Deployment</b><p><span class="lang-zh">把 repo-native Agent 项目发布成可运行、可暂停、可调用的 deployment。</span><span class="lang-en">Publishes a repo-native agent project as a runnable, pausable, invokable deployment.</span></p></div>
+            </div>
+            <h3><span class="lang-zh">发布官网和文档</span><span class="lang-en">Publish site and docs</span></h3>
+            <div class="block-zh"><p>公开站点路径是 <code>/openmaple/</code>，文档路径是 <code>/openmaple/docs/</code>。发布前后都要检查图片是否来自当前真实系统，不允许继续引用旧截图。</p></div>
+            <div class="block-en"><p>The public site path is <code>/openmaple/</code>, and docs live at <code>/openmaple/docs/</code>. Before and after publishing, verify that images come from the current real system, not legacy screenshots.</p></div>
+            <pre><code>git push origin main&#10;gh run watch --repo dragonforce2010/openmaple --exit-status&#10;curl -I https://dragonforce2010.github.io/openmaple/&#10;curl -I https://dragonforce2010.github.io/openmaple/docs/&#10;rg "$STALE_SCREENSHOT_PATTERN" index.html README.md docs/index.html</code></pre>
+            <table><thead><tr><th><span class="lang-zh">检查项</span><span class="lang-en">Check</span></th><th><span class="lang-zh">通过标准</span><span class="lang-en">Pass condition</span></th></tr></thead><tbody>
+              <tr><td>Homepage route</td><td><code>https://dragonforce2010.github.io/openmaple/</code> returns 200 and renders the current brand.</td></tr>
+              <tr><td>Docs route</td><td><code>https://dragonforce2010.github.io/openmaple/docs/</code> returns 200 and anchors such as <code>#deploy</code> scroll to the right section.</td></tr>
+              <tr><td>Image audit</td><td>Every visible <code>img</code> has non-zero <code>naturalWidth</code>/<code>naturalHeight</code>; no stale screenshot paths remain.</td></tr>
+              <tr><td>Visual proof</td><td>Capture one homepage screenshot, one docs screenshot, and one image-lightbox screenshot after deploy.</td></tr>
+            </tbody></table>
+            <h3><span class="lang-zh">部署平台到 stable veFaaS</span><span class="lang-en">Deploy the platform to stable veFaaS</span></h3>
+            <div class="block-zh"><p>stable 部署脚本复用已记录的函数和网关资源，只更新前端/后端包，不创建新生产资源。状态文件默认在 <code>output/vefaas/stable-deployment.json</code>，缺失时不要直接 deploy，应先完成 bootstrap 或恢复状态文件。</p></div>
+            <div class="block-en"><p>The stable deploy script reuses recorded functions and gateway resources. It updates frontend/backend packages without creating new production resources. The default state file is <code>output/vefaas/stable-deployment.json</code>; if it is missing, bootstrap or restore the state before deploy.</p></div>
+            <pre><code>export VOLCENGINE_ACCESS_KEY=...&#10;export VOLCENGINE_SECRET_KEY=...&#10;export MAPLE_VEFAAS_REGION=cn-beijing&#10;&#10;bun run typecheck&#10;bun run lint&#10;bun run build&#10;bun run deploy:vefaas:stable&#10;bun run status:vefaas:stable</code></pre>
+            <table><thead><tr><th>Resource</th><th><span class="lang-zh">来源</span><span class="lang-en">Source</span></th><th><span class="lang-zh">验收</span><span class="lang-en">Acceptance</span></th></tr></thead><tbody>
+              <tr><td>Frontend function</td><td><code>infra/vefaas/deploy_vefaas_stable.py</code></td><td><code>/</code> renders the new bundle and navigation works.</td></tr>
+              <tr><td>Backend function</td><td><code>apps/control-plane-api/src/index.ts</code></td><td><code>/health</code>, <code>/v1/platform/version</code>, <code>/v1/auth/providers</code> respond.</td></tr>
+              <tr><td>APIG routes</td><td>Recorded stable deployment state</td><td><code>/</code>, <code>/v1</code>, and <code>/health</code> route to the expected functions.</td></tr>
+              <tr><td>Runtime dependencies</td><td>Remote MySQL, secret store, provider credentials</td><td>Workspace onboarding, runtime pool, model config, and session creation work end to end.</td></tr>
+            </tbody></table>
+            <h3><span class="lang-zh">用 CLI 发布 Agent 项目</span><span class="lang-en">Deploy an agent project with CLI</span></h3>
+            <div class="block-zh"><p><code>maple init/build/deploy</code> 是 repo-native 发布路径。deploy 成功必须返回 <code>deployment_id</code>、<code>agent_id</code>、<code>environment_id</code>，随后用 <code>maple invoke</code> 创建 session 并流式读取事件。</p></div>
+            <div class="block-en"><p><code>maple init/build/deploy</code> is the repo-native path. A successful deploy returns <code>deployment_id</code>, <code>agent_id</code>, and <code>environment_id</code>; then <code>maple invoke</code> creates a session and streams events.</p></div>
+            <pre><code>maple config set api.baseUrl "$MAPLE_API_BASE_URL"&#10;maple config login --api-key "$MAPLE_WORKSPACE_API_KEY"&#10;&#10;maple init \&#10;  --name repo-auditor \&#10;  --loop codex_open_source \&#10;  --runtime e2b \&#10;  --directory ./repo-auditor \&#10;  --yes&#10;&#10;maple build --project ./repo-auditor&#10;maple deploy --project ./repo-auditor --json&#10;maple invoke "Scan this repo and return evidence." --deployment &lt;deployment_id&gt; --stream</code></pre>
+            <table><thead><tr><th>API</th><th><span class="lang-zh">行为</span><span class="lang-en">Behavior</span></th></tr></thead><tbody>
+              <tr><td><code>GET /v1/deployments</code></td><td>List deployments visible to the current workspace or API key scope.</td></tr>
+              <tr><td><code>POST /v1/deployments</code></td><td>Create a deployment from agent, environment, manifest, schedule, and initial events.</td></tr>
+              <tr><td><code>POST /v1/deployments/:deploymentId/run</code></td><td>Run the deployment with its saved initial event template.</td></tr>
+              <tr><td><code>POST /v1/deployments/:deploymentId/invoke</code></td><td>Invoke with a user message, create a session, and stream or inspect resulting events.</td></tr>
+              <tr><td><code>POST /v1/deployments/:deploymentId/pause</code></td><td>Pause scheduled/manual execution without deleting the underlying resources.</td></tr>
+              <tr><td><code>POST /v1/deployments/:deploymentId/archive</code></td><td>Archive a deployment after preserving its sessions, runs, and audit trail.</td></tr>
+            </tbody></table>
+            <h3><span class="lang-zh">Skill 一条命令部署并运行</span><span class="lang-en">Skill deploy-run in one command</span></h3>
+            <div class="block-zh"><p>上游 Agent 不应该手写一堆 API 调用。使用 <code>maple skill deploy-run</code> 可以创建 skill、初始化项目、部署 Agent、运行 session，并把 <code>skill_id</code>、<code>deployment_id</code>、<code>session_id</code>、<code>tool_calls</code> 一起返回。</p></div>
+            <div class="block-en"><p>Upstream agents should not hand-roll every API call. <code>maple skill deploy-run</code> creates the skill, initializes the project, deploys the agent, runs the session, and returns <code>skill_id</code>, <code>deployment_id</code>, <code>session_id</code>, and <code>tool_calls</code>.</p></div>
+            <pre><code>maple skill deploy-run \&#10;  --name repo-auditor \&#10;  --description "Use when auditing a repository through OpenMaple." \&#10;  --project ./repo-auditor-agent \&#10;  --loop codex_open_source \&#10;  --runtime e2b \&#10;  --prompt "Audit this repository and create a findings summary." \&#10;  --json</code></pre>
+            <h3><span class="lang-zh">部署后验收与失败定位</span><span class="lang-en">Post-deploy acceptance and failure triage</span></h3>
+            <ul>
+              <li><span class="lang-zh">控制台验收：列表页有 loading，deployment detail 可打开，运行按钮可创建 run/session。</span><span class="lang-en">Console acceptance: list pages show loading, deployment detail opens, and the run button creates a run/session.</span></li>
+              <li><span class="lang-zh">事件验收：session 至少包含 <code>user.message</code>、agent loop event、tool call 或 final answer。</span><span class="lang-en">Event acceptance: a session includes at least <code>user.message</code>, an agent-loop event, a tool call or final answer.</span></li>
+              <li><span class="lang-zh">失败验收：保留 <code>session.status_failed</code> 的 <code>reason</code> 和 <code>error</code>，例如 <code>agent_loop_failed</code> 或 <code>veFaaS runtime error 500</code>，再回查 runtime 日志和 tool_calls。</span><span class="lang-en">Failure acceptance: preserve <code>session.status_failed</code> <code>reason</code> and <code>error</code>, such as <code>agent_loop_failed</code> or <code>veFaaS runtime error 500</code>, then inspect runtime logs and tool_calls.</span></li>
+              <li><span class="lang-zh">Codex 链路验收：确认 <code>agent_loop.type=codex_open_source</code> 出现在 deployment manifest，且 session 能写事件、跑工具、产出 artifact。</span><span class="lang-en">Codex path acceptance: confirm <code>agent_loop.type=codex_open_source</code> appears in the deployment manifest and the session records events, tool calls, and artifacts.</span></li>
+            </ul>
+          </section>
+
+          <section id="troubleshooting">
+            <h2><span class="lang-zh">排障</span><span class="lang-en">Troubleshooting</span></h2>
+            <table><thead><tr><th>Symptom</th><th>Check</th><th>Fix</th></tr></thead><tbody>
+              <tr><td>Runtime 500</td><td>session_events, provider response, sandbox metadata</td><td>Serialize errors, shorten bootstrap timeout, inspect runtime logs</td></tr>
+              <tr><td>Workspace forbidden</td><td>workspace_members, accessibleWorkspaceIds</td><td>Scope list endpoints by member workspaces</td></tr>
+              <tr><td>CLI publish E401</td><td>npm whoami, temporary npmrc, token source</td><td>Use token from ~/.agents/.account.yaml without printing it</td></tr>
+              <tr><td>Codex chain broken</td><td>message, event, tool_call, artifact, final answer</td><td>Run a focused session contract before broader E2E</td></tr>
+            </tbody></table>
+          </section>
+        </article>
+      </main>
+
+      <aside class="toc">
+        <div class="toc-inner">
+          <div class="toc-title"><span class="lang-zh">本页目录</span><span class="lang-en">On this page</span></div>
+          <a href="#overview"><span class="lang-zh">概览</span><span class="lang-en">Overview</span></a>
+          <a href="#quickstart"><span class="lang-zh">快速开始</span><span class="lang-en">Quickstart</span></a>
+          <a href="#architecture"><span class="lang-zh">架构</span><span class="lang-en">Architecture</span></a>
+          <a href="#providers"><span class="lang-zh">云厂商</span><span class="lang-en">Cloud providers</span></a>
+          <a href="#cli">Maple CLI</a>
+          <a href="#skills">Skills</a>
+          <a href="#deploy"><span class="lang-zh">发布</span><span class="lang-en">Deploy</span></a>
+          <a href="#troubleshooting"><span class="lang-zh">排障</span><span class="lang-en">Troubleshooting</span></a>
+        </div>
+      </aside>
+    </div>
+    <script>
+      const root = document.documentElement;
+      const langBtn = document.querySelector("[data-lang-toggle]");
+      const themeBtn = document.querySelector("[data-theme-toggle]");
+      const menuBtn = document.querySelector("[data-menu-toggle]");
+      const backdrop = document.querySelector("[data-drawer-backdrop]");
+      const closeDrawer = () => document.body.classList.remove("drawer-open");
+      const setLang = (lang) => {
+        root.dataset.lang = lang;
+        root.lang = lang;
+        localStorage.setItem("openmaple-docs-lang", lang);
+        langBtn.setAttribute("aria-pressed", String(lang === "zh"));
+      };
+      const setTheme = (theme) => {
+        root.dataset.theme = theme;
+        localStorage.setItem("openmaple-docs-theme", theme);
+        themeBtn.setAttribute("aria-pressed", String(theme === "dark"));
+        themeBtn.textContent = theme === "dark" ? "Dark" : "Light";
+      };
+      setLang(localStorage.getItem("openmaple-docs-lang") || "zh");
+      setTheme(localStorage.getItem("openmaple-docs-theme") || "dark");
+      langBtn.addEventListener("click", () => setLang(root.dataset.lang === "zh" ? "en" : "zh"));
+      themeBtn.addEventListener("click", () => setTheme(root.dataset.theme === "dark" ? "light" : "dark"));
+      menuBtn.addEventListener("click", () => document.body.classList.toggle("drawer-open"));
+      backdrop.addEventListener("click", closeDrawer);
+      document.querySelectorAll(".nav-list a").forEach((link) => {
+        link.addEventListener("click", () => {
+          document.querySelectorAll(".nav-list a").forEach((item) => item.classList.remove("active"));
+          link.classList.add("active");
+          closeDrawer();
+        });
+      });
+    </script>
+  </body>
+</html>

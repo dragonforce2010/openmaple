@@ -1,0 +1,15 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "current-agent-npm-smoke",
+      "dependencies": {
+        "maple-agent-sdk": "^0.1.0",
+      },
+    },
+  },
+  "packages": {
+    "maple-agent-sdk": ["maple-agent-sdk@0.1.0", "", {}, "sha512-Z0iWcpSerAl8+AY3p1jH38ZP7PNB1r5OSkT9cZTTQREvLrYpPPBA3jgpbbDsgycsD8HkB5+RJjzDxLkpXLAMQQ=="],
+  }
+}

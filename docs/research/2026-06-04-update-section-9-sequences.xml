@@ -1,0 +1,57 @@
+<callout background-color="light-yellow" border-color="yellow">
+  <p><b>源码校准：</b>原 9.x 小节已有图，但部分标题与图内容错位。下面补充当前实现真实时序；Stop/Timeout/Retry 在当前 API 中尚未形成完整控制面，应在后续里程碑补齐。</p>
+</callout>
+<h3>源码校准 A：创建 Agent 与 Environment</h3>
+<whiteboard type="mermaid">sequenceDiagram
+  participant UI as React Console
+  participant API as Express API
+  participant Store as SQLite Store
+  UI-&gt;&gt;API: POST /v1/agents
+  API-&gt;&gt;Store: createAgent(config)
+  Store--&gt;&gt;API: agent + agent_version
+  API--&gt;&gt;UI: 201 agent
+  UI-&gt;&gt;API: POST /v1/environments
+  API-&gt;&gt;Store: createEnvironment(config)
+  Store--&gt;&gt;API: environment
+  API--&gt;&gt;UI: 201 environment
+</whiteboard>
+<h3>源码校准 B：Session Run</h3>
+<whiteboard type="mermaid">sequenceDiagram
+  participant UI as React Console
+  participant API as Express API
+  participant Store as SQLite Store
+  participant Runner as runner.ts
+  participant Provider as provider.ts
+  participant Runtime as runtime.ts
+  UI-&gt;&gt;API: POST /v1/sessions
+  API-&gt;&gt;Store: createSession(status=created)
+  API-&gt;&gt;Runner: bootstrapSession(sessionId)
+  Runner-&gt;&gt;Store: event system.bootstrapping / idle
+  UI-&gt;&gt;API: POST /v1/sessions/{id}/events
+  API-&gt;&gt;Store: createSessionEvent(user.message)
+  API-&gt;&gt;Runner: runUserMessage(sessionId,text)
+  Runner-&gt;&gt;Store: updateSessionStatus(running)
+  Runner-&gt;&gt;Provider: callProvider(messages, tools)
+  Provider--&gt;&gt;Runner: assistant text or tool_calls
+  Runner-&gt;&gt;Runtime: executeTool(sessionId, tool)
+  Runtime--&gt;&gt;Runner: tool result
+  Runner-&gt;&gt;Store: agent/tool events
+  Runner-&gt;&gt;Store: updateSessionStatus(idle or failed)
+</whiteboard>
+<h3>源码校准 C：SSE 事件流</h3>
+<whiteboard type="mermaid">sequenceDiagram
+  participant UI as React Console
+  participant API as Express API
+  participant Hub as eventHub.ts
+  participant Store as SQLite Store
+  participant Runner as runner.ts
+  UI-&gt;&gt;API: GET /v1/sessions/{id}/events/stream
+  API-&gt;&gt;Hub: subscribe(sessionId)
+  Runner-&gt;&gt;Store: createSessionEvent(...)
+  Runner-&gt;&gt;Hub: emitSessionEvent(sessionId,event)
+  Hub--&gt;&gt;API: event callback
+  API--&gt;&gt;UI: SSE data: event
+  UI-&gt;&gt;API: GET /v1/sessions/{id}/events
+  API-&gt;&gt;Store: listSessionEvents(sessionId)
+  Store--&gt;&gt;UI: full history
+</whiteboard>

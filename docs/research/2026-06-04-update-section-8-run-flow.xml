@@ -1,0 +1,19 @@
+<callout background-color="light-blue" border-color="blue">
+  <p><b>补图：</b>当前用户消息链路由 React Console 或 magcli/sdk 发起，经 Express API 写入 <code>session_events</code>，再异步调用 <code>runUserMessage</code>，由 OpenAI-compatible provider 决策工具调用，最后交给 sandbox runtime 执行。</p>
+</callout>
+<whiteboard type="mermaid">flowchart TB
+  User[User] -- message --&gt; UI[React Console / magcli / SDK]
+  UI -- POST /v1/sessions/{id}/events --&gt; API[Express API]
+  API -- createSessionEvent user.message --&gt; DB[(SQLite session_events)]
+  API -- void runUserMessage --&gt; Runner[runner.ts]
+  Runner -- set status running --&gt; DB
+  Runner -- messages + tools --&gt; Provider[provider.ts]
+  Provider -- tool_calls? --&gt; Runner
+  Runner -- executeTool --&gt; Runtime[runtime.ts]
+  Runtime -- bash/read/write/list/grep/memory --&gt; Sandbox[Docker or E2B]
+  Sandbox -- stdout/files --&gt; Runtime
+  Runtime -- artifact scan/sync --&gt; Artifacts[Host artifacts]
+  Runtime -- tool result --&gt; Runner
+  Runner -- agent/tool/session events --&gt; DB
+  DB -- EventSource stream --&gt; UI
+</whiteboard>

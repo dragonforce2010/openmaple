@@ -1,0 +1,29 @@
+{
+  "name": "maple-agent-cli",
+  "version": "0.1.2",
+  "description": "OpenMaple managed agent platform CLI.",
+  "private": false,
+  "type": "module",
+  "license": "UNLICENSED",
+  "bin": {
+    "maple": "maple.mjs"
+  },
+  "files": [
+    "maple.mjs",
+    "main.go",
+    "go.mod",
+    "cmd",
+    "internal",
+    "skills",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "go test ./...",
+    "prepack": "go test ./..."
+  },
+  "engines": {
+    "node": ">=18",
+    "npm": ">=9"
+  },
+  "publishConfig": {}
+}

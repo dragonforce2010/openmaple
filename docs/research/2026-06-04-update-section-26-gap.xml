@@ -1,0 +1,18 @@
+<callout background-color="light-red" border-color="red">
+  <p><b>新增差距审计（2026-06-04）：</b>基于当前源码、Anthropic Managed Agents 和 AWS AgentCore 调研结果，本节建议优先追踪以下缺口。</p>
+</callout>
+<table>
+  <thead>
+    <tr><th background-color="light-gray">优先级</th><th background-color="light-gray">缺口</th><th background-color="light-gray">当前证据</th><th background-color="light-gray">建议</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>P0</td><td>文档目标态与源码真实态混合</td><td>当前文档有未来表和架构，但缺当前实现 ER/数据流；9.x 图存在标题错位</td><td>保留目标态，同时增加“当前实现源码校准”图谱</td></tr>
+    <tr><td>P0</td><td>默认模型密钥硬编码风险</td><td><code>server/modelGateway.ts</code> 中存在默认 VolcoEngine API key 常量</td><td>迁到环境变量/secret store；默认初始化只写 secret ref，不在源码持有明文</td></tr>
+    <tr><td>P1</td><td>Runtime lifecycle 不完整</td><td>当前有 create session、bootstrap、run message，但没有显式 stop/timeout/retry/job queue 控制面</td><td>新增 runtime_session 状态机、stop API、超时配置、重试策略和恢复 worker</td></tr>
+    <tr><td>P1</td><td>Tool Gateway 缺失</td><td>已有 model gateway，但企业 API/MCP/OpenAPI target 未资源化</td><td>参考 AgentCore Gateway：tool target、schema import、credential provider、policy、sync 状态</td></tr>
+    <tr><td>P1</td><td>Identity/Vault 仍偏静态密钥</td><td>vault_credentials 存 key/value_ref，缺 OAuth2、token refresh、user-delegated auth</td><td>把 Vault 升级为 Identity 子系统，支持 workload identity、OAuth2/API key provider 和审计</td></tr>
+    <tr><td>P1</td><td>Memory 模型过薄</td><td>当前 memory_stores/memories 是 path/content 结构</td><td>增加 actor/session/event/record/strategy/extraction job，支持 semantic、summary、preference、episodic memory</td></tr>
+    <tr><td>P2</td><td>Observability 不足</td><td>SSE 与 session_events 可看 UI 时间线，但缺 trace/span/log/metric 统一观测</td><td>将 provider call、tool call、runtime execution、artifact sync、gateway usage 标准化为 spans</td></tr>
+    <tr><td>P2</td><td>Evaluation/Registry 缺位</td><td>已有 agent_versions、skill_versions、templates、deployments，但未形成评测与注册目录闭环</td><td>建设 golden task、batch eval、A/B、上线审批；skills/templates/tools/agents 进入 registry</td></tr>
+  </tbody>
+</table>

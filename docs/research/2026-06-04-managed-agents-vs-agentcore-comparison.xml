@@ -1,0 +1,115 @@
+<title>Anthropic Managed Agents vs AWS Bedrock AgentCore 对比与自研平台借鉴（2026-06-04）</title>
+
+<h1>Anthropic Managed Agents vs AWS Bedrock AgentCore 对比与自研平台借鉴（2026-06-04）</h1>
+
+<callout background-color="light-blue" border-color="blue">
+  <p>结论：Anthropic Managed Agents 更像“Claude-first 的托管 agent harness + sandbox + session log”，AWS Bedrock AgentCore 更像“云厂商级 agent platform control plane + data plane”。二者都在解决长任务、工具执行、状态、隔离和观测，但商业化、抽象层级、生态策略和 API 形态明显不同。</p>
+</callout>
+
+<h2>1. 一张图看差异</h2>
+
+<whiteboard type="mermaid">flowchart LR
+  subgraph Anthropic[Anthropic Claude Managed Agents]
+    AAgent[Agent&lt;br/&gt;model / prompt / tools / skills]
+    AEnv[Environment&lt;br/&gt;cloud or self-hosted sandbox]
+    ASess[Session&lt;br/&gt;long-running stateful work]
+    AEvents[Events / SSE / Webhooks]
+    AVault[Vault / files / memory]
+    AAgent --&gt; ASess
+    AEnv --&gt; ASess
+    ASess --&gt; AEvents
+    ASess --&gt; AVault
+  end
+  subgraph AWS[AWS Bedrock AgentCore]
+    Runtime[Runtime / Harness]
+    Gateway[Gateway / MCP targets]
+    Identity[Identity / Token Vault]
+    Memory[Memory strategies]
+    Tools[Browser / Code Interpreter]
+    Gov[Policy / Registry / Evaluations / Payments]
+    Obs[CloudWatch / OTEL Observability]
+    Runtime --&gt; Gateway
+    Runtime --&gt; Identity
+    Runtime --&gt; Memory
+    Runtime --&gt; Tools
+    Runtime --&gt; Gov
+    Runtime --&gt; Obs
+  end
+</whiteboard>
+
+<h2>2. 多维度对比</h2>
+
+<table>
+  <thead>
+    <tr><th background-color="light-gray">维度</th><th background-color="light-gray">Anthropic Managed Agents</th><th background-color="light-gray">AWS Bedrock AgentCore</th><th background-color="light-gray">判断</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>核心定位</td><td>预构建、可配置的 Claude agent harness，运行在托管基础设施上</td><td>面向任意框架/任意模型的企业级 agentic platform</td><td>Anthropic 更产品化、闭环；AWS 更平台化、组合式</td></tr>
+    <tr><td>目标用户</td><td>想快速使用 Claude 长任务 agent 的开发者和企业</td><td>AWS 生态内的平台团队、云应用团队、agent framework 用户</td><td>AWS 面向组织级底座，Anthropic 面向 Claude agent 交付效率</td></tr>
+    <tr><td>商业化策略</td><td>Claude Platform API 产品；也可通过 Claude Platform on AWS 进入 AWS 采购路径</td><td>AWS 云服务消费式定价，绑定 IAM/CloudWatch/ECR/Lambda/Bedrock 等生态</td><td>AWS 更像平台税和云资源消费，Anthropic 更像模型与 agent 产品消费</td></tr>
+    <tr><td>模型策略</td><td>Claude-first</td><td>明确 any foundation model，包括 Bedrock 内外模型</td><td>自研平台若做企业内部底座，应学习 AWS 的 model-agnostic 策略</td></tr>
+    <tr><td>Agent loop</td><td>托管 harness 是核心卖点，内置 prompt caching、compaction、工具执行优化</td><td>Runtime 可运行自带 loop；Harness 也提供单 API agent loop</td><td>Anthropic 在 agent 行为质量上更有模型厂商优势</td></tr>
+    <tr><td>Runtime 隔离</td><td>cloud sandbox 或 self-hosted sandbox，每个 session 独立环境</td><td>serverless runtime/session isolation，Browser/Code 也是托管隔离环境</td><td>二者都将“手”和“脑”隔离作为长任务 agent 的关键</td></tr>
+    <tr><td>状态模型</td><td>Session event history、sandbox filesystem、files、memory</td><td>短期 events + 长期 memory strategies + records + extraction jobs</td><td>AWS 的 memory 模型更显式、更适合平台化治理</td></tr>
+    <tr><td>工具生态</td><td>内置 Bash/File/Web/MCP/skills，偏 Claude 运行体验</td><td>Gateway 将 OpenAPI/Smithy/Lambda/MCP 统一转工具，另有 Browser/Code</td><td>AWS 的 Gateway 更适合企业既有系统工具化</td></tr>
+    <tr><td>身份与凭据</td><td>Vault 支持外部认证，文档强调 agent 使用凭据访问外部服务</td><td>Identity 是一等服务，含 workload identity、OAuth2/API key/payment credential provider、token vault</td><td>AWS 更完整；自研平台应将 Vault 升级为 Identity 子系统</td></tr>
+    <tr><td>OpenAPI 形态</td><td>围绕 agents/environments/sessions/events/vaults/memory/files 等资源</td><td>Control plane + Data plane + Gateway MCP plane，资源更细</td><td>Anthropic API 贴近 agent 生命周期；AWS API 贴近云资源生命周期</td></tr>
+    <tr><td>可观测性</td><td>事件流、webhook、session history；工程博客强调 session log 可恢复</td><td>OTEL-compatible telemetry、CloudWatch logs/metrics/traces/spans、Transaction Search</td><td>AWS 在企业运维可观测性上更重</td></tr>
+    <tr><td>治理能力</td><td>permission policies、vault、self-hosted sandbox、beta 合规边界</td><td>Policy、Registry、Evaluations、IAM condition keys、resource policy</td><td>AWS 治理面更宽；Anthropic 更集中在 agent 安全执行</td></tr>
+    <tr><td>合规边界</td><td>Managed Agents beta 当前不适用 ZDR 或 HIPAA BAA</td><td>继承 AWS 生态合规/区域/权限模型，但具体 AgentCore 能力仍需按服务文档核对</td><td>企业采购场景 AWS 更容易进入既有安全评审路径</td></tr>
+    <tr><td>核心竞争力</td><td>Claude agent 行为质量、托管 harness、长任务恢复、内置优化</td><td>AWS 生态、生产运维与治理能力、任意模型/框架、企业系统接入</td><td>不是同质竞争：一个是模型厂商 agent 产品，一个是云平台 agent 基建</td></tr>
+  </tbody>
+</table>
+
+<h2>3. 相同点</h2>
+
+<ul>
+  <li>都认为长任务 agent 不能只靠一次模型调用，需要 session、event log、tool execution、runtime isolation。</li>
+  <li>都把工具执行环境与模型推理解耦，降低沙箱崩溃、工具卡死、文件状态丢失对整体任务的影响。</li>
+  <li>都提供流式/事件式反馈，让上层应用可以观察 agent 的中间状态，而不是只拿最终答案。</li>
+  <li>都把 MCP 作为工具生态的重要接口，只是 AWS 进一步把 OpenAPI/Smithy/Lambda/MCP target 做成 Gateway 资源。</li>
+  <li>都在补齐企业需要的身份、凭据、记忆、文件、观测与安全边界。</li>
+</ul>
+
+<h2>4. 关键差异</h2>
+
+<table>
+  <thead>
+    <tr><th background-color="light-gray">差异主题</th><th background-color="light-gray">影响</th><th background-color="light-gray">对自研平台的启发</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>抽象层级</td><td>Anthropic 用户先感知 Agent/Environment/Session；AWS 用户先感知 Runtime/Gateway/Identity/Memory 等平台资源</td><td>Console 可以保留快速创建 agent 的低门槛，但内部模型要平台化拆分</td></tr>
+    <tr><td>模型绑定</td><td>Anthropic 深度绑定 Claude 能力；AWS 主张 model-agnostic</td><td>自研平台要把 model_configs/gateway 与 agent runtime 解耦，避免单模型路线锁死</td></tr>
+    <tr><td>企业系统接入</td><td>Anthropic 通过 MCP/tools/vault 接入；AWS Gateway 直接面向企业 API 资产</td><td>需要建设 OpenAPI import、tool target、tool registry、credential provider、tool policy</td></tr>
+    <tr><td>记忆治理</td><td>Anthropic 的 memory 文档偏 agent 使用体验；AWS 将 memory strategies/records/extraction 显式资源化</td><td>当前 memory_stores/memories 要升级成可审计、可重算、可策略化的 memory pipeline</td></tr>
+    <tr><td>观测链路</td><td>Anthropic 事件流适合产品交互；AWS OTEL/CloudWatch 适合 SRE 和审计</td><td>SSE 应继续服务 UI，但运行记录应落 trace/span/log/metric 四件套</td></tr>
+    <tr><td>治理资产</td><td>AWS 的 Policy/Registry/Evaluations/Payments 是组织级平台能力</td><td>skills/templates/deployments 应纳入 registry；inbound/tool policies 应一等资源化；上线前后要有评测基线</td></tr>
+  </tbody>
+</table>
+
+<h2>5. 对当前自研 managed-agents-platform 的优先级建议</h2>
+
+<ol>
+  <li seq="auto"><b>P0：文档先对齐真实实现。</b>补齐当前代码的模块图、数据流、时序图和 ER 图，并明确哪些是目标架构、哪些是当前实现，避免设计文档误导研发排期。</li>
+  <li seq="auto"><b>P0：Secret 风险收敛。</b>当前 model gateway 存在默认火山 key 常量，需要迁入 env/secret store，并在文档风险里显式标红。</li>
+  <li seq="auto"><b>P1：Runtime lifecycle。</b>补 stop/timeout/retry/job queue，避免 session 状态只在 request 内异步推进，缺少可恢复控制面。</li>
+  <li seq="auto"><b>P1：Tool Gateway。</b>学习 AgentCore Gateway，把 OpenAPI/MCP/内部 HTTP/Lambda-like target 统一抽象成 tool target，并给每个 target 挂 credential provider 与 policy。</li>
+  <li seq="auto"><b>P1：Identity + Vault。</b>把当前 vault_credentials 升级为 OAuth2/API key provider、token refresh、workload/user identity、授权审计。</li>
+  <li seq="auto"><b>P1：Memory pipeline。</b>新增 actor/session/event/record/strategy/extraction job，支持 summary、preference、semantic fact、episodic memory。</li>
+  <li seq="auto"><b>P2：Observability。</b>将 session_events/tool_calls/model gateway usage 统一映射为 trace/span/log/metric；提供 session replay 和失败定位视图。</li>
+  <li seq="auto"><b>P2：Evaluations/Registry。</b>把 agent_versions、skill_versions、templates、deployments 纳入 registry；构建 golden tasks、batch eval、A/B eval 与上线审批。</li>
+</ol>
+
+<h2>6. 参考资料</h2>
+
+<ul>
+  <li><a href="https://platform.claude.com/docs/en/managed-agents/overview">Claude Managed Agents overview</a></li>
+  <li><a href="https://platform.claude.com/docs/en/managed-agents/environments">Claude Managed Agents environments</a></li>
+  <li><a href="https://platform.claude.com/docs/en/managed-agents/events-and-streaming">Claude Managed Agents event stream</a></li>
+  <li><a href="https://platform.claude.com/docs/en/managed-agents/vaults">Claude Managed Agents vaults</a></li>
+  <li><a href="https://www.anthropic.com/engineering/managed-agents">Scaling Managed Agents: Decoupling the brain from the hands</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html">AWS Bedrock AgentCore overview</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_Operations.html">AWS AgentCore Data Plane API Reference</a></li>
+  <li><a href="https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_Operations.html">AWS AgentCore Control Plane API Reference</a></li>
+  <li><a href="https://www.youtube.com/playlist?list=PLhr1KZpdzukc60dMwb86KTBl41sko_hRE">AWS AgentCore YouTube playlist</a></li>
+</ul>

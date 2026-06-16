@@ -1,0 +1,31 @@
+<callout background-color="light-yellow" border-color="yellow">
+  <p><b>源码校准补充（2026-06-04）：</b>本节上方 API 表是目标态设计，下面按当前 <code>server/index.ts</code> 实际 Express routes 补一份“已实现 API 清单”。这能避免把 workspace、A2A、webhook、files 等尚未落地能力误判为已实现。</p>
+</callout>
+<h3>14.8 当前实现 API 路由清单</h3>
+<table>
+  <thead>
+    <tr><th background-color="light-gray">分组</th><th background-color="light-gray">已实现路由</th><th background-color="light-gray">说明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Public / Auth</td><td><code>GET /health</code><br/><code>GET /v1/platform/version</code><br/><code>GET /v1/auth/providers</code><br/><code>GET /v1/auth/oauth/:provider/start</code><br/><code>GET /v1/auth/oauth/:provider/callback</code><br/><code>POST /v1/auth/login</code><br/><code>POST /v1/auth/logout</code><br/><code>GET /v1/auth/me</code></td><td><code>/v1/auth/me</code> 使用 optional auth；<code>/v1/auth/login</code> 当前支持 local login。目标态里的 workspace/invitation/user identity API 尚未实现。</td></tr>
+    <tr><td>Model Gateway</td><td><code>POST /v1/gateway/chat/completions</code><br/><code>GET /v1/model_configs</code><br/><code>POST /v1/model_configs</code><br/><code>POST /v1/model_configs/test</code><br/><code>POST /v1/model_configs/:modelConfigId/test</code><br/><code>GET /v1/gateway_keys</code><br/><code>POST /v1/gateway_keys</code><br/><code>PATCH /v1/gateway_keys/:keyId</code><br/><code>GET /v1/quota_usage</code></td><td><code>/v1/gateway/chat/completions</code> 在 <code>requireAuth</code> 之前，使用 gateway bearer key 自鉴权；model/gateway 管理 API 需要登录态。</td></tr>
+    <tr><td>Artifacts</td><td><code>GET /v1/artifacts</code><br/><code>GET /v1/sessions/:sessionId/artifacts</code><br/><code>GET /v1/sessions/:sessionId/artifacts/*path/download</code></td><td>当前没有独立 <code>/v1/files</code> 资源；artifact 来自 session workspace 扫描与下载。</td></tr>
+    <tr><td>Agents / Drafts</td><td><code>POST /v1/agent_drafts</code><br/><code>GET /v1/agents</code><br/><code>POST /v1/agents</code><br/><code>GET /v1/agents/:agentId</code><br/><code>PATCH /v1/agents/:agentId</code><br/><code>GET /v1/agents/:agentId/versions</code></td><td>已有 agent CRUD 和 version list；目标态 <code>archive</code>、inbound auth、agent hub publish 尚未实现。</td></tr>
+    <tr><td>Environments</td><td><code>GET /v1/environments</code><br/><code>POST /v1/environments</code><br/><code>GET /v1/environments/:environmentId</code></td><td>已有基础环境配置；目标态 provider validate、archive/delete、火山云沙箱控制面尚未实现。</td></tr>
+    <tr><td>Sessions / Events</td><td><code>GET /v1/sessions</code><br/><code>POST /v1/sessions</code><br/><code>GET /v1/sessions/:sessionId</code><br/><code>GET /v1/sessions/:sessionId/detail</code><br/><code>GET /v1/sessions/:sessionId/events</code><br/><code>POST /v1/sessions/:sessionId/events</code><br/><code>GET /v1/sessions/:sessionId/events/stream</code></td><td>已有 session detail、event append、SSE；当前没有显式 stop、interrupt、timeout/retry、session_resources 一等 API。</td></tr>
+    <tr><td>Deployments / magcli</td><td><code>GET /v1/deployments</code><br/><code>GET /v1/deployments/:deploymentId</code><br/><code>POST /v1/deployments</code><br/><code>POST /v1/deployments/:deploymentId/invoke</code></td><td>服务当前 SDK/CLI 的 build/deploy/invoke 链路；不是目标态 Agent Hub/A2A publish。</td></tr>
+    <tr><td>Vaults / Memory</td><td><code>GET /v1/vaults</code><br/><code>POST /v1/vaults</code><br/><code>GET /v1/vaults/:vaultId</code><br/><code>GET /v1/vaults/:vaultId/credentials</code><br/><code>POST /v1/vaults/:vaultId/credentials</code><br/><code>GET /v1/memory_stores</code><br/><code>POST /v1/memory_stores</code><br/><code>GET /v1/memory_stores/:memoryStoreId/memories</code><br/><code>PUT /v1/memory_stores/:memoryStoreId/memories/*path</code></td><td>Vault 目前是静态 credential ref；Memory 目前是 path/content，不是 AgentCore 式 strategy/record/extraction pipeline。</td></tr>
+    <tr><td>Skills / Templates</td><td><code>GET /v1/skills</code><br/><code>POST /v1/skills/scan</code><br/><code>POST /v1/skills</code><br/><code>PATCH /v1/skills/:skillId</code><br/><code>GET /v1/skills/:skillId/files</code><br/><code>GET /v1/skills/:skillId/files/*path</code><br/><code>PUT /v1/skills/:skillId/files/*path</code><br/><code>GET /v1/templates</code><br/><code>POST /v1/templates</code><br/><code>GET /v1/templates/:templateId</code><br/><code>PATCH /v1/templates/:templateId</code></td><td>已有 skill 文件管理和模板 CRUD；目标态 registry、审批、版本发布流尚未实现。</td></tr>
+  </tbody>
+</table>
+<h3>14.9 当前实现 vs 目标 API 差距</h3>
+<table>
+  <thead><tr><th background-color="light-gray">目标态能力</th><th background-color="light-gray">当前状态</th><th background-color="light-gray">落地建议</th></tr></thead>
+  <tbody>
+    <tr><td>Workspace / user identity / invitation</td><td>未实现；当前资源未系统性绑定 workspace</td><td>先补 workspace schema 和 auth scope，再改所有 list/get/create 查询条件</td></tr>
+    <tr><td>Agent Inbound Auth / Agent Hub / A2A</td><td>未实现；当前只有 deployment invoke</td><td>以 <code>agent_publications</code>、<code>agent_access_grants</code>、<code>a2a_tasks</code> 三组表切入</td></tr>
+    <tr><td>Files / session resources</td><td>artifact 已有，file/resource API 未实现</td><td>把 session workspace artifact 与用户上传 file 拆成两个资源域</td></tr>
+    <tr><td>Runtime lifecycle</td><td>create/run/SSE 已有；stop/retry/timeout 控制面缺失</td><td>新增 <code>session_runs</code>、<code>work_items</code>、<code>runtime_instances</code></td></tr>
+    <tr><td>Webhooks</td><td>未实现</td><td>先做状态事件 webhook，后续扩展 tool/model/artifact 事件</td></tr>
+  </tbody>
+</table>

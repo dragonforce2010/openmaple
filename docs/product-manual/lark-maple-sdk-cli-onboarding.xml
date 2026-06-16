@@ -1,0 +1,175 @@
+<title>Maple SDK + CLI 接入手册</title>
+
+<callout emoji="📌" background-color="light-blue" border-color="blue">
+  <p><b>目标</b>：终端用户从空目录开始，通过代码编写 + CLI 完成 agent 创建、构建、部署、发布和调用。</p>
+  <p><b>适用版本</b>：Maple 0.1.0，支持 <code>anthropic_claude_code</code> 与 <code>codex_open_source</code> 两类 AgentLoop。</p>
+</callout>
+
+<h1>一、接入全景</h1>
+
+<whiteboard type="mermaid">flowchart LR
+    A[maple init] --&gt; B[编写 harness]
+    B --&gt; C[maple build]
+    C --&gt; D[POST /v1/deployments]
+    D --&gt; E[Agent + Environment + Deployment]
+    E --&gt; F[maple invoke]
+    F --&gt; G[Session Events + Artifacts]
+</whiteboard>
+
+<table>
+  <colgroup><col span="4" width="170"/></colgroup>
+  <thead>
+    <tr>
+      <th background-color="light-blue">接入层</th>
+      <th background-color="light-green">入口</th>
+      <th background-color="light-orange">用途</th>
+      <th background-color="light-gray">状态</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Web Console</td><td>Quickstart / Agents / Sessions</td><td>可视化创建和调试 agent</td><td>已实现</td></tr>
+    <tr><td>REST API</td><td><code>/v1/agents</code>、<code>/v1/sessions</code>、<code>/v1/deployments</code></td><td>服务端集成</td><td>已实现</td></tr>
+    <tr><td>SDK</td><td><code>sdk/index.mjs</code></td><td>Node 代码接入</td><td>已实现 MVP</td></tr>
+    <tr><td>CLI</td><td><code>scripts/maple.mjs</code></td><td>本地一键创建、构建、部署、调用</td><td>已实现 MVP</td></tr>
+  </tbody>
+</table>
+
+<h1>二、选择 AgentLoop</h1>
+
+<grid>
+  <column width-ratio="0.5">
+    <callout emoji="✅" background-color="light-green" border-color="green">
+      <h3>anthropic_claude_code</h3>
+      <p>Maple Code managed coding loop。</p>
+      <p>适合交互式代码任务、工具证据、简洁汇报。</p>
+    </callout>
+  </column>
+  <column width-ratio="0.5">
+    <callout emoji="🧩" background-color="light-orange" border-color="orange">
+      <h3>codex_open_source</h3>
+      <p>Codex 风格 open-source loop。</p>
+      <p>适合本地 harness、CLI 发布和脚本化调用。</p>
+    </callout>
+  </column>
+</grid>
+
+<pre lang="json" caption="AgentConfig 中的 loop 字段"><code>{
+  "agent_loop": {
+    "type": "codex_open_source",
+    "config": {},
+    "hooks": []
+  }
+}</code></pre>
+
+<h1>三、配置 Maple CLI</h1>
+
+<pre lang="bash" caption="配置 API 和登录"><code>bun run maple version --server
+bun run maple config set api.baseUrl http://127.0.0.1:8787
+bun run maple config login --local --email dev@example.com --name "Dev User"
+bun run maple config whoami</code></pre>
+
+<callout emoji="🔐" background-color="light-yellow" border-color="yellow">
+  <p>CLI 默认配置写入 <code>~/.maple/config.json</code>。CI 或 E2E 推荐设置 <code>MAPLE_CONFIG=/tmp/maple.json</code>，避免污染个人配置。</p>
+</callout>
+
+<h1>四、初始化本地 Agent 项目</h1>
+
+<pre lang="bash" caption="创建 Codex-style harness 项目"><code>bun run maple init \
+  --name repo-reviewer \
+  --loop codex_open_source \
+  --runtime local_docker \
+  --directory /tmp/repo-reviewer \
+  --yes</code></pre>
+
+<pre lang="text" caption="生成目录"><code>/tmp/repo-reviewer/
+├── maple.manifest.json
+├── package.json
+└── src/
+    └── harness.mjs</code></pre>
+
+<h1>五、编写 Harness</h1>
+
+<pre lang="javascript" caption="src/harness.mjs"><code>import { defineHarness } from 'maple-agent-sdk';
+
+export default defineHarness({
+  async beforeInvoke(ctx) {
+    return { message: ctx.input };
+  },
+  async onEvent(event, ctx) {
+    ctx.log(event.type);
+  },
+  async afterInvoke(result) {
+    return result;
+  }
+});</code></pre>
+
+<callout emoji="⚠️" background-color="light-red" border-color="red">
+  <p>当前 MVP 保存 harness manifest 和 bundle，但不在服务端直接执行上传代码。推荐把业务逻辑放在外层 harness，通过输入改写、事件观察、审计和结果处理接入。</p>
+</callout>
+
+<h1>六、构建与部署</h1>
+
+<pre lang="bash" caption="构建 bundle"><code>bun run maple build --project /tmp/repo-reviewer</code></pre>
+
+<pre lang="bash" caption="部署到平台"><code>bun run maple deploy --project /tmp/repo-reviewer --json</code></pre>
+
+<pre lang="json" caption="成功返回"><code>{
+  "deployment_id": "dep_xxx",
+  "agent_id": "agent_xxx",
+  "environment_id": "env_xxx",
+  "name": "repo-reviewer",
+  "version": "0.1.0"
+}</code></pre>
+
+<h1>七、调用和观察</h1>
+
+<pre lang="bash" caption="调用 deployment"><code>bun run maple invoke \
+  "读取 README，列出三个可以改进的地方" \
+  --deployment dep_xxx \
+  --stream</code></pre>
+
+<ol>
+  <li seq="auto">CLI 调用 <code>POST /v1/deployments/:deploymentId/invoke</code>。</li>
+  <li seq="auto">平台创建 session 并保存 immutable agent snapshot。</li>
+  <li seq="auto">runner 写入 <code>agent.loop_selected</code>、tool use、tool result 和 final message。</li>
+  <li seq="auto">用户可在 Sessions 和 Artifacts 页面查看过程与产物。</li>
+</ol>
+
+<h1>八、SDK 接入</h1>
+
+<pre lang="javascript" caption="Node SDK 示例"><code>import { MapleClient } from './sdk/index.mjs';
+
+const client = new MapleClient({ baseUrl: 'http://127.0.0.1:8787' });
+const login = await client.loginLocal({ email: 'dev@example.com' });
+const authed = client.withToken(login.token);
+const deployments = await authed.listDeployments();</code></pre>
+
+<h1>九、常见问题</h1>
+
+<table>
+  <colgroup><col span="2" width="260"/></colgroup>
+  <thead><tr><th background-color="light-blue">问题</th><th background-color="light-green">处理</th></tr></thead>
+  <tbody>
+    <tr><td><code>login_required</code></td><td>先执行 <code>maple config login --local --email ...</code>。</td></tr>
+    <tr><td><code>deployment_create_failed</code></td><td>检查同一用户下 <code>name + version</code> 是否重复。</td></tr>
+    <tr><td>AgentLoop 类型错误</td><td>只允许 <code>anthropic_claude_code</code> 或 <code>codex_open_source</code>。</td></tr>
+    <tr><td>session failed</td><td>检查 provider key、Docker/E2B 配置和 environment runtime。</td></tr>
+  </tbody>
+</table>
+
+<h1>十、验收命令</h1>
+
+<pre lang="bash" caption="本地验收"><code>npm run typecheck
+npm run build
+	bun run maple version --server
+	bun run maple init --name demo-agent --loop codex_open_source --runtime local_docker --directory /tmp/maple-demo --yes
+	bun run maple build --project /tmp/maple-demo
+	bun run maple deploy --project /tmp/maple-demo --json
+	bun run maple status --json</code></pre>
+
+<h1>十一、界面截图</h1>
+
+<callout emoji="🖼️" background-color="light-blue" border-color="blue">
+  <p>以下截图按接入流程追加到飞书文档末尾：Quickstart 首页、AgentLoop 选择器、Agents Loop 列、Session composer 和 Artifacts 下载页面。</p>
+  <p>本地源文件位于 <code>docs/product-manual/screenshots/</code>。</p>
+</callout>

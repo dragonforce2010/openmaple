@@ -1,0 +1,5 @@
+{
+  "name": "@maple/control-plane-api",
+  "private": true,
+  "type": "module"
+}

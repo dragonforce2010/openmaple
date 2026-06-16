@@ -1,0 +1,25 @@
+<callout background-color="light-green" border-color="green">
+  <p><b>自主补充建议（2026-06-04）：</b>结合 AWS AgentCore 和 Anthropic Managed Agents，推荐把后续工作拆成“先收敛安全与真实 API，再补 Runtime 生命周期，最后平台化 Gateway/Memory/Eval”。这样能先把当前平台变稳，再做 AgentCore 式扩展。</p>
+</callout>
+<h3>27.1 AgentCore/Anthropic 启发后的三阶段执行路线</h3>
+<whiteboard type="mermaid">flowchart LR
+  P0[P0: Stabilize current platform&lt;br/&gt;secret cleanup / route truth / stop API / traces] --&gt; P1[P1: Platformize runtime&lt;br/&gt;work queue / runtime sessions / provider contracts]
+  P1 --&gt; P2[P2: Enterprise agent platform&lt;br/&gt;tool gateway / identity / memory strategies / eval registry]
+  P0 --&gt; Doc[Docs stay source-aligned]
+  P1 --&gt; SDK[SDK and magcli contract tests]
+  P2 --&gt; Console[Console for registry, policy, evaluation]
+</whiteboard>
+<table>
+  <thead><tr><th background-color="light-gray">阶段</th><th background-color="light-gray">最小交付</th><th background-color="light-gray">验收证据</th></tr></thead>
+  <tbody>
+    <tr><td>P0</td><td>移除源码明文默认 key；补当前 API OpenAPI snapshot；新增 stop API；session_events 加 event_seq；gateway usage 加 latency/error</td><td><code>npm run typecheck</code>、gateway key smoke、session stop e2e、文档 API 清单与 route scan 一致</td></tr>
+    <tr><td>P1</td><td><code>session_runs</code>、<code>work_items</code>、<code>runtime_instances</code>、provider cancel/heartbeat contract、artifact manifest</td><td>kill runner 后可恢复或失败可解释；E2B/Docker provider contract tests 通过</td></tr>
+    <tr><td>P2</td><td>Tool Gateway、Identity credential provider、Memory strategy/record/extraction、Evaluation/Registry MVP</td><td>OpenAPI target 可导入为 tool；OAuth credential 不进 sandbox；golden task batch eval 可跑</td></tr>
+  </tbody>
+</table>
+<checkbox done="false">P0-1：把 <code>server/modelGateway.ts</code> 默认 API key 迁移到 env/secret 初始化流程。</checkbox>
+<checkbox done="false">P0-2：从 <code>server/index.ts</code> 自动生成当前 OpenAPI/route snapshot，作为文档和 SDK contract 的单一来源。</checkbox>
+<checkbox done="false">P1-1：新增 <code>session_runs</code> 和 <code>work_items</code>，让 long-running agent 有可恢复控制面。</checkbox>
+<checkbox done="false">P1-2：将 artifact 同步改成 manifest 驱动，避免 best-effort 文件扫描漏产物。</checkbox>
+<checkbox done="false">P2-1：新增 Tool Gateway，先支持 OpenAPI target，再接 MCP target。</checkbox>
+<checkbox done="false">P2-2：将 Memory 从 path/content 升级为 event/record/strategy/extraction pipeline。</checkbox>

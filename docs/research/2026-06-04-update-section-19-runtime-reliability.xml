@@ -1,0 +1,25 @@
+<callout background-color="light-yellow" border-color="yellow">
+  <p><b>源码校准补充（2026-06-04）：</b>当前可靠性主要靠 <code>sessions.status</code>、<code>session_events</code>、<code>tool_calls</code>、SSE 与 workspace artifact 扫描。和 AWS AgentCore Runtime 相比，还缺独立 run/work item、重试队列、heartbeat 和 cancel contract。</p>
+</callout>
+<h3>19.1 当前 Runtime / Artifact 同步可靠性边界</h3>
+<whiteboard type="mermaid">flowchart TB
+  Session[Session] -- ensureSessionRuntime --&gt; Provider{sandbox provider}
+  Provider -- local_docker --&gt; Docker[Docker container + host workspace]
+  Provider -- e2b --&gt; E2B[E2B sandbox]
+  Host[Host workspace] -- listHostFiles max 200 files max 512KB each --&gt; E2B
+  E2B -- find maxdepth 5 first 500 files --&gt; Host
+  E2B -- binary or inaccessible file --&gt; Skip[best-effort skip]
+  Host -- artifact scan --&gt; API[Artifacts API]
+  API -- download path guard --&gt; Client[Console / SDK]
+  Provider -- missing explicit stop/retry --&gt; Gap[Need runtime_session + work_item lifecycle]
+</whiteboard>
+<table>
+  <thead><tr><th background-color="light-gray">当前边界</th><th background-color="light-gray">影响</th><th background-color="light-gray">建议</th></tr></thead>
+  <tbody>
+    <tr><td>E2B 初始同步最多 200 个 host 文件，单文件 512KB</td><td>大仓库或大输入文件不会进入 sandbox</td><td>引入 file/resource manifest，显式选择挂载文件；大文件走对象存储</td></tr>
+    <tr><td>E2B 回同步最多扫描 500 个文件、深度 5</td><td>深层产物可能漏扫</td><td>runner 产物写入约定目录，artifact manifest 主动上报</td></tr>
+    <tr><td>二进制或不可读文件 best-effort skip</td><td>图像、压缩包等可能不进入 artifact</td><td>按 MIME/size 分流，二进制走 stream/blob 存储</td></tr>
+    <tr><td>没有独立 work item lease/heartbeat</td><td>进程崩溃后难判断任务是否还在运行</td><td>新增 work queue、lease expiry、heartbeat、dead letter</td></tr>
+    <tr><td>没有 stop runtime session API</td><td>用户无法可靠取消长任务</td><td>补 <code>POST /v1/sessions/{id}/stop</code> 和 provider cancel contract</td></tr>
+  </tbody>
+</table>

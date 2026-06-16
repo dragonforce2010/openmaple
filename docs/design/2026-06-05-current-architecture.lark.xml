@@ -1,0 +1,256 @@
+<doc>
+  <h1>Maple 当前代码校准架构设计</h1>
+  <p>更新时间：2026-06-05。本文档按当前代码库扫描结果编写，用于替换旧文档中“Environment 管 AgentRuntime”的过期边界。</p>
+  <callout><p>当前核心边界：Workspace 负责租户隔离、Runtime Provider、Runtime Pool、Sandbox Provider、模型池和 workspace API key；Environment 只描述工具执行 sandbox、网络、包和元数据；Session 创建时从 workspace runtime pool 选择 veFaaS 函数成员，并把绑定结果写入 session metadata。</p></callout>
+
+  <h2>1. 代码地图</h2>
+  <table>
+    <tr><th>层级</th><th>文件</th><th>当前职责</th></tr>
+    <tr><td>Console</td><td><code>src/App.tsx</code>, <code>src/api.ts</code>, <code>src/types.ts</code></td><td>React 单页控制台、i18n、Agent/Environment/Session/Vault/Memory/Skill/Template/Gateway/Artifact 视图。Environment 创建面板只写 sandbox 配置。</td></tr>
+    <tr><td>HTTP API</td><td><code>server/index.ts</code></td><td>Express API、Zod 入参校验、鉴权、workspace onboarding、资源 CRUD、session events、SSE、deployment invoke。</td></tr>
+    <tr><td>Auth</td><td><code>server/auth.ts</code></td><td>本地登录、OAuth/OIDC/ByteSSO/Lark provider 发现与 cookie session。<code>/v1</code> 下大部分接口走 <code>requireAuth</code>。</td></tr>
+    <tr><td>Store</td><td><code>server/store.ts</code></td><td>SQLite schema、seed、workspace/runtime pool/model pool/API key、Agent/Environment/Session/Event/Vault/Memory/Skill/Template/Gateway 存储。</td></tr>
+    <tr><td>Runtime</td><td><code>server/runtime.ts</code>, <code>server/sandboxConfig.ts</code></td><td>session runtime 准备、E2B/local Docker/veFaaS 执行、工具调用、资源同步、provider config 归一化。</td></tr>
+    <tr><td>Agent loop</td><td><code>server/runner.ts</code>, <code>server/provider.ts</code>, <code>server/agentLoops.ts</code></td><td>bootstrap session、调用模型、执行内置工具或等待 custom tool result、产生 session events。</td></tr>
+    <tr><td>Model gateway</td><td><code>server/modelGateway.ts</code>, <code>server/secrets.ts</code></td><td>模型配置、网关 API key、quota usage、OpenAI-compatible chat completions 转发。</td></tr>
+    <tr><td>SDK and CLI</td><td><code>sdk/index.mjs</code>, <code>sdk/index.d.ts</code>, <code>scripts/maple.mjs</code></td><td>Maple client surface、workspace API key、deployment manifest、CLI 初始化和 invoke。旧 HTTP shape 仅作为迁移兼容层保留。</td></tr>
+    <tr><td>Contracts</td><td><code>scripts/*contract*</code>, <code>scripts/e2e.mjs</code></td><td>workspace runtime pool、veFaaS、project <code>.env</code>、CWC smoke、UI E2E 和构建验证。</td></tr>
+  </table>
+
+  <h2>2. 总体组件图</h2>
+  <whiteboard type="mermaid">
+flowchart TB
+  Console["React Console<br/>src/App.tsx"] --> API["Express API<br/>server/index.ts"]
+  SDK["SDK<br/>sdk/index.mjs"] --> API
+  CLI["Maple CLI<br/>scripts/maple.mjs"] --> API
+  API --> Auth["Auth<br/>server/auth.ts"]
+  API --> Store["SQLite Store<br/>server/store.ts"]
+  API --> Gateway["Model Gateway<br/>server/modelGateway.ts"]
+  API --> Runner["Session Runner<br/>server/runner.ts"]
+  Runner --> Provider["Model Provider<br/>server/provider.ts"]
+  Runner --> Runtime["Runtime Adapter<br/>server/runtime.ts"]
+  Runner --> Events["Session Events and SSE<br/>server/eventHub.ts"]
+  Runtime --> Docker["local_docker sandbox"]
+  Runtime --> E2B["E2B sandbox"]
+  Runtime --> Vefaas["veFaaS agent runtime"]
+  Runtime -.not implemented.-> Lambda["AWS Lambda agent runtime"]
+  Runtime -.not implemented.-> Vercel["Vercel sandbox"]
+  Store --> DB[".managed-agents/platform.sqlite"]
+  Events --> Console
+  </whiteboard>
+
+  <h2>3. 资源归属模型</h2>
+  <table>
+    <tr><th>资源</th><th>归属边界</th><th>代码落点</th><th>当前状态</th></tr>
+    <tr><td>Tenant</td><td>平台租户</td><td><code>tenants</code></td><td>onboarding 时创建，主要作为 workspace 上级实体。</td></tr>
+    <tr><td>Workspace</td><td>所有业务资源隔离单元</td><td><code>workspaces</code></td><td>runtime provider、sandbox provider、runtime pool、model pool、API key 配置写入后不可改。<code>PATCH /v1/workspaces/:id</code> 返回 <code>workspace_config_immutable</code>。</td></tr>
+    <tr><td>Runtime Pool</td><td>workspace 级函数池</td><td><code>workspace_runtime_pools</code>, <code>workspace_runtime_pool_members</code></td><td>onboarding 后立即按 desired size 预热或绑定函数成员。session 创建时采用 least-active 策略选择成员。</td></tr>
+    <tr><td>Model Pool</td><td>workspace 级可用模型集合</td><td><code>workspace_model_configs</code></td><td>Agent 创建时必须使用 pool 中的 <code>model.config_id</code>，否则返回 <code>model_config_not_in_workspace_pool</code>。</td></tr>
+    <tr><td>Workspace API Key</td><td>workspace 级控制面和数据面 key</td><td><code>workspace_api_keys</code></td><td>onboarding 生成 <code>lmap_ws_</code> 原文 key 并只存 hash。<code>requireAuth</code> 已支持 <code>Authorization: Bearer &lt;lmap_ws_...&gt;</code> 访问 <code>/v1</code> 控制面和数据面；scope 当前记录但尚未逐 endpoint 强制校验。</td></tr>
+    <tr><td>Agent</td><td>workspace 可选作用域</td><td><code>agents</code>, <code>agent_versions</code></td><td>保存 Agent 定义和版本快照，兼容 Maple agent config surface。</td></tr>
+    <tr><td>Environment</td><td>workspace 可选作用域</td><td><code>environments</code></td><td>只描述 sandbox、网络、包和 metadata。API 拒绝 <code>agent_runtime</code>、<code>agentRuntime</code>、<code>agent_runtime_provider</code>、<code>agentRuntimeProvider</code> 和 <code>type=managed_agent</code>。</td></tr>
+    <tr><td>Session</td><td>workspace 可选作用域</td><td><code>sessions</code>, <code>session_threads</code>, <code>session_events</code>, <code>tool_calls</code></td><td>绑定 Agent、Environment、workspace runtime pool member，并持续写入事件流。</td></tr>
+    <tr><td>Vault and Memory</td><td>workspace 兼容列已存在</td><td><code>vaults</code>, <code>vault_credentials</code>, <code>memory_stores</code>, <code>memories</code></td><td>schema 已有 <code>workspace_id</code> 兼容列，API 当前仍以现有全局列表为主。</td></tr>
+  </table>
+
+  <h2>4. Workspace Runtime Pool 设计</h2>
+  <h3>4.1 Onboarding 输入</h3>
+  <pre><code>{
+  "tenant": { "name": "Acme", "description": "" },
+  "workspace": { "name": "Default Workspace", "description": "" },
+  "runtime_provider": "vefaas",
+  "runtime_pool": {
+    "desired_size": 2,
+    "max_instances_per_function": 100,
+    "max_concurrency_per_instance": 100,
+    "cpu_milli": 2000,
+    "memory_mb": 4096
+  },
+  "sandbox_provider": "e2b",
+  "model_config_ids": ["modelcfg_xxx"],
+  "api_key": {
+    "display_name": "Default workspace key",
+    "scopes": ["control_plane", "data_plane"]
+  }
+}</code></pre>
+  <table>
+    <tr><th>配置项</th><th>当前取值</th><th>说明</th></tr>
+    <tr><td>Runtime Provider</td><td><code>vefaas</code></td><td>默认且不可改。AWS Lambda 只作为未来能力占位。</td></tr>
+    <tr><td>Runtime Pool</td><td><code>desired_size</code>, <code>max_instances_per_function</code>, <code>max_concurrency_per_instance</code>, <code>cpu_milli</code>, <code>memory_mb</code></td><td>用于控制单 workspace 下的函数池容量、实例规格和理论并发上限。</td></tr>
+    <tr><td>Sandbox Provider</td><td><code>e2b</code></td><td>默认且当前唯一 onboarding 取值。Vercel 只作为未来能力占位。</td></tr>
+    <tr><td>Model Pool</td><td><code>model_config_ids</code></td><td>Agent 的模型只能从该集合中选择。</td></tr>
+    <tr><td>Workspace API Key</td><td><code>display_name</code>, <code>scopes</code></td><td>创建后返回一次明文 key，后续只保存 hash。</td></tr>
+  </table>
+
+  <h3>4.2 池成员 provisioning</h3>
+  <p><code>runtimePoolMemberProvisioning()</code> 只支持直接 provisioning：workspace 创建时必须提供火山 AK/SK，后端调用 <code>infra/vefaas/deploy_vefaas_runtime.py</code> 创建 runtime function、发布函数、复用已有 APIG service 创建独立 prefix route，并把返回的 <code>invoke_url</code> 写入 <code>workspace_runtime_pool_members</code>。没有 env/fake 复用分支；provisioning 失败时 pool member 进入 <code>failed</code>。</p>
+  <p>项目环境变量只从项目根目录 <code>.env</code> 加载，加载逻辑在 <code>server/env.ts</code>。region 未配置时，veFaaS 默认 <code>cn-beijing</code>。</p>
+
+  <h3>4.3 Session 绑定策略</h3>
+  <whiteboard type="mermaid">
+sequenceDiagram
+  participant Client
+  participant API as API server
+  participant Store as SQLite store
+  participant Pool as Runtime pool
+  participant Runner as Session runner
+  participant Runtime as Runtime adapter
+  participant Vefaas as veFaaS
+  participant Sandbox as E2B or local Docker
+  Client->>API: POST /v1/sessions with workspace_id
+  API->>Store: createSession(agent_id, environment_id, workspace_id)
+  Store->>Pool: select active member by active_session_count, weight, created_at
+  Pool-->>Store: runtime_pool_member
+  Store-->>API: session metadata contains runtime_pool_id, runtime_pool_member_id, agent_runtime
+  API->>Runner: bootstrapSession async
+  Runner->>Runtime: markRuntimeReady(session_id)
+  Runtime->>Sandbox: ensure sandbox from Environment
+  Runtime->>Vefaas: bootstrap with session_id, resources, sandbox metadata
+  Runtime-->>Runner: runtime ready
+  Runner->>Store: session.status_idle event
+  </whiteboard>
+  <p>当前实现会在 session 创建时把选中的 runtime pool member 写入 session metadata，并把该 member 的 <code>active_session_count</code> 加一。当前还没有在 session terminate/delete 时做 decrement，这是后续需要补齐的容量回收点。</p>
+
+  <h2>5. Environment 定义边界</h2>
+  <p>Environment 当前只描述 Maple 中“手”的环境，也就是工具执行环境。推荐 payload：</p>
+  <pre><code>{
+  "workspace_id": "ws_xxx",
+  "name": "maple-hand-env",
+  "config": {
+    "type": "e2b",
+    "sandbox": {
+      "provider": "e2b",
+      "e2b": {
+        "template": "base",
+        "workspace_path": "/workspace"
+      }
+    },
+    "networking": {
+      "mode": "limited",
+      "allowed_hosts": ["api.maple.local"]
+    },
+    "packages": [
+      { "manager": "pip", "packages": ["pytest==8.0.0"] }
+    ]
+  }
+}</code></pre>
+  <p>API 拒绝旧形态字段，例如：</p>
+  <pre><code>{
+  "config": {
+    "type": "managed_agent",
+    "agent_runtime": { "provider": "vefaas" }
+  }
+}</code></pre>
+  <p>拒绝错误码是 <code>environment_agent_runtime_forbidden</code>。当前 <code>server/store.ts</code> 的 <code>seedDefaults()</code> 和少量底层 contract 仍保留 legacy <code>volcengine-vefaas-runtime</code> Environment，这是兼容债，不代表新 API 允许继续创建这类 Environment。</p>
+
+  <h2>6. Runtime Provider 状态矩阵</h2>
+  <table>
+    <tr><th>类型</th><th>Provider</th><th>当前实现</th><th>代码行为</th></tr>
+    <tr><td>Agent Runtime</td><td><code>local</code></td><td>已实现</td><td>在 API server 内部调度 agent loop；<code>anthropic_claude_code</code> 作为 Maple Code loop 配置值使用 NDJSON runner，<code>codex_open_source</code> 使用 <code>codex exec</code>，工具走 sandbox provider。</td></tr>
+    <tr><td>Agent Runtime</td><td><code>vefaas</code></td><td>已实现</td><td>由 workspace runtime pool 或 legacy config 提供 invoke url。bootstrap 和 tool 通过 HTTP action 调用。</td></tr>
+    <tr><td>Agent Runtime</td><td><code>aws_lambda</code></td><td>占位</td><td>类型存在，<code>ensureAwsLambdaRuntime()</code> 当前抛 not implemented。</td></tr>
+    <tr><td>Sandbox</td><td><code>e2b</code></td><td>已实现</td><td>创建或连接 E2B sandbox，准备 workspace，同步资源和 artifact。E2B 属于付费资源，测试完成必须清理。</td></tr>
+    <tr><td>Sandbox</td><td><code>local_docker</code></td><td>已实现</td><td>创建 <code>lmap_&lt;session_id&gt;</code> 容器，挂载 session workspace，支持受限网络。</td></tr>
+    <tr><td>Sandbox</td><td><code>vercel</code></td><td>占位</td><td>类型存在，当前抛 not implemented。</td></tr>
+  </table>
+
+  <h2>7. 当前 ER 图</h2>
+  <whiteboard type="mermaid">
+erDiagram
+  tenants ||--o{ workspaces : owns
+  users ||--o{ workspace_members : joins
+  workspaces ||--o{ workspace_members : has
+  workspaces ||--o{ workspace_runtime_pools : configures
+  workspace_runtime_pools ||--o{ workspace_runtime_pool_members : contains
+  workspaces ||--o{ workspace_model_configs : allows
+  model_configs ||--o{ workspace_model_configs : selected
+  workspaces ||--o{ workspace_api_keys : issues
+  workspaces ||--o{ agents : scopes
+  workspaces ||--o{ environments : scopes
+  workspaces ||--o{ sessions : scopes
+  agents ||--o{ agent_versions : versions
+  agents ||--o{ sessions : snapshots
+  environments ||--o{ sessions : runs_in
+  sessions ||--o{ session_threads : has
+  sessions ||--o{ session_events : emits
+  sessions ||--o{ tool_calls : records
+  vaults ||--o{ vault_credentials : contains
+  memory_stores ||--o{ memories : contains
+  memories ||--o{ memory_versions : versions
+  skills ||--o{ skill_versions : versions
+  users ||--o{ model_configs : owns
+  gateway_keys ||--o{ gateway_usage : records
+  </whiteboard>
+
+  <h2>8. 已实现 API 目录</h2>
+  <table>
+    <tr><th>域</th><th>Endpoint</th></tr>
+    <tr><td>Health and platform</td><td><code>GET /health</code><br/><code>GET /v1/platform/version</code></td></tr>
+    <tr><td>Auth</td><td><code>GET /v1/auth/providers</code><br/><code>GET /v1/auth/oauth/:provider/start</code><br/><code>GET /v1/auth/oauth/:provider/callback</code><br/><code>POST /v1/auth/login</code><br/><code>POST /v1/auth/logout</code><br/><code>GET /v1/auth/me</code></td></tr>
+    <tr><td>Workspace</td><td><code>GET /v1/workspace_onboarding/status</code><br/><code>POST /v1/workspace_onboarding</code><br/><code>GET /v1/workspaces</code><br/><code>GET /v1/workspaces/:workspaceId</code><br/><code>PATCH /v1/workspaces/:workspaceId</code><br/><code>GET /v1/workspaces/:workspaceId/runtime_pool</code></td></tr>
+    <tr><td>Model gateway</td><td><code>GET /v1/model_configs</code><br/><code>POST /v1/model_configs</code><br/><code>POST /v1/model_configs/test</code><br/><code>POST /v1/model_configs/:id/test</code><br/><code>GET /v1/gateway_keys</code><br/><code>POST /v1/gateway_keys</code><br/><code>PATCH /v1/gateway_keys/:id</code><br/><code>GET /v1/quota_usage</code><br/><code>POST /v1/gateway/chat/completions</code></td></tr>
+    <tr><td>Agents</td><td><code>GET /v1/agents</code><br/><code>POST /v1/agents</code><br/><code>GET /v1/agents/:agentId</code><br/><code>PATCH /v1/agents/:agentId</code><br/><code>POST /v1/agents/:agentId</code><br/><code>GET /v1/agents/:agentId/versions</code><br/><code>POST /v1/agent_drafts</code></td></tr>
+    <tr><td>Environments</td><td><code>GET /v1/environments</code><br/><code>POST /v1/environments</code><br/><code>GET /v1/environments/:environmentId</code></td></tr>
+    <tr><td>Sessions and events</td><td><code>GET /v1/sessions</code><br/><code>POST /v1/sessions</code><br/><code>DELETE /v1/sessions/:sessionId</code><br/><code>GET /v1/sessions/:sessionId</code><br/><code>GET /v1/sessions/:sessionId/detail</code><br/><code>GET /v1/sessions/:sessionId/events</code><br/><code>POST /v1/sessions/:sessionId/events</code><br/><code>GET /v1/sessions/:sessionId/events/stream</code></td></tr>
+    <tr><td>Deployments</td><td><code>GET /v1/deployments</code><br/><code>GET /v1/deployments/:deploymentId</code><br/><code>POST /v1/deployments</code><br/><code>POST /v1/deployments/:deploymentId/invoke</code></td></tr>
+    <tr><td>Files and artifacts</td><td><code>POST /v1/files</code><br/><code>GET /v1/files/:fileId</code><br/><code>GET /v1/artifacts</code><br/><code>GET /v1/sessions/:sessionId/artifacts</code><br/><code>GET /v1/sessions/:sessionId/artifacts/*path/download</code></td></tr>
+    <tr><td>Vaults</td><td><code>GET /v1/vaults</code><br/><code>POST /v1/vaults</code><br/><code>GET /v1/vaults/:vaultId</code><br/><code>GET /v1/vaults/:vaultId/credentials</code><br/><code>POST /v1/vaults/:vaultId/credentials</code></td></tr>
+    <tr><td>Memory</td><td><code>GET /v1/memory_stores</code><br/><code>POST /v1/memory_stores</code><br/><code>GET /v1/memory_stores/:memoryStoreId/memories</code><br/><code>PUT /v1/memory_stores/:memoryStoreId/memories/*path</code></td></tr>
+    <tr><td>Skills and templates</td><td><code>GET /v1/skills</code><br/><code>POST /v1/skills/scan</code><br/><code>POST /v1/skills</code><br/><code>PATCH /v1/skills/:skillId</code><br/><code>GET /v1/skills/:skillId/files</code><br/><code>GET /v1/skills/:skillId/files/*path</code><br/><code>PUT /v1/skills/:skillId/files/*path</code><br/><code>GET /v1/templates</code><br/><code>POST /v1/templates</code><br/><code>GET /v1/templates/:templateId</code><br/><code>PATCH /v1/templates/:templateId</code></td></tr>
+  </table>
+
+  <h2>9. Session 事件模型</h2>
+  <whiteboard type="mermaid">
+stateDiagram-v2
+  [*] --> created
+  created --> bootstrapping: bootstrapSession
+  bootstrapping --> idle: runtime ready
+  bootstrapping --> failed: runtime_bootstrap_failed
+  idle --> running: user.message
+  running --> tool_waiting: custom tool use
+  tool_waiting --> running: user tool result
+  running --> idle: end_turn
+  running --> failed: provider_or_tool_failed
+  idle --> terminated: DELETE /v1/sessions/:id
+  failed --> terminated: DELETE /v1/sessions/:id
+  </whiteboard>
+  <p>主要事件类型包括 <code>session.status_bootstrapping</code>、<code>agent.loop_selected</code>、<code>session.status_idle</code>、<code>user.message</code>、<code>session.status_running</code>、<code>agent.tool_use</code>、<code>agent.custom_tool_use</code>、<code>tool.result</code>、<code>agent.message_delta</code>、<code>agent.message</code>、<code>session.status_failed</code>。SSE 入口是 <code>GET /v1/sessions/:id/events/stream</code>。</p>
+
+  <h2>10. 当前验证门禁</h2>
+  <table>
+    <tr><th>命令</th><th>覆盖范围</th></tr>
+    <tr><td><code>bun run test:bun-runtime</code></td><td>Bun runtime 基础兼容。</td></tr>
+    <tr><td><code>bun run test:project-env</code></td><td>项目根目录 <code>.env</code> 加载行为。</td></tr>
+    <tr><td><code>bun run test:vefaas-provisioner</code></td><td>veFaaS provisioning 参数和输出契约。</td></tr>
+    <tr><td><code>bun run test:vefaas-contract</code></td><td>veFaaS bootstrap/tool HTTP runtime contract。</td></tr>
+    <tr><td><code>bun run test:workspace-runtime-pool</code></td><td>onboarding、workspace immutability、Environment runtime 拒绝、model pool、session pool 绑定。</td></tr>
+    <tr><td><code>bun run test:platform-sdk-cli</code></td><td>Maple SDK、workspace API key、Maple CLI 登录、session message/events 数据面闭环，验证不依赖外部平台 API key。</td></tr>
+    <tr><td><code>bun run typecheck</code></td><td>TypeScript 静态检查。</td></tr>
+    <tr><td><code>bun run build</code></td><td>Bun frontend build。</td></tr>
+    <tr><td><code>bun run test:e2e</code></td><td>Console + API 端到端 happy path 和关键按钮审计。</td></tr>
+    <tr><td><code>bun run test:all</code></td><td>当前主要回归门禁。</td></tr>
+  </table>
+  <callout><p>真实 E2B 测试可能产生费用。涉及 E2B sandbox 的测试完成后必须清理 sandbox，避免持续计费；当前 <code>DELETE /v1/sessions/:id</code> 只更新 session status，还没有自动 terminate E2B sandbox，这是必须补齐的可靠性缺口。</p></callout>
+
+  <h2>11. 当前差距和下一步</h2>
+  <table>
+    <tr><th>差距</th><th>影响</th><th>建议</th></tr>
+    <tr><td>Workspace onboarding/配置 UI 未实现</td><td>后端能力已有，用户仍不能在 Console 完成租户开通和池化配置</td><td>增加首次登录 wizard、workspace settings 查看页、runtime pool 状态页。</td></tr>
+    <tr><td>Workspace API key scope 尚未细分</td><td><code>lmap_ws_...</code> 已能替代 cookie auth 调用 <code>/v1</code> 控制面和数据面，但当前只记录 scopes，尚未逐 endpoint 强制校验</td><td>增加 scope 到 endpoint 的映射、审计日志和 key rotate/revoke UI。</td></tr>
+    <tr><td>Runtime pool member 计数只增不减</td><td>长时间运行后 capacity 估算会偏高</td><td>session terminated/archived 和 runtime cleanup 时做 decrement 或按活跃 session 定期重算。</td></tr>
+    <tr><td>E2B sandbox 未自动释放</td><td>可能产生不必要费用</td><td>增加 <code>terminateSessionRuntime()</code>，DELETE session、测试 teardown 和失败回收都调用。</td></tr>
+    <tr><td>Legacy veFaaS Environment seed 仍存在</td><td>文档和用户可能误以为 Environment 仍可配置 AgentRuntime</td><td>保留兼容时加显式标记，最终迁移到 workspace runtime pool 后删除 legacy seed。</td></tr>
+    <tr><td>AWS Lambda/Vercel 仅占位</td><td>用户在 UI 选择后会遇到 not implemented</td><td>UI 禁用并展示“敬请期待”，后端继续返回明确错误。</td></tr>
+    <tr><td>Vault/Memory/Skill workspace scope 尚未全面强制</td><td>workspace 隔离还不完整</td><td>列表和写操作逐步加 <code>workspace_id</code> 过滤和授权检查。</td></tr>
+    <tr><td>Work queue、lease、heartbeat、webhook、A2A/inbound auth 尚未落地</td><td>生产级托管 agent 调度和对外暴露能力不足</td><td>下一阶段引入 run/work item 模型、runtime lease、webhook delivery 和 Agent inbound policy。</td></tr>
+  </table>
+
+  <h2>12. 架构变更规则</h2>
+  <ul>
+    <li>修改 <code>server/store.ts</code> 的 schema、workspace/runtime pool/session metadata 时，必须同步本文档。</li>
+    <li>修改 <code>server/index.ts</code> 的 API surface、auth boundary、Environment/Agent/Session 入参规则时，必须同步本文档。</li>
+    <li>修改 <code>server/runtime.ts</code> 或 <code>server/sandboxConfig.ts</code> 的 provider 选择、bootstrap、tool contract 时，必须同步本文档。</li>
+    <li>修改 <code>src/App.tsx</code> 的 workspace onboarding、Environment、Session 或 runtime provider UI 时，必须同步本文档。</li>
+    <li>修改 <code>scripts/*contract*</code> 中任何被作为架构门禁的测试行为时，必须同步本文档。</li>
+  </ul>
+</doc>
