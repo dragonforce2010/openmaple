@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="zh" data-theme="dark" data-lang="zh">
+<html lang="zh" data-theme="light" data-lang="zh">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
-    <title>OpenMaple Docs · Managed agent platform</title>
-    <meta name="description" content="OpenMaple documentation for managed agents, CLI, SDK, skills, provider identity, sessions, vaults, and deployment." />
+    <title>OpenMaple Docs · Open-source Managed Agents</title>
+    <meta name="description" content="OpenMaple documentation for the open-source implementation of the Anthropic Managed Agents platform pattern: sessions, sandboxes, runtimes, vaults, CLI, SDK, and provider identity." />
     <link rel="icon" href="./assets/openmaple-mascot.svg" />
     <style>
       :root { --bg: #010101; --header: rgba(17,17,17,.88); --surface: #111; --surface-2: #151515; --ink: #fff; --muted: #aeaeae; --soft: #777; --line: rgba(255,255,255,.12); --active: #293342; --hover: rgba(255,255,255,.06); --accent: #4b9eff; --leaf: #72d69f; --code: #0b0b0b; }
@@ -159,13 +159,23 @@
           <section id="overview">
             <div class="block-zh">
               <h1>OpenMaple 文档</h1>
-              <p class="lead">OpenMaple 把智能体从 demo 变成可托管、可观测、可迁移的云软件：控制面记录资源真相，运行面执行 agent loop，沙箱面隔离工具调用。</p>
-              <div class="callout"><b>核心原则</b><p>Runtime、Sandbox、Storage、Model 和 Agent Loop 都必须通过 provider 抽象接入，租户只配置云厂商 identity，工作区选择 provider 加少量配置。</p></div>
+              <p class="lead">OpenMaple 是 Anthropic Managed Agents 平台理念的开源实现：用稳定接口托管 session、sandbox、runtime、tool、vault、event log、SDK 和 CLI，让 Agent 从本地 demo 变成可运营的云软件。</p>
+              <div class="callout"><b>核心原则</b><p>借鉴 Anthropic “decouple the brain from the hands” 与 meta-harness 思路：AgentRuntime 负责思考，Sandbox 负责执行；Session 持久化状态，Tool/Vault/Provider 通过接口接入，未来可替换 Claude Code、Codex 或自定义 harness。</p></div>
+              <div class="mini-grid">
+                <div class="mini"><small>Brain</small><b>AgentRuntime</b><p>跑 agent loop、模型调用、事件流和长任务控制，不直接暴露工具执行环境。</p></div>
+                <div class="mini"><small>Hands</small><b>SandboxRuntime</b><p>隔离命令、文件、MCP、artifact 和包安装，把副作用限制在明确边界内。</p></div>
+                <div class="mini"><small>State</small><b>Session event log</b><p>把 user.message、tool_calls、status_failed、artifacts 写成可审计事实。</p></div>
+              </div>
             </div>
             <div class="block-en">
               <h1>OpenMaple Docs</h1>
-              <p class="lead">OpenMaple turns agent prototypes into managed, observable, and cloud-portable software. The control plane owns resource truth, the runtime plane runs loops, and the sandbox plane isolates tools.</p>
-              <div class="callout"><b>Core rule</b><p>Runtime, sandbox, storage, model, and agent-loop choices enter through provider adapters. Tenants configure cloud identity once; workspaces select provider plus focused options.</p></div>
+              <p class="lead">OpenMaple is an open-source implementation of the Anthropic Managed Agents platform pattern: stable interfaces for sessions, sandboxes, runtimes, tools, vaults, event logs, SDKs, and CLIs.</p>
+              <div class="callout"><b>Core rule</b><p>Following Anthropic's “decouple the brain from the hands” and meta-harness idea, AgentRuntime thinks, SandboxRuntime acts, Session stores state, and Tool/Vault/Provider adapters let Claude Code, Codex, or custom harnesses evolve behind the same contract.</p></div>
+              <div class="mini-grid">
+                <div class="mini"><small>Brain</small><b>AgentRuntime</b><p>Runs agent loops, model calls, event streams, and long-task control without owning tool side effects.</p></div>
+                <div class="mini"><small>Hands</small><b>SandboxRuntime</b><p>Isolates commands, files, MCP, artifacts, and package installs inside an explicit boundary.</p></div>
+                <div class="mini"><small>State</small><b>Session event log</b><p>Persists user.message, tool_calls, status_failed, and artifacts as auditable truth.</p></div>
+              </div>
             </div>
           </section>
 
@@ -375,7 +385,7 @@ for await (const event of maple.sessions.streamEvents(session.id)) {
         themeBtn.textContent = theme === "dark" ? "Dark" : "Light";
       };
       setLang(localStorage.getItem("openmaple-docs-lang") || "zh");
-      setTheme(localStorage.getItem("openmaple-docs-theme") || "dark");
+      setTheme(localStorage.getItem("openmaple-docs-theme") || "light");
       langBtn.addEventListener("click", () => setLang(root.dataset.lang === "zh" ? "en" : "zh"));
       themeBtn.addEventListener("click", () => setTheme(root.dataset.theme === "dark" ? "light" : "dark"));
       menuBtn.addEventListener("click", () => document.body.classList.toggle("drawer-open"));

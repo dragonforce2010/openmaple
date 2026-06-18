@@ -1,55 +1,133 @@
 # OpenMaple
 
-OpenMaple is an open managed agent platform. It gives teams one control plane for agents, sessions, vaults, environments, model configs, runtime providers, sandbox providers, SDKs, and CLI workflows.
+OpenMaple is an open-source implementation of the Anthropic Managed Agents platform pattern. It gives teams one control plane for sessions, sandboxes, runtimes, tools, vaults, model configs, SDKs, CLIs, and audit logs.
 
-OpenMaple 是开放的 managed agent 平台：用一个控制面管理 Agent、Session、Vault、Environment、模型接入点、Runtime Provider、Sandbox Provider、SDK 和 CLI。
+OpenMaple 是 Anthropic Managed Agents 平台理念的开源实现：用一个控制面托管 Session、Sandbox、Runtime、Tool、Vault、模型接入点、SDK、CLI 和审计事件流。
+
+OpenMaple is not an Anthropic official product. It implements the managed-agent operating model in an open stack: decouple the brain from the hands, persist session state, isolate computation, and keep agent harnesses replaceable.
 
 [Website](https://dragonforce2010.github.io/openmaple/) · [Docs](https://dragonforce2010.github.io/openmaple/docs/) · [Reference README](reference/README.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
 
 ![OpenMaple mascot](docs/assets/openmaple-mascot.svg)
 
-## What It Is
+## Why OpenMaple
 
-OpenMaple is built for running agents as managed cloud software, not one-off local demos.
+Anthropic Managed Agents turns agent deployment into a platform problem: keep the model loop, tool execution, state, credentials, sandboxing, and orchestration behind stable interfaces. OpenMaple takes that operating model and makes the control plane open, self-hostable, and provider-portable.
 
-- **Control Plane**: tenants, workspaces, agents, environments, vaults, model configs, sessions, events, API keys.
-- **Runtime Plane**: agent loops through Claude Code, Codex, local runtime, and veFaaS runtime pool.
-- **Sandbox Plane**: isolated tool execution through E2B, veFaaS Sandbox path, or local Docker.
-- **Provider Identity**: tenant-side cloud identity for Volcengine, Alibaba Cloud, AWS, and GCP expansion.
-- **Interfaces**: Web Console, REST API, `maple-agent-sdk`, and `maple-agent-cli`.
+| Managed-agent concern | OpenMaple primitive | Why it matters |
+|---|---|---|
+| Define what the agent is | `Agent` | Model, system prompt, tools, MCP servers, skills, and loop type are versioned as a managed resource. |
+| Decide where it runs | `Environment` | Separates `AgentRuntime` from `SandboxRuntime`, so reasoning and tool execution can move independently. |
+| Keep work durable | `Session` + event log | User messages, tool calls, status changes, artifacts, and failures become replayable state, not terminal scrollback. |
+| Keep secrets scoped | `Vault` + `secret_ref` | Agents receive credential references instead of raw secrets; workspaces decide which vaults sessions can use. |
+| Operate repeatably | `Deployment` | Persist an agent, environment, initial message, and schedule into a reusable launch template. |
+| Expose stable interfaces | Console, REST API, SDK, CLI | Users can start in the UI, automate with API calls, then package repeatable workflows through `maple-agent-cli`. |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  User[User / Developer] --> Console[Web Console]
-  User --> CLI[Maple CLI]
-  User --> SDK[Node SDK]
-  Console --> CP[Control Plane API]
-  CLI --> CP
-  SDK --> CP
-  CP --> DB[(Remote MySQL)]
-  CP --> Vault[Vault + Secret Store]
-  CP --> Runtime[Runtime Plane]
-  Runtime --> Claude[Claude Code Loop]
-  Runtime --> Codex[Codex Loop]
-  Runtime --> Sandbox[Sandbox Plane]
-  Sandbox --> E2B[E2B]
-  Sandbox --> VeFaaS[veFaaS Sandbox]
-  Sandbox --> Docker[Local Docker]
+  subgraph Interfaces
+    Console[Web Console]
+    CLI[Maple CLI]
+    SDK[Node SDK]
+    REST[REST API]
+  end
+
+  subgraph Control["Control Plane"]
+    API[Express API]
+    DB[(Remote MySQL)]
+    Vault[Vault + Secret Store]
+    Events[Session Event Log]
+  end
+
+  subgraph Runtime["Runtime Plane"]
+    Claude[Claude Code Loop]
+    Codex[Codex Loop]
+    Direct[Direct Provider Loop]
+    Pool[Runtime Pool]
+  end
+
+  subgraph Sandbox["Sandbox Plane"]
+    E2B[E2B]
+    VeFaaS[veFaaS Sandbox]
+    Docker[Local Docker]
+  end
+
+  Console --> API
+  CLI --> API
+  SDK --> API
+  REST --> API
+  API --> DB
+  API --> Vault
+  API --> Events
+  API --> Pool
+  Pool --> Claude
+  Pool --> Codex
+  Pool --> Direct
+  Claude --> Sandbox
+  Codex --> Sandbox
+  Direct --> Sandbox
+  Sandbox --> E2B
+  Sandbox --> VeFaaS
+  Sandbox --> Docker
 ```
 
-## Current Product Screens
+### Resource Lifecycle
 
-These screenshots are captured from the current OpenMaple console E2E run. Legacy product-manual screenshots are not used on the public homepage.
+1. **Create an agent**: `POST /v1/agents` stores the model, prompt, tools, MCP servers, skills, and loop adapter.
+2. **Attach an environment**: `POST /v1/environments` chooses runtime provider, sandbox provider, networking, and runtime pool behavior.
+3. **Add tool credentials**: `POST /v1/vaults/:vaultId/credentials` writes encrypted secret material and returns credential references.
+4. **Start a session**: `POST /v1/sessions` binds `agent`, `environment_id`, optional `vault_ids`, resources, and metadata.
+5. **Send and stream work**: `POST /v1/sessions/:sessionId/events` writes user/tool events; `GET /v1/sessions/:sessionId/events/stream` exposes the live timeline.
+6. **Operate repeatably**: `POST /v1/deployments` saves the same launch path as a manual or scheduled run template.
 
-| Desktop console | Mobile quickstart |
+### API Surface
+
+| Area | Endpoints | Notes |
+|---|---|---|
+| Auth/bootstrap | `/v1/auth/*`, `/v1/bootstrap`, `/v1/console_snapshot` | Cookie or API-key auth; list endpoints are workspace-scoped. |
+| Agents | `/v1/agents`, `/v1/agents/:agentId/versions`, `/v1/agents/:agentId/runtime` | Agent configs are versioned and runtime state is inspectable. |
+| Environments | `/v1/environments`, `/v1/workspaces/:workspaceId/runtime_pool`, `/v1/workspaces/:workspaceId/sandbox_pool` | Runtime pool members provision in the background. |
+| Sessions | `/v1/sessions`, `/v1/sessions/:sessionId/events`, `/v1/sessions/:sessionId/events/stream` | Durable event log for user, agent, tool, artifact, and failure records. |
+| Vaults + MCP | `/v1/vaults`, `/v1/vaults/:vaultId/credentials`, `/v1/mcp_servers`, `/v1/mcp_servers/:mcpId/oauth/start` | OAuth and API-key credentials stay workspace-scoped. |
+| Deployments | `/v1/deployments`, `/v1/deployments/:deploymentId/run`, `/v1/deployments/:deploymentId/invoke` | Reusable launch templates with manual and scheduled execution. |
+| Files + artifacts | `/v1/files`, `/v1/sessions/:sessionId/files`, `/v1/sessions/:sessionId/artifacts` | Session file uploads and downloadable artifacts. |
+| Skills + memory | `/v1/skills`, `/v1/memory_stores`, `/v1/memory_stores/:memoryStoreId/memories/*path` | Packaged instructions and workspace-scoped persistent memory. |
+
+### Runtime Boundary
+
+- **Brain/hands split**: agent loops run through runtime adapters; commands, files, and network access run through sandbox providers.
+- **Secret isolation**: secrets are stored through `secret_ref` records; agents receive references and scoped tool access, not plaintext keys in config.
+- **Workspace scoping**: every list route must filter through the user's accessible workspaces. No global table scans in user-facing APIs.
+- **Remote MySQL**: the data store exposes a synchronous better-sqlite3-style API, but the backing database is remote MySQL through a worker bridge.
+- **Provider portability**: veFaaS, E2B, Docker, and future Lambda/FC-style runtimes can sit behind the same session contract.
+
+## Product Modules
+
+These are real large-screen light-theme screenshots from the current OpenMaple online environment. No mobile crops, generated mocks, or legacy product-manual screenshots are used.
+
+| Quickstart builder | Agents registry |
 |---|---|
-| ![Current OpenMaple desktop console](docs/site/screenshots/current-console-deployments.png) | ![Current OpenMaple mobile quickstart](docs/site/screenshots/current-console-quickstart-mobile.png) |
+| <img src="docs/site/screenshots/current-console-quickstart.png" alt="OpenMaple quickstart builder in the online console" width="520"> | <img src="docs/site/screenshots/current-console-agents.png" alt="OpenMaple agents registry in the online console" width="520"> |
+| **Deployments** | **Sessions event log** |
+| <img src="docs/site/screenshots/current-console-deployments.png" alt="OpenMaple deployments control plane in the online console" width="520"> | <img src="docs/site/screenshots/current-console-sessions.png" alt="OpenMaple sessions event log in the online console" width="520"> |
+| **Environments** | **Credential vaults** |
+| <img src="docs/site/screenshots/current-console-environments.png" alt="OpenMaple environments module in the online console" width="520"> | <img src="docs/site/screenshots/current-console-vaults.png" alt="OpenMaple credential vaults module in the online console" width="520"> |
 
-## Quick Deploy
+## Repository Map
 
-Local development:
+```text
+apps/admin-web/             React console, docs view, route sync, design system
+apps/control-plane-api/     Express API, auth, storage, runtime orchestration
+packages/sdk/               Node SDK: MapleClient and typed API helpers
+packages/cli/               Maple CLI: init, build, deploy, api, session, vault
+agents/                     Packaged agent skills and runtime-facing assets
+docs/                       Architecture, product manual, acceptance notes, screenshots
+tests/contracts/            Contract tests for docs, routes, branding, runtime behavior
+```
+
+## Local Development
 
 ```bash
 bun install
@@ -62,6 +140,14 @@ Open:
 ```text
 Web Console: http://127.0.0.1:5173/
 API Server:  http://127.0.0.1:27951/
+```
+
+Verify:
+
+```bash
+bun run typecheck
+bun run lint
+bun run test:maple-docs
 ```
 
 Docker Compose:
@@ -95,6 +181,16 @@ const client = new MapleClient({
   baseUrl: process.env.MAPLE_BASE_URL,
   apiKey: process.env.MAPLE_API_KEY
 });
+
+const { session, done } = await client.createSessionAndStream({
+  agent: "agent_...",
+  environment_id: "env_...",
+  vault_ids: ["vault_..."],
+  message: "Audit this repository and summarize the risky files."
+});
+
+await client.sendSessionMessage(session.id, "Focus on auth and storage code paths.");
+await done;
 ```
 
 ## More
@@ -103,3 +199,4 @@ const client = new MapleClient({
 - Architecture docs: [docs/architecture/maple-platform-overview.md](docs/architecture/maple-platform-overview.md)
 - SDK/CLI onboarding: [docs/product-manual/maple-sdk-cli-onboarding.md](docs/product-manual/maple-sdk-cli-onboarding.md)
 - Runtime contract: [docs/design/2026-06-04-vefaas-runtime-contract.md](docs/design/2026-06-04-vefaas-runtime-contract.md)
+- Managed Agents platform pattern: [Anthropic engineering essay](https://www.anthropic.com/engineering/managed-agents)
