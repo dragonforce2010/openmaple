@@ -40,8 +40,12 @@ jobs:
           registry = "https://registry.npmjs.org"
           TOML
 
+          install_deps() {
+            bun install --frozen-lockfile --registry=https://registry.npmjs.org --network-concurrency=4 --no-progress
+          }
+
           for attempt in 1 2 3; do
-            if bun install --frozen-lockfile; then
+            if install_deps; then
               exit 0
             fi
             delay=$((attempt * 15))
@@ -49,7 +53,7 @@ jobs:
             sleep "$delay"
           done
 
-          bun install --frozen-lockfile
+          install_deps
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run build
@@ -80,8 +84,12 @@ jobs:
           registry = "https://registry.npmjs.org"
           TOML
 
+          install_deps() {
+            bun install --frozen-lockfile --registry=https://registry.npmjs.org --network-concurrency=4 --no-progress
+          }
+
           for attempt in 1 2 3; do
-            if bun install --frozen-lockfile; then
+            if install_deps; then
               exit 0
             fi
             delay=$((attempt * 15))
@@ -89,7 +97,7 @@ jobs:
             sleep "$delay"
           done
 
-          bun install --frozen-lockfile
+          install_deps
       - run: bun run ci:contracts
       - uses: actions/upload-artifact@v4
         if: always()
