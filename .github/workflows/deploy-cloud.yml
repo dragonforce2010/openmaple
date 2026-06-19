@@ -1,0 +1,190 @@
+name: Cloud Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: cloud-deploy-main
+  cancel-in-progress: false
+
+env:
+  DEPLOY_ENVIRONMENT: vefaas-production
+  MAPLE_VEFAAS_DEPLOYMENT_STATE: output/vefaas/stable-deployment.json
+
+jobs:
+  deploy:
+    name: deploy
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deployed version
+        id: deployed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const environment = process.env.DEPLOY_ENVIRONMENT;
+            const sha = context.payload.workflow_run?.head_sha || context.sha;
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              owner,
+              repo,
+              environment,
+              per_page: 30
+            });
+            for (const deployment of deployments) {
+              const statuses = await github.paginate(github.rest.repos.listDeploymentStatuses, {
+                owner,
+                repo,
+                deployment_id: deployment.id,
+                per_page: 10
+              });
+              const latest = statuses[0];
+              if (deployment.sha === sha && latest?.state === "success") {
+                core.notice(`Skip deploy: ${sha} is already deployed to ${environment}.`);
+                core.setOutput("skip", "true");
+                core.setOutput("sha", sha);
+                core.setOutput("environment_url", latest.environment_url || "");
+                return;
+              }
+            }
+            core.setOutput("skip", "false");
+            core.setOutput("sha", sha);
+
+      - name: Create deployment record
+        id: deployment
+        if: steps.deployed.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "${{ steps.deployed.outputs.sha }}",
+              environment: process.env.DEPLOY_ENVIRONMENT,
+              auto_merge: false,
+              required_contexts: [],
+              description: "Deploy OpenMaple to stable veFaaS"
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: "in_progress",
+              description: "veFaaS deploy started"
+            });
+            core.setOutput("deployment_id", String(deployment.data.id));
+
+      - uses: actions/checkout@v4
+        if: steps.deployed.outputs.skip != 'true'
+        with:
+          ref: ${{ steps.deployed.outputs.sha }}
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.deployed.outputs.skip != 'true'
+        with:
+          bun-version: 1.3.14
+
+      - uses: actions/cache@v4
+        if: steps.deployed.outputs.skip != 'true'
+        with:
+          path: ~/.bun/install/cache
+          key: bun-1.3.14-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - run: bun install --frozen-lockfile
+        if: steps.deployed.outputs.skip != 'true'
+
+      - name: Restore stable deployment state
+        if: steps.deployed.outputs.skip != 'true'
+        env:
+          MAPLE_VEFAAS_STABLE_STATE_JSON: ${{ secrets.MAPLE_VEFAAS_STABLE_STATE_JSON }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          raw = os.environ.get("MAPLE_VEFAAS_STABLE_STATE_JSON", "").strip()
+          if not raw:
+            raise SystemExit("missing MAPLE_VEFAAS_STABLE_STATE_JSON secret")
+
+          state = json.loads(raw)
+          path = Path(os.environ["MAPLE_VEFAAS_DEPLOYMENT_STATE"])
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n")
+          PY
+
+      - name: Deploy stable veFaaS app
+        id: vefaas
+        if: steps.deployed.outputs.skip != 'true'
+        env:
+          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+          MAPLE_VEFAAS_REGION: ${{ vars.MAPLE_VEFAAS_REGION || 'cn-beijing' }}
+          MAPLE_VEFAAS_STABLE_MIN_INSTANCE: ${{ vars.MAPLE_VEFAAS_STABLE_MIN_INSTANCE || '1' }}
+          MAPLE_VEFAAS_STABLE_MAX_INSTANCE: ${{ vars.MAPLE_VEFAAS_STABLE_MAX_INSTANCE || '10' }}
+          MAPLE_AGENT_RUNTIME_PROVIDER: ${{ vars.MAPLE_AGENT_RUNTIME_PROVIDER || 'local' }}
+          MAPLE_AGENT_LOOP_EXECUTION: ${{ vars.MAPLE_AGENT_LOOP_EXECUTION || 'provider' }}
+          MAPLE_MYSQL_HOST: ${{ secrets.MAPLE_MYSQL_HOST }}
+          MAPLE_MYSQL_PORT: ${{ secrets.MAPLE_MYSQL_PORT }}
+          MAPLE_MYSQL_DATABASE: ${{ secrets.MAPLE_MYSQL_DATABASE }}
+          MAPLE_MYSQL_USER: ${{ secrets.MAPLE_MYSQL_USER }}
+          MAPLE_MYSQL_PASSWORD: ${{ secrets.MAPLE_MYSQL_PASSWORD }}
+          MAPLE_SECRET_MASTER_KEY: ${{ secrets.MAPLE_SECRET_MASTER_KEY }}
+          ARK_API_KEY: ${{ secrets.ARK_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+        run: |
+          set -o pipefail
+          python3 infra/vefaas/deploy_vefaas_stable.py deploy | tee output/vefaas/deploy.log
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          lines = Path("output/vefaas/deploy.log").read_text().splitlines()
+          summary = json.loads(next(line for line in reversed(lines) if line.strip().startswith("{")))
+          Path("output/vefaas/deploy-summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
+          print(f"url={summary.get('url', '')}")
+          PY
+
+      - name: Mark deployment success
+        if: steps.deployed.outputs.skip != 'true' && success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: Number("${{ steps.deployment.outputs.deployment_id }}"),
+              state: "success",
+              environment_url: "${{ steps.vefaas.outputs.url }}",
+              description: "veFaaS deploy succeeded"
+            });
+
+      - name: Mark deployment failure
+        if: steps.deployed.outputs.skip != 'true' && failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: Number("${{ steps.deployment.outputs.deployment_id }}"),
+              state: "failure",
+              description: "veFaaS deploy failed"
+            });
+
+      - uses: actions/upload-artifact@v4
+        if: steps.deployed.outputs.skip != 'true' && always()
+        with:
+          name: vefaas-deploy-output
+          path: output/vefaas
+          if-no-files-found: ignore
