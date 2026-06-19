@@ -18,6 +18,7 @@ output/
 artifacts/deploy-output/
 artifacts/ui-comparison/
 artifacts/tmp/
+test-results/
 
 .claude/scheduled_tasks.lock
 .claude/launch.json
