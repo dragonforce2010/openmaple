@@ -8,7 +8,9 @@ OpenMaple is not an Anthropic official product. It implements the managed-agent 
 
 [Website](https://dragonforce2010.github.io/openmaple/) · [Docs](https://dragonforce2010.github.io/openmaple/docs/) · [Reference README](reference/README.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
 
-![OpenMaple mascot](docs/assets/openmaple-mascot.svg)
+<p align="center">
+  <img src="docs/assets/openmaple-mascot.svg" alt="OpenMaple mascot" width="180">
+</p>
 
 ## Why OpenMaple
 
