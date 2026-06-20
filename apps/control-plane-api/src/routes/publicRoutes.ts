@@ -2,6 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import type { AuthenticatedRequest, JsonRecord } from "./routeDeps";
 import {
   agentLoopTypes,
+  authCookieName,
   buildAuthorizationStart,
   clearAuth,
   clearOAuthStateCookie,
@@ -19,7 +20,6 @@ import {
   oauthStateWorkspaceRoute,
   optionalAuth,
   providerCallbackUrl,
-  readRequestToken,
   runRuntimeToolCall,
   safeWebReturnPath,
   scopeForParent,
@@ -158,11 +158,26 @@ app.get("/v1/auth/me", optionalAuth, (request: AuthenticatedRequest, response) =
 });
 
 function requestHasAuthMaterial(request: Request) {
-  return Boolean(readRequestToken(request) || request.header("x-maple-api-key") || request.header("x-api-key"));
+  return Boolean(
+    request.header("authorization") ||
+    request.header("x-maple-api-key") ||
+    request.header("x-api-key") ||
+    looksLikeSessionToken(readNamedCookie(request.header("cookie") || "", authCookieName))
+  );
 }
 
 function sendAnonymousAuthBootstrap(response: Response) {
   response.json({ user: null, tenants: [], created_count: 0, owned_count: 0, member_only_count: 0, recommended_view: "login" });
+}
+
+function looksLikeSessionToken(token: string) {
+  return /^maple_sess_[A-Za-z0-9_-]{32,}$/.test(token);
+}
+
+function readNamedCookie(header: string, name: string) {
+  const prefix = `${name}=`;
+  const match = header.split(";").map((part) => part.trim()).find((cookie) => cookie.startsWith(prefix));
+  return match ? decodeURIComponent(match.slice(prefix.length)) : "";
 }
 
 function authBootstrapWithoutDatabase(request: Request, response: Response, next: NextFunction) {
