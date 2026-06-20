@@ -2,7 +2,7 @@ import cors from "cors";
 import express,{ type NextFunction,type Request,type Response } from "express";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { requireAuth } from "./auth";
+import { authCookieName, requireAuth } from "./auth";
 import { startDeploymentScheduler } from "./deployments/scheduler";
 import "./env";
 import { ensureGlobalModelConfigs } from "./modelGateway";
@@ -47,11 +47,24 @@ function ensureDatabaseInitialized() {
   databaseInitialized = true;
 }
 
-function ensureDatabaseReady(_request: Request, response: Response, next: NextFunction) {
+function anonymousAuthBootstrap(response: Response) {
+  response.clearCookie(authCookieName, { path: "/" });
+  response.json({ user: null, tenants: [], created_count: 0, owned_count: 0, member_only_count: 0, recommended_view: "login" });
+}
+
+function isAuthBootstrapRequest(request: Request) {
+  return request.path === "/v1/auth/bootstrap" || request.path.startsWith("/v1/auth/bootstrap/");
+}
+
+function ensureDatabaseReady(request: Request, response: Response, next: NextFunction) {
   try {
     ensureDatabaseInitialized();
     next();
   } catch (error) {
+    if (isAuthBootstrapRequest(request)) {
+      anonymousAuthBootstrap(response);
+      return;
+    }
     response.status(503).json({
       error: "database_unavailable",
       message: error instanceof Error ? error.message : String(error)
