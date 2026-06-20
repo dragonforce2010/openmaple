@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = ROOT / "output"
 BUN_VERSION = os.environ.get("MAPLE_VEFAAS_WEB_BUN_VERSION") or "1.3.14"
 BUN_URL = f"https://github.com/oven-sh/bun/releases/download/bun-v{BUN_VERSION}/bun-linux-x64.zip"
-BUN = shutil.which("bun") or "/Users/bytedance/.bun/bin/bun"
+BUN = shutil.which("bun") or "bun"
 METHODS = ["POST", "GET", "PUT", "DELETE", "HEAD", "OPTIONS", "CONNECT"]
 WEB_RUNTIME = os.environ.get("MAPLE_VEFAAS_WEB_RUNTIME") or os.environ.get("MAPLE_VEFAAS_RUNTIME") or "node20/v1"
 
@@ -400,7 +400,7 @@ def backend_envs() -> dict[str, str]:
     # the public apigateway host, not the faas-internal request host or a local .env URL.
     public_base = (
         os.environ.get("MAPLE_VEFAAS_PUBLIC_BASE_URL")
-        or "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com"
+        or "http://127.0.0.1:27951"
     ).rstrip("/")
     envs = {
         "NODE_ENV": "production",

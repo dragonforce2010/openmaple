@@ -12,7 +12,7 @@ function envValue(name) {
 
 export class MapleClient {
   constructor(options = {}) {
-    this.baseUrl = String(options.baseUrl || options.baseURL || envValue("MAPLE_API_BASE_URL") || "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com").replace(/\/$/, "");
+    this.baseUrl = String(options.baseUrl || options.baseURL || envValue("MAPLE_API_BASE_URL") || "http://127.0.0.1:27951").replace(/\/$/, "");
     this.token = options.token || options.apiKey || envValue("MAPLE_API_KEY") || "";
     this.workspaceId = options.workspaceId || options.workspace_id || envValue("MAPLE_WORKSPACE_ID") || "";
   }

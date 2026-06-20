@@ -20,9 +20,9 @@ from deploy_vefaas_runtime import load_project_env, VolcengineVefaasApi  # noqa:
 ROOT = Path(__file__).resolve().parents[2]
 load_project_env(ROOT)
 
-IMAGE = os.environ.get("MAPLE_VEFAAS_IMAGE") or "agentkit-platform-2100050190-cn-beijing.cr.volces.com/agentkit/maple-runtime:ark"
+IMAGE = os.environ.get("MAPLE_VEFAAS_IMAGE") or "maple-vefaas-runtime:latest"
 LOCAL = os.environ.get("MAPLE_LOCAL_IMAGE") or "maple-vefaas-runtime:ark"
-REGISTRY = os.environ.get("MAPLE_CR_REGISTRY") or "agentkit-platform-2100050190"
+REGISTRY = os.environ.get("MAPLE_CR_REGISTRY") or ""
 ACCESS_KEY = os.environ.get("VOLCENGINE_ACCESS_KEY") or os.environ.get("VOLC_ACCESSKEY")
 SECRET_KEY = os.environ.get("VOLCENGINE_SECRET_KEY") or os.environ.get("VOLC_SECRETKEY")
 REGION = os.environ.get("MAPLE_VEFAAS_REGION") or "cn-beijing"
@@ -30,6 +30,8 @@ FUNCTIONS = [fn for fn in sys.argv[2:] if fn] or [fn for fn in (os.environ.get("
 
 
 def cr_login():
+    if not REGISTRY:
+        raise SystemExit("MAPLE_CR_REGISTRY is required for CR login.")
     import volcenginesdkcore
     import volcenginesdkcr
 

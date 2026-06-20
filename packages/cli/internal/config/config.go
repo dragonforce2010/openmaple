@@ -116,5 +116,5 @@ func defaultBaseURL() string {
 	if value := os.Getenv("MAPLE_API_BASE_URL"); value != "" {
 		return value
 	}
-	return "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com"
+	return "http://127.0.0.1:27951"
 }

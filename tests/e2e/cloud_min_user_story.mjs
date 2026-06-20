@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile);
 
 loadProjectEnv();
 
-const baseUrl = (process.env.MAPLE_CLOUD_BASE_URL || process.env.E2E_API_BASE || "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com").replace(/\/$/, "");
+const baseUrl = (process.env.MAPLE_CLOUD_BASE_URL || process.env.E2E_API_BASE || "http://127.0.0.1:27951").replace(/\/$/, "");
 const runtimeInvokeUrl = process.env.VEFAAS_INVOKE_URL || `${baseUrl}/maple-ark`;
 const platformDevKey = process.env.MAPLE_CLOUD_DEV_API_KEY || process.env.MAPLE_DEV_API_KEY || "maple_dev_key";
 const runId = String(Date.now());

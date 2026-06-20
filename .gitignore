@@ -24,6 +24,21 @@ test-results/
 .claude/launch.json
 scripts/_*.mjs
 scripts/_*.sh
+scripts/perf/
+scripts/probe-hermes-profile-cost.sh
 docs/screenshot
 tests/_*.mjs
 tests/_*.sh
+
+# Private planning, launch, and local-agent surfaces.
+docs/
+marketing/launch/
+reference/
+artifacts/
+.claude/
+.vscode/
+.githooks/
+AGENTS.md
+CLAUDE.md
+CONTEXT.md
+SPEC.md

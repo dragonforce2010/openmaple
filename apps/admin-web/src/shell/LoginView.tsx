@@ -62,7 +62,7 @@ export function LoginView(props: { providers: AuthProvider[]; error: string; onL
           <p className="auth-hint">{L("登录 OpenMaple。你只能进入已被授权的工作区。", "Sign in to OpenMaple. You can only enter workspaces you have access to.")}</p>
           {error ? <div className="warning-box">{error}</div> : null}
           <button className="sso-btn" onClick={() => login("lark_sso")} disabled={busy || larkProvider?.configured === false}>
-            <span className="lark-mark"><Icon name="i-lark" size={14} /></span>{L("使用飞书 (Lark) 登录", "Continue with Lark")}
+            <span className="lark-mark"><Icon name="i-lark" size={14} /></span>{L("使用 Lark 登录", "Continue with Lark")}
           </button>
           {larkProvider?.configured === false ? <div className="warning-box">{t("login.providerMissing")}</div> : null}
         </div>
@@ -71,8 +71,8 @@ export function LoginView(props: { providers: AuthProvider[]; error: string; onL
       <div className={busy && provider !== "local" ? "sso-overlay on" : "sso-overlay"}>
         <div className="sso-box">
           <div className="lark-mark lg"><Icon name="i-lark" size={26} /></div>
-          <h3>{L("正在跳转飞书授权", "Redirecting to Lark SSO")}</h3>
-          <p>{L("已向飞书发起单点登录请求，授权通过后将自动返回。", "A single sign-on request was sent to Lark.")}</p>
+          <h3>{L("正在跳转 Lark 授权", "Redirecting to Lark SSO")}</h3>
+          <p>{L("已向 Lark 发起单点登录请求，授权通过后将自动返回。", "A single sign-on request was sent to Lark.")}</p>
           <div className="sso-progress"><i style={{ width: busy ? "90%" : "0%" }} /></div>
         </div>
       </div>

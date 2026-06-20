@@ -21,7 +21,7 @@ from typing import Any, Callable
 
 
 DEFAULT_TEMPLATE_ID = "6874f3360bdbc40008ecf8c7"
-DEFAULT_RUNTIME_IMAGE = "agentkit-platform-2100050190-cn-beijing.cr.volces.com/agentkit/maple-runtime:ark"
+DEFAULT_RUNTIME_IMAGE = os.environ.get("MAPLE_VEFAAS_IMAGE") or "maple-vefaas-runtime:latest"
 OPENAPI_HOST = "open.volcengineapi.com"
 OPENAPI_VERSION = "2021-03-03"
 OPENAPI_SERVICE = "vefaas"

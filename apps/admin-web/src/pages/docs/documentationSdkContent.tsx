@@ -73,7 +73,7 @@ export function sdkDoc(helpers: DocContentHelpers): DocPage {
                     <Code>{`import { MapleClient, defineHarness } from "maple-agent-sdk";
 
   export const client = new MapleClient({
-    baseURL: "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com",
+    baseURL: "http://127.0.0.1:27951",
     apiKey: process.env.MAPLE_API_KEY || "maple_ws_xxx",
     workspaceId: "ws_xxx"
   });`}</Code>
@@ -117,7 +117,7 @@ export function sdkDoc(helpers: DocContentHelpers): DocPage {
                   <Code>{`import { MapleClient } from "maple-agent-sdk";
 
   export const client = new MapleClient({
-    baseURL: "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com",
+    baseURL: "http://127.0.0.1:27951",
     apiKey: process.env.MAPLE_API_KEY || "maple_ws_xxx",
     workspaceId: "ws_xxx"
   });
@@ -190,7 +190,7 @@ export function cliDoc(helpers: DocContentHelpers): DocPage {
                       )}
                     </p>
                     <Code>{`npm install -g maple-agent-cli
-  maple config set api.baseUrl https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com
+  maple config set api.baseUrl http://127.0.0.1:27951
   maple config login --api-key <maple_ws_...>
   maple config whoami
   maple version --json`}</Code>

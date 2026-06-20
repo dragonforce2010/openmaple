@@ -7,13 +7,11 @@
     <meta name="description" content="OpenMaple is an open-source managed-agent control plane: sessions, sandboxes, runtimes, vault-backed tools, SDK, CLI, provider adapters, and real console workflows." />
     <meta property="og:title" content="OpenMaple · Managed Agents without Cloud Lock-in" />
     <meta property="og:description" content="Open-source managed-agent control plane for sessions, sandboxes, runtime pools, vault-backed tools, SDKs, CLIs, and audit logs." />
-    <meta property="og:image" content="https://dragonforce2010.github.io/openmaple/marketing/launch/openmaple-social-card.png" />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="OpenMaple · Managed Agents without Cloud Lock-in" />
     <meta name="twitter:description" content="Open-source managed-agent control plane without cloud lock-in." />
-    <meta name="twitter:image" content="https://dragonforce2010.github.io/openmaple/marketing/launch/openmaple-social-card.png" />
-    <link rel="icon" href="./docs/assets/openmaple-mascot.svg" />
+    <link rel="icon" href="./assets/openmaple-mascot.svg" />
     <style>
       :root {
         color-scheme: light;
@@ -164,6 +162,22 @@
         background: var(--panel);
         cursor: zoom-in;
       }
+      .proof-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1px;
+        border-top: 1px solid var(--line);
+        background: var(--line);
+      }
+      .proof-cell {
+        min-height: 190px;
+        display: grid;
+        align-content: space-between;
+        padding: 22px;
+        background: var(--panel);
+      }
+      .proof-cell b { font-size: 24px; line-height: 1.1; }
+      .proof-cell span { color: var(--muted); }
       .below-fold-hint {
         min-height: 84px;
         display: grid;
@@ -257,6 +271,22 @@
       }
       .feature-list { display: grid; gap: 16px; }
       .feature-list .feature { min-height: 168px; }
+      .module-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .module-list li {
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--muted);
+        background: #fffaf1;
+        font-weight: 760;
+      }
       .providers {
         display: grid;
         grid-template-columns: minmax(0, .86fr) minmax(320px, .56fr);
@@ -328,7 +358,7 @@
       .zoom-caption { margin: 0 auto; color: #ede4d8; text-align: center; }
       @media (max-width: 980px) {
         .navlinks { display: none; }
-        .hero-grid, .section-head, .feature-grid, .providers, .product-shots, .cta { grid-template-columns: 1fr; }
+        .hero-grid, .section-head, .feature-grid, .providers, .product-shots, .proof-strip, .cta { grid-template-columns: 1fr; }
         .principles, .planes, .provider-grid { grid-template-columns: 1fr 1fr; }
         .product-shots img { min-height: 0; max-height: 680px; object-fit: contain; }
       }
@@ -336,21 +366,19 @@
         .wrap { width: min(100% - 28px, 1240px); }
         .hero { min-height: auto; padding-top: 38px; }
         .principles, .planes, .provider-grid { grid-template-columns: 1fr; }
-        .screen-label, .footer { display: grid; }
+        .screen-label, .footer, .module-list { display: grid; grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
     <header class="topbar">
       <nav class="wrap nav" aria-label="Main navigation">
-        <a class="brand" href="./"><img src="./docs/assets/openmaple-mascot.svg" alt="" />OpenMaple</a>
+        <a class="brand" href="./"><img src="./assets/openmaple-mascot.svg" alt="" />OpenMaple</a>
         <div class="navlinks">
           <a href="#managed-agents">Managed Agents</a>
           <a href="#platform">Platform</a>
           <a href="#features">Product</a>
           <a href="#providers">Providers</a>
-          <a href="./docs/index.html">Docs</a>
-          <a href="https://github.com/dragonforce2010/openmaple/blob/main/marketing/launch/media-kit.md">Media kit</a>
           <a class="repo" href="https://github.com/dragonforce2010/openmaple">GitHub</a>
         </div>
       </nav>
@@ -365,9 +393,8 @@
             <div>
               <p class="lead"><strong>An open-source control plane for long-running agents.</strong> OpenMaple turns agent prototypes into sessions, sandboxes, runtime pools, vault-backed tools, event logs, SDK calls, and CLI workflows you can run on your own cloud.</p>
               <div class="actions">
-                <a class="btn primary" href="./docs/index.html">Read docs</a>
-                <a class="btn maple" href="https://github.com/dragonforce2010/openmaple">View GitHub</a>
-                <a class="btn" href="https://github.com/dragonforce2010/openmaple/blob/main/marketing/launch/media-kit.md">Media kit</a>
+                <a class="btn primary" href="https://github.com/dragonforce2010/openmaple">View GitHub</a>
+                <a class="btn maple" href="https://www.npmjs.com/package/maple-agent-cli">Install CLI</a>
                 <a class="btn" href="https://www.anthropic.com/engineering/managed-agents">Managed Agents essay</a>
               </div>
             </div>
@@ -376,10 +403,14 @@
         </div>
       </section>
 
-      <section class="screen-stage" aria-label="OpenMaple console screenshot">
+      <section class="screen-stage" aria-label="OpenMaple public proof points">
         <div class="screen-inner">
-          <div class="screen-label"><span>Live OpenMaple online environment · light theme</span><span>Control plane screenshot from t3-prod</span></div>
-          <img src="./docs/site/screenshots/current-console-deployments.png" alt="OpenMaple online console deployments page in light theme" />
+          <div class="screen-label"><span>Public repository surface</span><span>Docs, launch kit, and local artifacts are not published</span></div>
+          <div class="proof-strip">
+            <div class="proof-cell"><b>Console + API</b><span>React console and Express control plane live in the same open repo.</span></div>
+            <div class="proof-cell"><b>SDK + CLI</b><span>Programmatic entry points are packaged as `maple-agent-sdk` and `maple-agent-cli`.</span></div>
+            <div class="proof-cell"><b>Provider adapters</b><span>Runtime, sandbox, storage, and model layers stay replaceable.</span></div>
+          </div>
         </div>
       </section>
       <div class="wrap below-fold-hint">Session, sandbox, runtime, vault, tool calls, and audit log stay separate so managed agents can run longer than a local demo.</div>
@@ -419,20 +450,24 @@
 
       <section id="features" class="wrap section">
         <div class="section-head">
-          <h2>Real console. Real light screenshots.</h2>
-          <p>These large-screen screenshots are captured from the current OpenMaple online environment, not mock data, mobile crops, or the legacy product-manual screenshot set.</p>
+          <h2>Console, API, SDK, and CLI in one repo.</h2>
+          <p>OpenMaple exposes the managed-agent lifecycle as resources you can operate from UI or code.</p>
         </div>
         <div class="feature-grid">
           <article class="feature">
-            <div class="product-shots">
-              <figure><img src="./docs/site/screenshots/current-console-quickstart.png" alt="OpenMaple online quickstart builder in light theme on a large screen" /><figcaption>Quickstart builder</figcaption></figure>
-              <figure><img src="./docs/site/screenshots/current-console-agents.png" alt="OpenMaple online agents registry in light theme on a large screen" /><figcaption>Agents registry</figcaption></figure>
-              <figure><img src="./docs/site/screenshots/current-console-deployments.png" alt="OpenMaple online deployments console in light theme on a large screen" /><figcaption>Deployments</figcaption></figure>
-              <figure><img src="./docs/site/screenshots/current-console-sessions.png" alt="OpenMaple online sessions event log in light theme on a large screen" /><figcaption>Session event log</figcaption></figure>
-              <figure><img src="./docs/site/screenshots/current-console-environments.png" alt="OpenMaple online environments module in light theme on a large screen" /><figcaption>Environments</figcaption></figure>
-              <figure><img src="./docs/site/screenshots/current-console-vaults.png" alt="OpenMaple online credential vaults module in light theme on a large screen" /><figcaption>Credential vaults</figcaption></figure>
+            <div class="feature-copy">
+              <small>Current product</small>
+              <h3>Managed-agent resources, not one-off demos.</h3>
+              <p>The platform models the pieces that keep agents operable after a prototype works.</p>
+              <ul class="module-list">
+                <li>Quickstart builder</li>
+                <li>Agent registry</li>
+                <li>Deployments</li>
+                <li>Session event log</li>
+                <li>Environments</li>
+                <li>Credential vaults</li>
+              </ul>
             </div>
-            <div class="feature-copy"><small>Current product</small><h3>Large-screen modules, not mobile crops.</h3><p>The public page shows the product as it runs today: quickstart, agents, deployments, sessions, environments, and credential vaults from the live online console.</p></div>
           </article>
           <div class="feature-list">
             <article class="feature"><div class="feature-copy"><small>Quickstart</small><h3>Build from intent.</h3><p>Create a runnable path: agent, environment, model, vault, and session.</p></div></article>
@@ -471,8 +506,8 @@ storageProvider:
 
       <section class="wrap section">
         <div class="cta">
-          <div><h2>Ship a managed-agent path today.</h2><p>Start local, publish docs, then connect a runtime provider and run a real session through the console, SDK, or CLI.</p></div>
-          <div class="actions"><a class="btn primary" href="./docs/index.html">Open docs</a><a class="btn" href="https://github.com/dragonforce2010/openmaple">View repo</a></div>
+          <div><h2>Ship a managed-agent path today.</h2><p>Start local, connect a runtime provider, and run a real session through the console, SDK, or CLI.</p></div>
+          <div class="actions"><a class="btn primary" href="https://github.com/dragonforce2010/openmaple">View repo</a><a class="btn" href="https://www.npmjs.com/package/maple-agent-cli">CLI package</a></div>
         </div>
       </section>
     </main>
@@ -481,31 +516,5 @@ storageProvider:
       <span>OpenMaple · open-source Managed Agents platform</span>
       <span>Console · REST API · SDK · CLI · Skills</span>
     </footer>
-    <div class="lightbox" data-lightbox hidden role="dialog" aria-modal="true" aria-label="Image preview"><button class="zoom-close" type="button" data-lightbox-close aria-label="Close preview">×</button><img data-lightbox-image alt="" /><p class="zoom-caption" data-lightbox-caption></p></div>
-    <script>
-      const lightbox = document.querySelector("[data-lightbox]");
-      const lightboxImage = document.querySelector("[data-lightbox-image]");
-      const lightboxCaption = document.querySelector("[data-lightbox-caption]");
-      const closeLightbox = () => { lightbox.hidden = true; document.body.style.overflow = ""; };
-      document.querySelectorAll(".screen-stage img, .product-shots img").forEach((image) => {
-        image.tabIndex = 0;
-        image.addEventListener("click", () => {
-          lightboxImage.src = image.currentSrc || image.src;
-          lightboxImage.alt = image.alt;
-          lightboxCaption.textContent = image.alt;
-          lightbox.hidden = false;
-          document.body.style.overflow = "hidden";
-        });
-        image.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            image.click();
-          }
-        });
-      });
-      document.querySelector("[data-lightbox-close]").addEventListener("click", closeLightbox);
-      lightbox.addEventListener("click", (event) => { if (event.target === lightbox) closeLightbox(); });
-      document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeLightbox(); });
-    </script>
   </body>
 </html>

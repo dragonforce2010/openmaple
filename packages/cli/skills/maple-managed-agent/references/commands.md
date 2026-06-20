@@ -3,7 +3,7 @@
 ## Auth
 
 ```bash
-maple config set api.baseUrl https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com
+maple config set api.baseUrl http://127.0.0.1:27951
 maple config login --api-key <maple_ws_...>
 maple config whoami
 ```
