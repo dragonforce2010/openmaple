@@ -130,6 +130,7 @@ jobs:
           VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
           VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
           MAPLE_VEFAAS_REGION: ${{ vars.MAPLE_VEFAAS_REGION || 'cn-beijing' }}
+          MAPLE_VEFAAS_PUBLIC_BASE_URL: ${{ vars.MAPLE_VEFAAS_PUBLIC_BASE_URL || 'https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com' }}
           MAPLE_VEFAAS_STABLE_MIN_INSTANCE: ${{ vars.MAPLE_VEFAAS_STABLE_MIN_INSTANCE || '1' }}
           MAPLE_VEFAAS_STABLE_MAX_INSTANCE: ${{ vars.MAPLE_VEFAAS_STABLE_MAX_INSTANCE || '10' }}
           MAPLE_AGENT_RUNTIME_PROVIDER: ${{ vars.MAPLE_AGENT_RUNTIME_PROVIDER || 'local' }}

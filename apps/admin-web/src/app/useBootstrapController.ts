@@ -31,7 +31,7 @@ import type {
 import type { ToastType } from "../ui";
 
 type Toast = (message: string, kind?: ToastType) => void;
-const FIRST_PAINT_TIMEOUT_MS = 12_000;
+const FIRST_PAINT_TIMEOUT_MS = 60_000;
 
 export function useBootstrapController(input: {
   toast: Toast;
