@@ -35,6 +35,8 @@ READY_TIMEOUT_SECONDS = 240
 PROBE_ATTEMPTS = 3
 PROBE_TIMEOUT_SECONDS = 20
 PROBE_RETRY_SECONDS = 2
+RESOURCE_UPDATE_TIMEOUT_SECONDS = 300
+RESOURCE_UPDATE_RETRY_SECONDS = 10
 
 
 def main() -> int:
@@ -310,7 +312,20 @@ def existing_function_id(clients: dict[str, Any], function_name: str) -> str:
 
 
 def ensure_resource(clients: dict[str, Any], function_id: str, min_instance: int, max_instance: int) -> None:
-    clients["vefaas_api"].update_function_resource(function_id, min_instance, max_instance)
+    deadline = time.monotonic() + RESOURCE_UPDATE_TIMEOUT_SECONDS
+    while True:
+        try:
+            clients["vefaas_api"].update_function_resource(function_id, min_instance, max_instance)
+            return
+        except Exception as error:
+            if not is_function_deploying_error(error) or time.monotonic() >= deadline:
+                raise
+            time.sleep(RESOURCE_UPDATE_RETRY_SECONDS)
+
+
+def is_function_deploying_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return "invalidoperation" in message and "is deploying" in message
 
 
 def choose_gateway(clients: dict[str, Any], config: DeployConfig) -> dict[str, Any]:

@@ -13,12 +13,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "infra" / "vefaas" / "deploy_vefaas_runtime.py"
 APP_DEPLOY_PATH = ROOT / "infra" / "vefaas" / "deploy_vefaas_application.py"
+STABLE_DEPLOY_PATH = ROOT / "infra" / "vefaas" / "deploy_vefaas_stable.py"
 
 
 def load_module():
     source = MODULE_PATH.read_text()
     assert "veadk" not in source.lower(), "veFaaS provisioning must not import or mention veadk"
     spec = importlib.util.spec_from_file_location("deploy_vefaas_runtime", MODULE_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_stable_module():
+    infra_path = str(ROOT / "infra" / "vefaas")
+    if infra_path not in sys.path:
+        sys.path.insert(0, infra_path)
+    spec = importlib.util.spec_from_file_location("deploy_vefaas_stable", STABLE_DEPLOY_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -148,6 +161,48 @@ class FakeSdk:
     class TlsConfigForCreateFunctionInput:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
+
+
+class FlakyResourceApi:
+    def __init__(self, failures):
+        self.failures = list(failures)
+        self.calls = []
+
+    def update_function_resource(self, function_id, min_instance, max_instance):
+        self.calls.append({"function_id": function_id, "min_instance": min_instance, "max_instance": max_instance})
+        if self.failures:
+            raise RuntimeError(self.failures.pop(0))
+
+
+def test_stable_deploy_retries_resource_update_while_function_is_deploying():
+    module = load_stable_module()
+    module.RESOURCE_UPDATE_RETRY_SECONDS = 0
+    api = FlakyResourceApi(
+        [
+            'Volcengine OpenAPI UpdateFunctionResource failed with HTTP 403: {"ResponseMetadata":{"Error":{"Code":"InvalidOperation","Message":"This operation is not supported. Function fn_contract is deploying"}}}',
+            'Volcengine OpenAPI UpdateFunctionResource failed with HTTP 403: {"ResponseMetadata":{"Error":{"Code":"InvalidOperation","Message":"This operation is not supported. Function fn_contract is deploying"}}}',
+        ]
+    )
+
+    module.ensure_resource({"vefaas_api": api}, "fn_contract", 1, 10)
+
+    assert len(api.calls) == 3
+    assert api.calls[-1] == {"function_id": "fn_contract", "min_instance": 1, "max_instance": 10}
+
+
+def test_stable_deploy_does_not_retry_fatal_resource_update_errors():
+    module = load_stable_module()
+    module.RESOURCE_UPDATE_RETRY_SECONDS = 0
+    api = FlakyResourceApi(["Volcengine OpenAPI UpdateFunctionResource failed with HTTP 403: forbidden"])
+
+    try:
+        module.ensure_resource({"vefaas_api": api}, "fn_contract", 1, 10)
+    except RuntimeError as error:
+        assert "forbidden" in str(error)
+    else:
+        raise AssertionError("expected fatal resource update error to be raised")
+
+    assert len(api.calls) == 1
 
 
 def test_direct_provisioner_deploys_fixed_runtime_template():
@@ -602,6 +657,8 @@ def test_env_parser_and_error_json_are_defensive():
 
 if __name__ == "__main__":
     test_backend_package_carries_runtime_provisioner_scripts()
+    test_stable_deploy_retries_resource_update_while_function_is_deploying()
+    test_stable_deploy_does_not_retry_fatal_resource_update_errors()
     test_direct_provisioner_deploys_fixed_runtime_template()
     test_direct_provisioner_deploys_runtime_image_with_route()
     test_config_loads_project_env_only_and_defaults_region()
