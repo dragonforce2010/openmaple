@@ -140,18 +140,18 @@ export function useBootstrapController(input: {
 
   async function routeAfterAuth(resetStaleSession = true) {
     try {
-      await routeAfterAuthOnce();
+      await routeAfterAuthOnce(shouldVerifySessionFromLocation());
     } catch (reason) {
       if (!resetStaleSession || !shouldResetSessionCookie(reason)) throw reason;
       await clearSessionCookie();
-      await routeAfterAuthOnce();
+      await routeAfterAuthOnce(false);
     }
   }
 
-  async function routeAfterAuthOnce() {
+  async function routeAfterAuthOnce(verifySession: boolean) {
     const requestedRoute = requestedWorkspaceRouteFromLocation();
     const boot = await apiGet<{ user: User | null; tenants?: AccessibleTenant[]; recommended_view?: string; selected_tenant_id?: string; selected_workspace_id?: string }>(
-      authBootstrapPath(requestedRoute),
+      authBootstrapPath(requestedRoute, verifySession),
       { timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS }
     );
     input.setCurrentUser(boot.user);
@@ -219,6 +219,17 @@ export function useBootstrapController(input: {
     }
   }
 
+  function shouldVerifySessionFromLocation() {
+    return new URLSearchParams(window.location.search).get("auth_return") === "1";
+  }
+
+  function clearAuthReturnParam() {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("auth_return")) return;
+    url.searchParams.delete("auth_return");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }
+
   async function enterTenant(tenant: AccessibleTenant) {
     if (input.currentUser) rememberTenantSelection(input.currentUser.id, tenant.id);
     input.setUserMenuOpen(false);
@@ -282,6 +293,7 @@ export function useBootstrapController(input: {
         input.setError(errorMessage(reason));
         input.setCurrentUser((current) => current ?? null);
       } finally {
+        clearAuthReturnParam();
         input.setAuthChecked(true);
       }
     })();

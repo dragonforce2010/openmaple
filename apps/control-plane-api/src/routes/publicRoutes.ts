@@ -101,7 +101,7 @@ app.get("/v1/auth/oauth/:provider/callback", async (request, response) => {
     if (String(request.headers.accept || "").includes("application/json")) {
       return response.status(201).json({ user: login.user, expires_at: login.expires_at });
     }
-    return response.redirect(webRedirectUrl(workspaceRoute));
+    return response.redirect(webRedirectUrl(authReturnPath(workspaceRoute)));
   } catch (error) {
     return response.status(502).json({ error: "oauth_callback_failed", message: error instanceof Error ? error.message : String(error) });
   }
@@ -122,7 +122,7 @@ app.get("/callback", async (request, response) => {
     if (String(request.headers.accept || "").includes("application/json")) {
       return response.status(201).json({ user: login.user, expires_at: login.expires_at });
     }
-    return response.redirect(webRedirectUrl(workspaceRoute));
+    return response.redirect(webRedirectUrl(authReturnPath(workspaceRoute)));
   } catch (error) {
     return response.status(502).json({ error: "oauth_callback_failed", message: error instanceof Error ? error.message : String(error) });
   }
@@ -206,11 +206,24 @@ function hasIssuedSessionTokenShape(token: string) {
   return /^maple_sess_[A-Za-z0-9_-]{43}$/.test(token);
 }
 
+function shouldVerifySessionCookie(request: Request) {
+  return request.query.verify_session === "1";
+}
+
+function authReturnPath(path = "") {
+  const target = path && path.startsWith("/") ? path : "/";
+  return `${target}${target.includes("?") ? "&" : "?"}auth_return=1`;
+}
+
 function authBootstrapWithoutDatabase(request: Request, response: Response, next: NextFunction) {
   const token = sessionCookieToken(request);
   const hasApiKey = Boolean(request.header("x-maple-api-key") || request.header("x-api-key"));
   if (token && !bearerAuthToken(request) && !hasApiKey && !hasIssuedSessionTokenShape(token)) {
     clearSessionCookie(response);
+    sendAnonymousAuthBootstrap(response);
+    return;
+  }
+  if (token && !bearerAuthToken(request) && !hasApiKey && !shouldVerifySessionCookie(request)) {
     sendAnonymousAuthBootstrap(response);
     return;
   }
