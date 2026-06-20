@@ -194,6 +194,7 @@ def build_backend_package(app_name: str) -> FunctionPackage:
     package_dir.mkdir(parents=True, exist_ok=False)
     run([BUN, "build", "--target=node", "--packages=bundle", "--outfile", str(package_dir / "app.js"), str(ROOT / "apps/control-plane-api/src/index.ts")])
     run([BUN, "build", "--target=node", "--packages=bundle", "--outfile", str(package_dir / "mysql_child.mjs"), str(ROOT / "apps/control-plane-api/src/infra/mysql_child.mjs")])
+    run([BUN, "build", "--target=node", "--packages=bundle", "--outfile", str(package_dir / "mysql_worker.mjs"), str(ROOT / "apps/control-plane-api/src/infra/mysql_worker.mjs")])
     copy_backend_source(package_dir / "source")
     copy_source_dir(ROOT / "infra/vefaas", package_dir / "infra/vefaas")
     if (ROOT / "sandbox.config.json").exists():
@@ -410,7 +411,7 @@ def backend_envs() -> dict[str, str]:
         "MAPLE_SKILLS_ROOT": "/tmp/maple-skills",
         "MAPLE_AGENT_RUNTIME_PROVIDER": agent_runtime_provider,
         "MAPLE_AGENT_LOOP_EXECUTION": agent_loop_execution,
-        "MAPLE_MYSQL_FORCE_HELPER": "true",
+        "MAPLE_MYSQL_FORCE_HELPER": "false",
         "MAPLE_MYSQL_HELPER_COMMAND": "node",
         "MAPLE_MYSQL_HELPER_SCRIPT": "mysql_child.mjs",
         "MAPLE_MYSQL_HELPER_TIMEOUT_MS": os.environ.get("MAPLE_MYSQL_HELPER_TIMEOUT_MS") or "15000",
@@ -503,6 +504,7 @@ export HOST="${HOST:-0.0.0.0}"
 export PORT="${_FAAS_RUNTIME_PORT:-${SERVER_PORT:-${PORT:-8000}}}"
 export NODE_ENV="${NODE_ENV:-production}"
 export SERVE_STATIC="${SERVE_STATIC:-false}"
+export MAPLE_MYSQL_FORCE_HELPER="${MAPLE_MYSQL_FORCE_HELPER:-false}"
 export MAPLE_MYSQL_HELPER_COMMAND="${MAPLE_MYSQL_HELPER_COMMAND:-node}"
 export MAPLE_MYSQL_HELPER_SCRIPT="${MAPLE_MYSQL_HELPER_SCRIPT:-mysql_child.mjs}"
 export MAPLE_MYSQL_HELPER_TIMEOUT_MS="${MAPLE_MYSQL_HELPER_TIMEOUT_MS:-15000}"

@@ -557,16 +557,17 @@ def probe_urls(base_url: str) -> dict[str, Any]:
     for name, path in paths.items():
         url = f"{base_url.rstrip('/')}{path}"
         probes[name] = probe_url(url)
+    probes["auth_bootstrap_stale_cookie"] = probe_url(f"{base_url.rstrip('/')}/v1/auth/bootstrap", ["-H", "Cookie: maple_session=bogus_stale_session"])
     probes["auth_start"] = probe_auth_start(base_url)
     return probes
 
 
-def probe_url(url: str) -> dict[str, Any]:
+def probe_url(url: str, curl_args: list[str] | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {"url": url}
     for attempt in range(1, PROBE_ATTEMPTS + 1):
         try:
             completed = subprocess.run(
-                ["curl", "-k", "-sS", "-o", "/tmp/maple-vefaas-stable-probe.txt", "-w", "%{http_code}", url],
+                ["curl", "-k", "-sS", *(curl_args or []), "-o", "/tmp/maple-vefaas-stable-probe.txt", "-w", "%{http_code}", url],
                 text=True,
                 capture_output=True,
                 timeout=PROBE_TIMEOUT_SECONDS,

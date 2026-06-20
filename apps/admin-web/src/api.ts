@@ -32,6 +32,9 @@ async function readApiError(response: Response) {
   if (!text) return new ApiError(`${response.status} ${response.statusText}`.trim(), response.status, {});
   try {
     const body = JSON.parse(text) as { error?: string; message?: string; fieldErrors?: Record<string, string[]> };
+    if (body.error === "database_unavailable") {
+      return new ApiError("登录状态暂时无法校验，请刷新或重新登录。", response.status, body);
+    }
     if (body.error === "workspace_runtime_pool_unavailable") {
       return new ApiError("当前工作区 runtime pool 暂无 active member，Builder Agent 暂时不能创建会话。请等待开通完成或切换到已有 runtime 的工作区。", response.status, body);
     }
