@@ -10,6 +10,7 @@ import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 import deploy_vefaas_application as app_deploy
 from deploy_vefaas_runtime import (
@@ -556,6 +557,7 @@ def probe_urls(base_url: str) -> dict[str, Any]:
     for name, path in paths.items():
         url = f"{base_url.rstrip('/')}{path}"
         probes[name] = probe_url(url)
+    probes["auth_start"] = probe_auth_start(base_url)
     return probes
 
 
@@ -581,6 +583,43 @@ def probe_url(url: str) -> dict[str, Any]:
     return result
 
 
+def probe_auth_start(base_url: str) -> dict[str, Any]:
+    base = base_url.rstrip("/")
+    callback_url = f"{base}/v1/auth/oauth/lark_sso/callback"
+    url = f"{base}/v1/auth/oauth/lark_sso/start?redirect=1&return_to=%2F"
+    result: dict[str, Any] = {"url": url, "expected_callback": callback_url}
+    header_path = Path("/tmp/maple-vefaas-stable-probe-headers.txt")
+    body_path = Path("/tmp/maple-vefaas-stable-probe.txt")
+    for attempt in range(1, PROBE_ATTEMPTS + 1):
+        try:
+            completed = subprocess.run(
+                ["curl", "-k", "-sS", "-D", str(header_path), "-o", str(body_path), "-w", "%{http_code} %{redirect_url}", url],
+                text=True,
+                capture_output=True,
+                timeout=PROBE_TIMEOUT_SECONDS,
+            )
+            status, _, redirect_url = completed.stdout.strip().partition(" ")
+            body = body_path.read_text(errors="replace")[:500]
+            headers = header_path.read_text(errors="replace")[:500]
+            result = {
+                "url": url,
+                "status": status,
+                "redirect_url": redirect_url,
+                "expected_callback": callback_url,
+                "headers_prefix": headers,
+                "body_prefix": body,
+                "attempt": attempt,
+            }
+            if completed.returncode:
+                result["error"] = (completed.stderr or f"curl exited {completed.returncode}")[:300]
+        except Exception as error:
+            result = {"url": url, "expected_callback": callback_url, "error": str(error)[:300], "attempt": attempt}
+        if probe_ok(result) or attempt == PROBE_ATTEMPTS:
+            return result
+        time.sleep(PROBE_RETRY_SECONDS)
+    return result
+
+
 def probe_ok(probe: dict[str, Any]) -> bool:
     status = str(probe.get("status") or "")
     return not probe.get("error") and status.isdigit() and 200 <= int(status) < 400
@@ -593,6 +632,14 @@ def assert_probes_ok(probes: dict[str, Any]) -> None:
         if not probe_ok(probe):
             detail = probe.get("error") or f"status={status} body={str(probe.get('body_prefix') or '')[:160]}"
             failures.append(f"{name}: {detail}")
+            continue
+        if name == "auth_start":
+            redirect_url = unquote(str(probe.get("redirect_url") or ""))
+            expected_callback = str(probe.get("expected_callback") or "")
+            if "127.0.0.1" in redirect_url or "localhost" in redirect_url:
+                failures.append(f"{name}: local callback leaked into redirect_url={redirect_url[:160]}")
+            elif expected_callback and expected_callback not in redirect_url:
+                failures.append(f"{name}: expected callback {expected_callback} missing from redirect_url={redirect_url[:160]}")
     if failures:
         raise SystemExit("stable probe failed: " + "; ".join(failures))
 
