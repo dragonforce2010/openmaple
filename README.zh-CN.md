@@ -20,6 +20,17 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 - **给长任务 Agent**：Session 状态、事件流、工具调用、文件和产物都沉淀在控制面，而不是散落在终端输出里。
 - **给二开团队**：公共仓库包含 Console、API、SDK、CLI、provider contract 和可部署 runtime adapter。
 
+## 先跑一个 SDK 路径
+
+clone repo 后，填一个 workspace API key，再填一组 agent/environment，就能用仓库里的 SDK 源码跑一轮 managed-agent session：
+
+```bash
+cp examples/minimal-sdk-run/.env.example examples/minimal-sdk-run/.env
+node examples/minimal-sdk-run/index.mjs
+```
+
+变量说明和预期输出见 [examples/minimal-sdk-run](examples/minimal-sdk-run/)。
+
 ## 它解决什么问题
 
 | managed-agent 问题 | OpenMaple 抽象 | 价值 |
