@@ -15,7 +15,9 @@ OpenMaple is not an Anthropic official product. It implements the same platform 
 
 [Website](https://dragonforce2010.github.io/openmaple/) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
 
-<img src="assets/openmaple-mascot.svg" alt="OpenMaple mascot" width="120">
+<img src="assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder real console screenshot">
+
+_Screenshots are public-safe crops from the running OpenMaple console. Workspace labels and resource IDs are omitted._
 
 ## 60-Second Read
 
@@ -128,6 +130,12 @@ flowchart LR
 - **Provider portability**: veFaaS, E2B, Docker, and future Lambda/FC-style runtimes can sit behind the same session contract.
 
 ## Product Surface
+
+| Quickstart builder | Agents registry |
+|---|---|
+| <img src="assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder screenshot"> | <img src="assets/screenshots/openmaple-agents.png" alt="OpenMaple agents registry screenshot"> |
+| Runtime environments | Credential vaults |
+| <img src="assets/screenshots/openmaple-environments.png" alt="OpenMaple environments screenshot"> | <img src="assets/screenshots/openmaple-vaults.png" alt="OpenMaple credential vaults screenshot"> |
 
 - **Quickstart**: generate an agent draft, bind an environment, attach vaults, and start a session.
 - **Agents**: version agent configs, tools, MCP servers, skills, models, and loop type.
