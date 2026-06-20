@@ -39,6 +39,11 @@ server.stderr.on("data", (chunk) => (serverOutput += String(chunk)));
 try {
   await waitForHealth();
 
+  const staleBoot = await staleBootstrap();
+  assert.equal(staleBoot.recommended_view, "login");
+  assert.equal(staleBoot.owned_count, 0);
+  assert.equal(staleBoot.member_only_count, 0);
+
   // U_A — brand-new user with no tenant → onboarding
   const a = await login(`uA-${stamp}@example.com`);
   const models = await getJson("/v1/model_configs", a.cookie);
@@ -163,6 +168,12 @@ async function bootstrap(cookie: string, tenantSlug = "") {
   const response = await fetch(`${apiBase}/v1/auth/bootstrap${route}`, { headers: { cookie } });
   if (!response.ok) throw new Error(`bootstrap failed ${response.status}: ${await response.text()}`);
   return response.json() as Promise<{ recommended_view: string; owned_count: number; member_only_count: number; selected_tenant_id?: string; selected_workspace_id?: string }>;
+}
+
+async function staleBootstrap() {
+  const response = await fetch(`${apiBase}/v1/auth/bootstrap`, { headers: { cookie: "maple_session=bogus_stale_session" } });
+  if (!response.ok) throw new Error(`stale bootstrap failed ${response.status}: ${await response.text()}`);
+  return response.json() as Promise<{ recommended_view: string; owned_count: number; member_only_count: number }>;
 }
 
 async function appBootstrap(cookie: string, workspaceId: string) {
