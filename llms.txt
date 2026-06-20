@@ -1,0 +1,30 @@
+# OpenMaple
+
+OpenMaple is an open-source managed-agent control plane for teams building agent platforms without binding the runtime, sandbox, storage, or model layer to one cloud.
+
+## Primary Links
+
+- Site: https://dragonforce2010.github.io/openmaple/
+- Repository: https://github.com/dragonforce2010/openmaple
+- English README: https://github.com/dragonforce2010/openmaple#readme
+- Chinese README: https://github.com/dragonforce2010/openmaple/blob/main/README.zh-CN.md
+- Release v0.1.0: https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0
+
+## Public Package Entry Points
+
+- Node SDK package: https://www.npmjs.com/package/maple-agent-sdk
+- CLI package: https://www.npmjs.com/package/maple-agent-cli
+- SDK source: https://github.com/dragonforce2010/openmaple/tree/main/packages/sdk
+- CLI source: https://github.com/dragonforce2010/openmaple/tree/main/packages/cli
+
+## What To Inspect
+
+- Managed-agent concepts: agent, environment, session, vault, runtime pool, sandbox provider, provider adapter.
+- Real product screenshots are published on the site and in repository assets.
+- Local quickstart is documented in the README and uses `compose.yaml`.
+
+## Boundaries
+
+- OpenMaple is not an official Anthropic product.
+- OpenMaple does not claim public production adoption, benchmark leadership, or customer counts.
+- Provider support should be evaluated from the current code paths and tests.
