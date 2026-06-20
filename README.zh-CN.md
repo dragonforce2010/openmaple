@@ -20,6 +20,24 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 - **给长任务 Agent**：Session 状态、事件流、工具调用、文件和产物都沉淀在控制面，而不是散落在终端输出里。
 - **给二开团队**：公共仓库包含 Console、API、SDK、CLI、provider contract 和可部署 runtime adapter。
 
+## 本地跑起来
+
+一个命令启动控制面和本地 MySQL：
+
+```bash
+docker compose up --build
+```
+
+然后打开：
+
+```text
+Console: http://127.0.0.1:27951/
+Health:  http://127.0.0.1:27951/health
+Login:   http://127.0.0.1:27951/v1/auth/bootstrap
+```
+
+Compose 路径是自包含的：它会构建 OpenMaple，启动 MySQL 8，打开本地开发登录，并把数据保存在 `mysql_data` volume。只有运行真实 agent loop 或外部工具执行时，才需要模型 key 和 sandbox provider key。
+
 ## 先跑一个 SDK 路径
 
 clone repo 后，填一个 workspace API key，再填一组 agent/environment，就能用仓库里的 SDK 源码跑一轮 managed-agent session：
