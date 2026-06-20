@@ -27,6 +27,24 @@ _Screenshots are public-safe crops from the running OpenMaple console. Workspace
 - **For long-running agents**: keep session state outside the model context window and isolate tool execution from credentials.
 - **For contributors**: the public repo includes the console, API, SDK, CLI, provider contracts, and deployable runtime adapters.
 
+## Run It Locally
+
+Start the full control plane and a local MySQL database with one command:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+```text
+Console: http://127.0.0.1:27951/
+Health:  http://127.0.0.1:27951/health
+Login:   http://127.0.0.1:27951/v1/auth/bootstrap
+```
+
+The Compose path is self-contained: it builds OpenMaple, starts MySQL 8, enables local dev login, and persists data in the `mysql_data` volume. Model keys and sandbox provider keys are only needed when you run real agent loops or external tool execution.
+
 ## Try the SDK Path
 
 Clone the repo, fill a workspace API key plus one agent/environment pair, then run one managed-agent session through the repo SDK source:
