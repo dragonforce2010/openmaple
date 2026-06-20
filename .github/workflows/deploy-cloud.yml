@@ -101,7 +101,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.deployed.outputs.skip != 'true'
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Restore stable deployment state
         if: steps.deployed.outputs.skip != 'true'
