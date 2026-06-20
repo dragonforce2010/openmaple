@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -191,12 +192,38 @@ def deploy_update(state: dict[str, Any], state_path: Path, clients: dict[str, An
 
 
 def update_existing_function(clients: dict[str, Any], function_id: str, config: DeployConfig, package: app_deploy.FunctionPackage) -> None:
+    package = with_existing_envs(clients["vefaas_api"], function_id, package)
     update_function_config(clients["vefaas_api"], function_id, config, package)
     code_zip = zip_source_dir(package.source_dir)
     upload_url = clients["vefaas_api"].get_code_upload_address(function_id, len(code_zip))
     put_zip_bytes(upload_url, code_zip)
     clients["app"].post("CodeUploadCallback", {"FunctionId": function_id})
     app_deploy.release_function(clients["release"], function_id, config)
+
+
+def with_existing_envs(api: VolcengineVefaasApi, function_id: str, package: app_deploy.FunctionPackage) -> app_deploy.FunctionPackage:
+    existing = function_envs(api, function_id)
+    if not existing:
+        return package
+    # Stable updates replace the whole env list. Preserve live secrets when CI lacks them.
+    merged = {**existing, **{key: value for key, value in package.envs.items() if value != ""}}
+    return replace(package, envs=merged)
+
+
+def function_envs(api: VolcengineVefaasApi, function_id: str) -> dict[str, str]:
+    if getattr(api, "openapi", None):
+        data = api.openapi.post("GetFunction", {"Id": function_id}).get("Result", {})
+    else:
+        sdk = api.sdk
+        data = to_plain_dict(api.client.get_function(sdk.GetFunctionRequest(id=function_id)))
+    envs = data.get("envs") or data.get("Envs") or []
+    result: dict[str, str] = {}
+    for item in envs:
+        key = str((item.get("key") if isinstance(item, dict) else getattr(item, "key", "")) or (item.get("Key") if isinstance(item, dict) else ""))
+        value = str((item.get("value") if isinstance(item, dict) else getattr(item, "value", "")) or (item.get("Value") if isinstance(item, dict) else ""))
+        if key:
+            result[key] = value
+    return result
 
 
 def update_function_config(api: VolcengineVefaasApi, function_id: str, config: DeployConfig, package: app_deploy.FunctionPackage) -> None:
