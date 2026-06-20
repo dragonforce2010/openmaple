@@ -19,6 +19,7 @@ import {
   oauthStateWorkspaceRoute,
   optionalAuth,
   providerCallbackUrl,
+  readRequestToken,
   runRuntimeToolCall,
   safeWebReturnPath,
   scopeForParent,
@@ -72,6 +73,10 @@ function startOAuth(request: Request, response: Response) {
 app.get("/v1/auth/oauth/:provider/start/t/:tenantSlug/w/:workspaceSlug", startOAuth);
 app.get("/v1/auth/oauth/:provider/start/t/:tenantSlug", startOAuth);
 app.get("/v1/auth/oauth/:provider/start", startOAuth);
+
+app.get("/v1/auth/bootstrap/t/:tenantSlug/w/:workspaceSlug", authBootstrapWithoutDatabase);
+app.get("/v1/auth/bootstrap/t/:tenantSlug", authBootstrapWithoutDatabase);
+app.get("/v1/auth/bootstrap", authBootstrapWithoutDatabase);
 
 app.use("/v1", ensureDatabaseReady);
 
@@ -152,11 +157,27 @@ app.get("/v1/auth/me", optionalAuth, (request: AuthenticatedRequest, response) =
   response.json({ user, tenants: user ? listTenantAdminTenants(user.id) : [] });
 });
 
+function requestHasAuthMaterial(request: Request) {
+  return Boolean(readRequestToken(request) || request.header("x-maple-api-key") || request.header("x-api-key"));
+}
+
+function sendAnonymousAuthBootstrap(response: Response) {
+  response.json({ user: null, tenants: [], created_count: 0, owned_count: 0, member_only_count: 0, recommended_view: "login" });
+}
+
+function authBootstrapWithoutDatabase(request: Request, response: Response, next: NextFunction) {
+  if (requestHasAuthMaterial(request)) {
+    next();
+    return;
+  }
+  sendAnonymousAuthBootstrap(response);
+}
+
 // single first-paint decision source: classify accessible tenants into the four login branches
 function authBootstrap(request: AuthenticatedRequest, response: Response) {
   const user = request.user ?? null;
   if (!user) {
-    response.json({ user: null, tenants: [], created_count: 0, owned_count: 0, member_only_count: 0, recommended_view: "login" });
+    sendAnonymousAuthBootstrap(response);
     return;
   }
   const { tenantSlug, workspaceSlug } = requestedWorkspaceRoute(request);

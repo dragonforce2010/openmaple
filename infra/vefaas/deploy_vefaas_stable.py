@@ -30,6 +30,9 @@ from deploy_vefaas_runtime import (
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_STATE_PATH = ROOT / "output" / "vefaas" / "stable-deployment.json"
 READY_TIMEOUT_SECONDS = 240
+PROBE_ATTEMPTS = 3
+PROBE_TIMEOUT_SECONDS = 20
+PROBE_RETRY_SECONDS = 2
 
 
 def main() -> int:
@@ -57,6 +60,7 @@ def main() -> int:
         state = refresh_state(state, clients, args.min_instance, args.max_instance, include_probe=True)
 
     print(safe_json(public_summary(state)))
+    assert_probes_ok(state.get("probe") or {})
     return 0
 
 
@@ -521,20 +525,49 @@ def first_upstream_id(route: dict[str, Any]) -> str:
 
 def probe_urls(base_url: str) -> dict[str, Any]:
     probes: dict[str, Any] = {}
-    for name, path in {"frontend": "/?dev_login=1", "health": "/health", "providers": "/v1/auth/providers"}.items():
+    paths = {"frontend": "/?dev_login=1", "health": "/health", "providers": "/v1/auth/providers", "auth_bootstrap": "/v1/auth/bootstrap"}
+    for name, path in paths.items():
         url = f"{base_url.rstrip('/')}{path}"
+        probes[name] = probe_url(url)
+    return probes
+
+
+def probe_url(url: str) -> dict[str, Any]:
+    result: dict[str, Any] = {"url": url}
+    for attempt in range(1, PROBE_ATTEMPTS + 1):
         try:
             completed = subprocess.run(
                 ["curl", "-k", "-sS", "-o", "/tmp/maple-vefaas-stable-probe.txt", "-w", "%{http_code}", url],
                 text=True,
                 capture_output=True,
-                timeout=30,
+                timeout=PROBE_TIMEOUT_SECONDS,
             )
             body = Path("/tmp/maple-vefaas-stable-probe.txt").read_text(errors="replace")[:500]
-            probes[name] = {"url": url, "status": completed.stdout.strip(), "body_prefix": body}
+            result = {"url": url, "status": completed.stdout.strip(), "body_prefix": body, "attempt": attempt}
+            if completed.returncode:
+                result["error"] = (completed.stderr or f"curl exited {completed.returncode}")[:300]
         except Exception as error:
-            probes[name] = {"url": url, "error": str(error)[:300]}
-    return probes
+            result = {"url": url, "error": str(error)[:300], "attempt": attempt}
+        if probe_ok(result) or attempt == PROBE_ATTEMPTS:
+            return result
+        time.sleep(PROBE_RETRY_SECONDS)
+    return result
+
+
+def probe_ok(probe: dict[str, Any]) -> bool:
+    status = str(probe.get("status") or "")
+    return not probe.get("error") and status.isdigit() and 200 <= int(status) < 400
+
+
+def assert_probes_ok(probes: dict[str, Any]) -> None:
+    failures: list[str] = []
+    for name, probe in probes.items():
+        status = str(probe.get("status") or "")
+        if not probe_ok(probe):
+            detail = probe.get("error") or f"status={status} body={str(probe.get('body_prefix') or '')[:160]}"
+            failures.append(f"{name}: {detail}")
+    if failures:
+        raise SystemExit("stable probe failed: " + "; ".join(failures))
 
 
 def load_state_or_exit(path: Path) -> dict[str, Any]:
