@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1200, initial-scale=1" />
+    <title>OpenMaple social card</title>
+    <style>
+      :root {
+        --paper: #f4efe6;
+        --panel: #fffdf8;
+        --ink: #1c1d19;
+        --muted: #65665d;
+        --leaf: #17684f;
+        --maple: #c65a43;
+        --blue: #256fbb;
+        --line: #d8cfbf;
+      }
+      * { box-sizing: border-box; }
+      body {
+        width: 1200px;
+        height: 630px;
+        margin: 0;
+        overflow: hidden;
+        color: var(--ink);
+        background:
+          linear-gradient(90deg, rgba(28,29,25,.06) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(28,29,25,.05) 1px, transparent 1px),
+          var(--paper);
+        background-size: 54px 54px, 54px 54px, auto;
+        font: 22px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .frame {
+        width: 1200px;
+        height: 630px;
+        display: grid;
+        grid-template-columns: 470px 1fr;
+        gap: 24px;
+        padding: 52px;
+      }
+      .copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-width: 0;
+      }
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--leaf);
+        font-size: 17px;
+        line-height: 22px;
+        font-weight: 900;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+      }
+      .kicker::before {
+        content: "";
+        width: 42px;
+        height: 3px;
+        background: var(--maple);
+      }
+      h1 {
+        margin: 24px 0 0;
+        font-size: 66px;
+        line-height: .92;
+        letter-spacing: 0;
+      }
+      .lead {
+        margin: 24px 0 0;
+        max-width: 440px;
+        color: var(--muted);
+        font-size: 23px;
+        line-height: 1.25;
+        font-weight: 560;
+      }
+      .proof {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 28px 0 0;
+      }
+      .proof span {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255,253,248,.78);
+        color: var(--ink);
+        font-size: 15px;
+        font-weight: 760;
+      }
+      .url {
+        color: var(--blue);
+        font-size: 20px;
+        font-weight: 860;
+      }
+      .shot {
+        align-self: center;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        box-shadow: 0 28px 80px rgba(28,29,25,.18);
+        overflow: hidden;
+        transform: rotate(-1deg);
+      }
+      .shot img {
+        display: block;
+        width: 590px;
+        height: 404px;
+        object-fit: contain;
+        object-position: 50% 0;
+        background: var(--panel);
+      }
+      .shot-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 42px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 760;
+      }
+      .dots {
+        display: flex;
+        gap: 7px;
+      }
+      .dots span {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--maple);
+      }
+      .dots span:nth-child(2) { background: #dcae4f; }
+      .dots span:nth-child(3) { background: var(--leaf); }
+    </style>
+  </head>
+  <body>
+    <main class="frame">
+      <section class="copy">
+        <div>
+          <div class="kicker">Open-source Managed Agents</div>
+          <h1>Managed agents without cloud lock-in.</h1>
+          <p class="lead">One control plane for sessions, sandboxes, runtime pools, vault-backed tools, SDKs, CLIs, and audit logs.</p>
+          <div class="proof">
+            <span>Control Plane</span>
+            <span>Runtime Pool</span>
+            <span>Sandbox Pool</span>
+            <span>Vaults</span>
+            <span>SDK + CLI</span>
+          </div>
+        </div>
+        <div class="url">github.com/dragonforce2010/openmaple</div>
+      </section>
+      <section class="shot" aria-label="OpenMaple product screenshot">
+        <div class="shot-bar"><span>OpenMaple Console</span><div class="dots"><span></span><span></span><span></span></div></div>
+        <img src="../site/screenshots/current-console-deployments.png" alt="OpenMaple deployments console" />
+      </section>
+    </main>
+  </body>
+</html>
