@@ -13,7 +13,7 @@ OpenMaple 是开放的 managed agent 控制面：把 Session、Sandbox、Runtime
 
 OpenMaple is not an Anthropic official product. It implements the same platform idea in an open stack: decouple the brain from the hands, persist session state, isolate computation, and keep agent harnesses replaceable.
 
-[Website](https://dragonforce2010.github.io/openmaple/) · [Docs](https://dragonforce2010.github.io/openmaple/docs/) · [Launch kit](docs/launch/media-kit.md) · [Reference README](reference/README.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
+[Website](https://dragonforce2010.github.io/openmaple/) · [Docs](https://dragonforce2010.github.io/openmaple/docs/) · [Launch kit](marketing/launch/media-kit.md) · [Reference README](reference/README.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
 
 <img src="docs/site/screenshots/current-console-deployments.png" alt="OpenMaple deployments control plane screenshot" width="100%">
 
@@ -119,7 +119,7 @@ flowchart LR
 | Runtime and sandbox are separate | Environment and runtime pool contracts, veFaaS/E2B/Docker provider paths, and session event streaming. |
 | API, SDK, and CLI are first-class | `maple-agent-sdk`, `maple-agent-cli`, REST docs, and contract tests. |
 | Provider lock-in is not the model | Runtime, sandbox, storage, model, and cloud identity are represented as provider choices. |
-| Public launch assets are reusable | See [docs/launch/media-kit.md](docs/launch/media-kit.md) for positioning, post copy, screenshots, and demo scripts. |
+| Public launch assets are reusable | See [marketing/launch/media-kit.md](marketing/launch/media-kit.md) for positioning, post copy, screenshots, and demo scripts. |
 
 ### Runtime Boundary
 

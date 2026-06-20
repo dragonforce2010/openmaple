@@ -22,8 +22,8 @@ OpenMaple is not an Anthropic official product. It is an open implementation of 
 | Sessions event log | `docs/site/screenshots/current-console-sessions.png` | Show event-as-truth and observability. |
 | Environments | `docs/site/screenshots/current-console-environments.png` | Show runtime/sandbox provider split. |
 | Credential vaults | `docs/site/screenshots/current-console-vaults.png` | Show secrets by reference and MCP credential flow. |
-| Social card source | `docs/launch/social-card.html` | 1200x630 launch card source built from real product screenshots. |
-| Social card PNG | `docs/launch/openmaple-social-card.png` | Ready-to-share image for posts after regeneration. |
+| Social card source | `marketing/launch/social-card.html` | 1200x630 launch card source built from real product screenshots. |
+| Social card PNG | `marketing/launch/openmaple-social-card.png` | Ready-to-share image for posts after regeneration. |
 | Website | `https://dragonforce2010.github.io/openmaple/` | Shareable product landing page. |
 | Docs | `https://dragonforce2010.github.io/openmaple/docs/` | Developer follow-up path. |
 | Repo | `https://github.com/dragonforce2010/openmaple` | Primary star/clone target. |
