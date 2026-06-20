@@ -200,6 +200,27 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 16px;
       }
+      .managed-proof {
+        margin-bottom: 18px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+      .managed-proof img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-bottom: 1px solid var(--line);
+        cursor: zoom-in;
+      }
+      .managed-proof p {
+        margin: 0;
+        padding: 14px 18px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 760;
+      }
       .principle {
         min-height: 220px;
         display: grid;
@@ -239,6 +260,7 @@
         overflow: hidden;
         background: var(--panel);
       }
+      .screenshot-feature { background: #ece5d8; }
       .feature-copy { padding: 22px; }
       .product-shots {
         display: grid;
@@ -249,6 +271,7 @@
         background: #ece5d8;
       }
       .product-shots figure { margin: 0; }
+      .product-shots figure:first-child { grid-column: 1 / -1; }
       .product-shots img {
         display: block;
         width: 100%;
@@ -405,7 +428,8 @@
 
       <section class="screen-stage" aria-label="OpenMaple public proof points">
         <div class="screen-inner">
-          <div class="screen-label"><span>Public repository surface</span><span>Docs, launch kit, and local artifacts are not published</span></div>
+          <div class="screen-label"><span>Real OpenMaple console capture</span><span>Public-safe crop from the running product</span></div>
+          <img src="./assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder real console screenshot" />
           <div class="proof-strip">
             <div class="proof-cell"><b>Console + API</b><span>React console and Express control plane live in the same open repo.</span></div>
             <div class="proof-cell"><b>SDK + CLI</b><span>Programmatic entry points are packaged as `maple-agent-sdk` and `maple-agent-cli`.</span></div>
@@ -419,6 +443,10 @@
         <div class="section-head">
           <h2>Anthropic's managed-agent idea, made open.</h2>
           <p>Anthropic frames Managed Agents as a meta-harness: a system around Claude with general interfaces for stateful sessions, computation, tools, sandboxes, and future harnesses. OpenMaple maps that idea onto an open control plane.</p>
+        </div>
+        <div class="managed-proof">
+          <img src="./assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder real console screenshot inside the managed agents section" />
+          <p>Real console capture: the quickstart path turns an agent idea into agent, environment, vault, and session resources.</p>
         </div>
         <div class="principles">
           <article class="principle">
@@ -454,22 +482,24 @@
           <p>OpenMaple exposes the managed-agent lifecycle as resources you can operate from UI or code.</p>
         </div>
         <div class="feature-grid">
-          <article class="feature">
-            <div class="feature-copy">
-              <small>Current product</small>
-              <h3>Managed-agent resources, not one-off demos.</h3>
-              <p>The platform models the pieces that keep agents operable after a prototype works.</p>
-              <ul class="module-list">
-                <li>Quickstart builder</li>
-                <li>Agent registry</li>
-                <li>Deployments</li>
-                <li>Session event log</li>
-                <li>Environments</li>
-                <li>Credential vaults</li>
-              </ul>
+          <article class="feature screenshot-feature">
+            <div class="product-shots">
+              <figure>
+                <img src="./assets/screenshots/openmaple-agents.png" alt="OpenMaple agents registry real console screenshot" />
+                <figcaption>Agents registry</figcaption>
+              </figure>
+              <figure>
+                <img src="./assets/screenshots/openmaple-environments.png" alt="OpenMaple environments real console screenshot" />
+                <figcaption>Runtime environments</figcaption>
+              </figure>
+              <figure>
+                <img src="./assets/screenshots/openmaple-vaults.png" alt="OpenMaple credential vaults real console screenshot" />
+                <figcaption>Credential vaults</figcaption>
+              </figure>
             </div>
           </article>
           <div class="feature-list">
+            <article class="feature"><div class="feature-copy"><small>Current product</small><h3>Managed-agent resources, not one-off demos.</h3><p>Agents, environments, sessions, vaults, runtime pools, and API access are modeled as product resources.</p></div></article>
             <article class="feature"><div class="feature-copy"><small>Quickstart</small><h3>Build from intent.</h3><p>Create a runnable path: agent, environment, model, vault, and session.</p></div></article>
             <article class="feature"><div class="feature-copy"><small>Sessions</small><h3>Observe every run.</h3><p>Follow user messages, agent events, sandbox metadata, artifacts, and debugging context.</p></div></article>
             <article class="feature"><div class="feature-copy"><small>Vaults</small><h3>Keep tools credentialed.</h3><p>MCP OAuth and API secrets live as references that can be attached without exposing raw keys.</p></div></article>
@@ -516,5 +546,37 @@ storageProvider:
       <span>OpenMaple · open-source Managed Agents platform</span>
       <span>Console · REST API · SDK · CLI · Skills</span>
     </footer>
+    <div class="lightbox" hidden>
+      <button class="zoom-close" type="button" aria-label="Close screenshot preview">x</button>
+      <img alt="" />
+      <p class="zoom-caption"></p>
+    </div>
+    <script>
+      const lightbox = document.querySelector(".lightbox");
+      const lightboxImage = lightbox.querySelector("img");
+      const lightboxCaption = lightbox.querySelector(".zoom-caption");
+      const closeLightbox = () => {
+        lightbox.hidden = true;
+        lightboxImage.removeAttribute("src");
+        lightboxCaption.textContent = "";
+      };
+
+      document.querySelectorAll(".screen-stage img, .managed-proof img, .product-shots img").forEach((image) => {
+        image.addEventListener("click", () => {
+          lightboxImage.src = image.currentSrc || image.src;
+          lightboxImage.alt = image.alt;
+          lightboxCaption.textContent = image.closest("figure")?.querySelector("figcaption")?.textContent || image.alt;
+          lightbox.hidden = false;
+        });
+      });
+
+      lightbox.querySelector(".zoom-close").addEventListener("click", closeLightbox);
+      lightbox.addEventListener("click", (event) => {
+        if (event.target === lightbox) closeLightbox();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !lightbox.hidden) closeLightbox();
+      });
+    </script>
   </body>
 </html>
