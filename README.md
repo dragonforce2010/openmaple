@@ -13,13 +13,15 @@ OpenMaple 是开放的 managed agent 控制面：把 Session、Sandbox、Runtime
 
 OpenMaple is not an Anthropic official product. It implements the same platform idea in an open stack: decouple the brain from the hands, persist session state, isolate computation, and keep agent harnesses replaceable.
 
-[Website](https://dragonforce2010.github.io/openmaple/) · [中文 README](README.zh-CN.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [Release](https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0) · [Launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
+[Website](https://dragonforce2010.github.io/openmaple/) · [Evaluation guide](EVALUATION.md) · [中文 README](README.zh-CN.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [Release](https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0) · [Launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
 
 <img src="assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder real console screenshot">
 
 _Screenshots are public-safe crops from the running OpenMaple console. Workspace labels and resource IDs are omitted._
 
 Feedback wanted: join the [launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30) to challenge the resource model, provider priorities, and first proof you would need before trying OpenMaple inside an engineering team.
+
+Evaluating for an internal platform spike? Start with the [30-minute evaluation guide](EVALUATION.md).
 
 ## 60-Second Read
 
