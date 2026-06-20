@@ -238,6 +238,7 @@ function authBootstrapWithoutDatabase(request: Request, response: Response, next
 function authBootstrap(request: AuthenticatedRequest, response: Response) {
   const user = request.user ?? null;
   if (!user) {
+    if (shouldVerifySessionCookie(request) && sessionCookieToken(request)) clearSessionCookie(response);
     sendAnonymousAuthBootstrap(response);
     return;
   }
