@@ -1,14 +1,29 @@
 # OpenMaple
 
-OpenMaple is an open-source implementation of the Anthropic Managed Agents platform pattern. It gives teams one control plane for sessions, sandboxes, runtimes, tools, vaults, model configs, SDKs, CLIs, and audit logs.
+[![CI](https://github.com/dragonforce2010/openmaple/actions/workflows/ci.yml/badge.svg)](https://github.com/dragonforce2010/openmaple/actions/workflows/ci.yml)
+[![GitHub Pages](https://github.com/dragonforce2010/openmaple/actions/workflows/pages.yml/badge.svg)](https://github.com/dragonforce2010/openmaple/actions/workflows/pages.yml)
+[![npm SDK](https://img.shields.io/npm/v/maple-agent-sdk?label=maple-agent-sdk)](https://www.npmjs.com/package/maple-agent-sdk)
+[![npm CLI](https://img.shields.io/npm/v/maple-agent-cli?label=maple-agent-cli)](https://www.npmjs.com/package/maple-agent-cli)
 
-OpenMaple 是 Anthropic Managed Agents 平台理念的开源实现：用一个控制面托管 Session、Sandbox、Runtime、Tool、Vault、模型接入点、SDK、CLI 和审计事件流。
+**Open-source managed agents without cloud lock-in.**
 
-OpenMaple is not an Anthropic official product. It implements the managed-agent operating model in an open stack: decouple the brain from the hands, persist session state, isolate computation, and keep agent harnesses replaceable.
+OpenMaple is an open-source managed-agent control plane for teams that want the Anthropic Managed Agents operating model without binding their stack to one cloud. It gives you sessions, sandboxes, runtime pools, vault-backed tools, model configs, SDKs, CLIs, and audit logs behind stable interfaces.
 
-[Website](https://dragonforce2010.github.io/openmaple/) · [Docs](https://dragonforce2010.github.io/openmaple/docs/) · [Reference README](reference/README.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
+OpenMaple 是开放的 managed agent 控制面：把 Session、Sandbox、Runtime Pool、Vault、Tool、模型接入点、SDK、CLI 和审计事件流放进同一套可二开的工程栈。
 
-![OpenMaple mascot](docs/assets/openmaple-mascot.svg)
+OpenMaple is not an Anthropic official product. It implements the same platform idea in an open stack: decouple the brain from the hands, persist session state, isolate computation, and keep agent harnesses replaceable.
+
+[Website](https://dragonforce2010.github.io/openmaple/) · [Docs](https://dragonforce2010.github.io/openmaple/docs/) · [Launch kit](docs/launch/media-kit.md) · [Reference README](reference/README.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
+
+<img src="docs/site/screenshots/current-console-deployments.png" alt="OpenMaple deployments control plane screenshot" width="100%">
+
+## 60-Second Read
+
+- **For platform teams**: build a self-hostable managed-agent platform instead of wiring one-off agent demos.
+- **For enterprise IT**: keep cloud identity, runtime, sandbox, storage, and model access behind replaceable provider adapters.
+- **For engineering teams**: start from the web console, automate through REST, then package repeatable workflows with `maple-agent-sdk` and `maple-agent-cli`.
+- **For long-running agents**: keep session state outside the model context window and isolate tool execution from credentials.
+- **For contributors**: the public repo includes the console, API, SDK, CLI, provider contracts, docs, and current product screenshots.
 
 ## Why OpenMaple
 
@@ -94,6 +109,17 @@ flowchart LR
 | Deployments | `/v1/deployments`, `/v1/deployments/:deploymentId/run`, `/v1/deployments/:deploymentId/invoke` | Reusable launch templates with manual and scheduled execution. |
 | Files + artifacts | `/v1/files`, `/v1/sessions/:sessionId/files`, `/v1/sessions/:sessionId/artifacts` | Session file uploads and downloadable artifacts. |
 | Skills + memory | `/v1/skills`, `/v1/memory_stores`, `/v1/memory_stores/:memoryStoreId/memories/*path` | Packaged instructions and workspace-scoped persistent memory. |
+
+## What You Can Verify Today
+
+| Claim | Evidence |
+|---|---|
+| Real console, not a mock landing page | Current screenshots under `docs/site/screenshots/` and the GitHub Pages site. |
+| Control plane is implemented | Express routes under `apps/control-plane-api/src/routes/` and typed SDK calls in `packages/sdk/`. |
+| Runtime and sandbox are separate | Environment and runtime pool contracts, veFaaS/E2B/Docker provider paths, and session event streaming. |
+| API, SDK, and CLI are first-class | `maple-agent-sdk`, `maple-agent-cli`, REST docs, and contract tests. |
+| Provider lock-in is not the model | Runtime, sandbox, storage, model, and cloud identity are represented as provider choices. |
+| Public launch assets are reusable | See [docs/launch/media-kit.md](docs/launch/media-kit.md) for positioning, post copy, screenshots, and demo scripts. |
 
 ### Runtime Boundary
 
