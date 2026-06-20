@@ -193,6 +193,36 @@
         color: var(--muted);
         border-bottom: 1px solid var(--line);
       }
+      .quickstart {
+        display: grid;
+        grid-template-columns: minmax(0, .72fr) minmax(420px, .6fr);
+        gap: 32px;
+        align-items: center;
+        padding: 58px 0;
+        border-bottom: 1px solid var(--line);
+        scroll-margin-top: 88px;
+      }
+      .quickstart-copy h2 { font-size: clamp(36px, 5vw, 64px); }
+      .quickstart-copy p {
+        margin: 18px 0 0;
+        max-width: 680px;
+        color: var(--muted);
+        font-size: 18px;
+      }
+      .quickstart-commands {
+        display: grid;
+        gap: 14px;
+      }
+      .quickstart-commands .code-card {
+        min-height: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .quickstart-meta {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
       .section { padding: 78px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 88px; }
       .section-head {
         display: grid;
@@ -389,7 +419,7 @@
       .zoom-caption { margin: 0 auto; color: #ede4d8; text-align: center; }
       @media (max-width: 980px) {
         .navlinks { display: none; }
-        .hero-grid, .section-head, .feature-grid, .providers, .product-shots, .proof-strip, .cta { grid-template-columns: 1fr; }
+        .hero-grid, .section-head, .quickstart, .feature-grid, .providers, .product-shots, .proof-strip, .cta { grid-template-columns: 1fr; }
         .principles, .planes, .provider-grid { grid-template-columns: 1fr 1fr; }
         .product-shots img { min-height: 0; max-height: 680px; object-fit: contain; }
       }
@@ -406,6 +436,7 @@
       <nav class="wrap nav" aria-label="Main navigation">
         <a class="brand" href="./"><img src="./assets/openmaple-mascot.svg" alt="" />OpenMaple</a>
         <div class="navlinks">
+          <a href="#quickstart">Quickstart</a>
           <a href="#managed-agents">Managed Agents</a>
           <a href="#platform">Platform</a>
           <a href="#features">Product</a>
@@ -425,8 +456,9 @@
             <div>
               <p class="lead"><strong>An open-source control plane for long-running agents.</strong> OpenMaple turns agent prototypes into sessions, sandboxes, runtime pools, vault-backed tools, event logs, SDK calls, and CLI workflows you can run on your own cloud.</p>
               <div class="actions">
-                <a class="btn primary" href="https://github.com/dragonforce2010/openmaple">View GitHub</a>
-                <a class="btn maple" href="https://www.npmjs.com/package/maple-agent-cli">Install CLI</a>
+                <a class="btn primary" href="#quickstart">Run locally</a>
+                <a class="btn maple" href="https://github.com/dragonforce2010/openmaple">Star on GitHub</a>
+                <a class="btn" href="https://www.npmjs.com/package/maple-agent-cli">Install CLI</a>
                 <a class="btn" href="https://github.com/dragonforce2010/openmaple/blob/main/README.zh-CN.md">中文 README</a>
                 <a class="btn" href="https://www.anthropic.com/engineering/managed-agents">Managed Agents essay</a>
               </div>
@@ -445,6 +477,24 @@
             <div class="proof-cell"><b>SDK + CLI</b><span>Programmatic entry points are packaged as `maple-agent-sdk` and `maple-agent-cli`.</span></div>
             <div class="proof-cell"><b>Provider adapters</b><span>Runtime, sandbox, storage, and model layers stay replaceable.</span></div>
           </div>
+        </div>
+      </section>
+      <section id="quickstart" class="wrap quickstart">
+        <div class="quickstart-copy">
+          <h2>Run the control plane locally.</h2>
+          <p>OpenMaple ships a self-contained Docker Compose path: app, console, API, local MySQL, and dev login. Model and sandbox provider keys are only needed when you run real agent loops.</p>
+          <div class="actions">
+            <a class="btn primary" href="https://github.com/dragonforce2010/openmaple#run-it-locally">Open README</a>
+            <a class="btn" href="https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0">v0.1.0 release</a>
+          </div>
+        </div>
+        <div class="quickstart-commands">
+          <pre class="code-card"><code>docker compose up --build
+
+BASE=http://127.0.0.1:27951
+curl $BASE/health
+curl $BASE/v1/auth/bootstrap</code></pre>
+          <p class="quickstart-meta">Console: http://127.0.0.1:27951/</p>
         </div>
       </section>
       <div class="wrap below-fold-hint">Session, sandbox, runtime, vault, tool calls, and audit log stay separate so managed agents can run longer than a local demo.</div>
@@ -547,7 +597,7 @@ storageProvider:
       <section class="wrap section">
         <div class="cta">
           <div><h2>Ship a managed-agent path today.</h2><p>Start local, connect a runtime provider, and run a real session through the console, SDK, or CLI.</p></div>
-          <div class="actions"><a class="btn primary" href="https://github.com/dragonforce2010/openmaple">View repo</a><a class="btn" href="https://www.npmjs.com/package/maple-agent-cli">CLI package</a></div>
+          <div class="actions"><a class="btn primary" href="#quickstart">Run locally</a><a class="btn" href="https://github.com/dragonforce2010/openmaple">View repo</a><a class="btn" href="https://www.npmjs.com/package/maple-agent-cli">CLI package</a></div>
         </div>
       </section>
     </main>
