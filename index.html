@@ -239,25 +239,39 @@
         gap: 16px;
       }
       .managed-proof {
-        margin-bottom: 18px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+      .managed-shot {
+        margin: 0;
         overflow: hidden;
         border: 1px solid var(--line);
         border-radius: 8px;
         background: var(--panel);
       }
-      .managed-proof img {
+      .managed-shot.primary,
+      .managed-shot.wide { grid-column: 1 / -1; }
+      .managed-shot img {
         display: block;
         width: 100%;
         height: auto;
         border-bottom: 1px solid var(--line);
         cursor: zoom-in;
       }
-      .managed-proof p {
+      .managed-shot p {
         margin: 0;
         padding: 14px 18px;
         color: var(--muted);
         font-size: 14px;
         font-weight: 760;
+      }
+      .managed-shot b {
+        display: block;
+        margin-bottom: 3px;
+        color: var(--ink);
+        font-size: 15px;
       }
       .principle {
         min-height: 220px;
@@ -424,7 +438,8 @@
       .zoom-caption { margin: 0 auto; color: #ede4d8; text-align: center; }
       @media (max-width: 980px) {
         .navlinks { display: none; }
-        .hero-grid, .section-head, .quickstart, .feature-grid, .providers, .product-shots, .proof-strip, .cta { grid-template-columns: 1fr; }
+        .hero-grid, .section-head, .quickstart, .feature-grid, .providers, .product-shots, .proof-strip, .cta, .managed-proof { grid-template-columns: 1fr; }
+        .managed-shot.primary, .managed-shot.wide { grid-column: auto; }
         .cta-actions { justify-items: start; }
         .cta-actions .actions { justify-content: flex-start; }
         .share-row { justify-content: flex-start; }
@@ -512,9 +527,23 @@ curl $BASE/v1/auth/bootstrap</code></pre>
           <h2>Anthropic's managed-agent idea, made open.</h2>
           <p>Anthropic frames Managed Agents as a meta-harness: a system around Claude with general interfaces for stateful sessions, computation, tools, sandboxes, and future harnesses. OpenMaple maps that idea onto an open control plane.</p>
         </div>
-        <div class="managed-proof">
-          <img src="./assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder real console screenshot inside the managed agents section" />
-          <p>Real console capture: the quickstart path turns an agent idea into agent, environment, vault, and session resources.</p>
+        <div class="managed-proof" aria-label="OpenMaple managed-agent lifecycle screenshots">
+          <figure class="managed-shot primary">
+            <img src="./assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder real console screenshot inside the managed agents section" />
+            <p><b>Quickstart builder</b>Turn an agent idea into agent, environment, vault, and session resources from the running console.</p>
+          </figure>
+          <figure class="managed-shot">
+            <img src="./assets/screenshots/openmaple-agents.png" alt="OpenMaple agents registry real console screenshot inside the managed agents section" />
+            <p><b>Agents</b>Version prompts, tools, MCP servers, skills, model configs, and loop type as managed resources.</p>
+          </figure>
+          <figure class="managed-shot">
+            <img src="./assets/screenshots/openmaple-environments.png" alt="OpenMaple runtime environments real console screenshot inside the managed agents section" />
+            <p><b>Runtime environments</b>Separate AgentRuntime and SandboxRuntime choices so execution can move behind stable contracts.</p>
+          </figure>
+          <figure class="managed-shot wide">
+            <img src="./assets/screenshots/openmaple-vaults.png" alt="OpenMaple credential vaults real console screenshot inside the managed agents section" />
+            <p><b>Credential vaults</b>Attach tool credentials by reference without exposing raw secret material to agent runs.</p>
+          </figure>
         </div>
         <div class="principles">
           <article class="principle">
