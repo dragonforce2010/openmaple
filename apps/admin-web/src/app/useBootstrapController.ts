@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useEffect, useRef, useState } from "react";
-import { apiGet, type ApiList } from "../api";
+import { ApiError, apiGet, type ApiList } from "../api";
 import {
   authBootstrapPath,
   consoleRouteFromLocation,
@@ -32,6 +32,8 @@ import type { ToastType } from "../ui";
 
 type Toast = (message: string, kind?: ToastType) => void;
 const FIRST_PAINT_TIMEOUT_MS = 60_000;
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 5_000;
+const SESSION_COOKIE_CLEAR_TIMEOUT_MS = 3_000;
 
 export function useBootstrapController(input: {
   toast: Toast;
@@ -136,11 +138,21 @@ export function useBootstrapController(input: {
     }
   }
 
-  async function routeAfterAuth() {
+  async function routeAfterAuth(resetStaleSession = true) {
+    try {
+      await routeAfterAuthOnce();
+    } catch (reason) {
+      if (!resetStaleSession || !shouldResetSessionCookie(reason)) throw reason;
+      await clearSessionCookie();
+      await routeAfterAuthOnce();
+    }
+  }
+
+  async function routeAfterAuthOnce() {
     const requestedRoute = requestedWorkspaceRouteFromLocation();
     const boot = await apiGet<{ user: User | null; tenants?: AccessibleTenant[]; recommended_view?: string; selected_tenant_id?: string; selected_workspace_id?: string }>(
       authBootstrapPath(requestedRoute),
-      { timeoutMs: FIRST_PAINT_TIMEOUT_MS }
+      { timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS }
     );
     input.setCurrentUser(boot.user);
     const tenants = boot.tenants ?? [];
@@ -189,6 +201,22 @@ export function useBootstrapController(input: {
       return;
     }
     await refresh();
+  }
+
+  function shouldResetSessionCookie(reason: unknown) {
+    if (!(reason instanceof ApiError)) return false;
+    const body = reason.body && typeof reason.body === "object" ? reason.body as { error?: unknown } : {};
+    return reason.status === 408 || body.error === "database_unavailable";
+  }
+
+  async function clearSessionCookie() {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), SESSION_COOKIE_CLEAR_TIMEOUT_MS);
+    try {
+      await fetch("/v1/auth/session-cookie/clear", { method: "POST", credentials: "include", signal: controller.signal });
+    } finally {
+      window.clearTimeout(timer);
+    }
   }
 
   async function enterTenant(tenant: AccessibleTenant) {

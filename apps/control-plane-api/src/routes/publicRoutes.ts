@@ -77,6 +77,10 @@ app.get("/v1/auth/oauth/:provider/start", startOAuth);
 app.get("/v1/auth/bootstrap/t/:tenantSlug/w/:workspaceSlug", authBootstrapWithoutDatabase);
 app.get("/v1/auth/bootstrap/t/:tenantSlug", authBootstrapWithoutDatabase);
 app.get("/v1/auth/bootstrap", authBootstrapWithoutDatabase);
+app.post("/v1/auth/session-cookie/clear", (_request, response) => {
+  clearSessionCookie(response);
+  response.json({ ok: true });
+});
 
 app.use("/v1", ensureDatabaseReady);
 
@@ -162,7 +166,7 @@ function requestHasAuthMaterial(request: Request) {
     request.header("authorization") ||
     request.header("x-maple-api-key") ||
     request.header("x-api-key") ||
-    looksLikeSessionToken(readNamedCookie(request.header("cookie") || "", authCookieName))
+    hasIssuedSessionTokenShape(sessionCookieToken(request))
   );
 }
 
@@ -170,17 +174,46 @@ function sendAnonymousAuthBootstrap(response: Response) {
   response.json({ user: null, tenants: [], created_count: 0, owned_count: 0, member_only_count: 0, recommended_view: "login" });
 }
 
-function looksLikeSessionToken(token: string) {
-  return /^maple_sess_[A-Za-z0-9_-]{32,}$/.test(token);
+function bearerAuthToken(request: Request) {
+  const header = request.header("authorization") || "";
+  return header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
+}
+
+function sessionCookieToken(request: Request) {
+  return readNamedCookie(request.header("cookie") || "", authCookieName);
 }
 
 function readNamedCookie(header: string, name: string) {
-  const prefix = `${name}=`;
-  const match = header.split(";").map((part) => part.trim()).find((cookie) => cookie.startsWith(prefix));
-  return match ? decodeURIComponent(match.slice(prefix.length)) : "";
+  for (const chunk of header.split(";")) {
+    const [rawKey, ...rawValue] = chunk.trim().split("=");
+    if (rawKey === name) {
+      const value = rawValue.join("=") || "";
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    }
+  }
+  return "";
+}
+
+function clearSessionCookie(response: Response) {
+  response.clearCookie(authCookieName, { path: "/" });
+}
+
+function hasIssuedSessionTokenShape(token: string) {
+  return /^maple_sess_[A-Za-z0-9_-]{43}$/.test(token);
 }
 
 function authBootstrapWithoutDatabase(request: Request, response: Response, next: NextFunction) {
+  const token = sessionCookieToken(request);
+  const hasApiKey = Boolean(request.header("x-maple-api-key") || request.header("x-api-key"));
+  if (token && !bearerAuthToken(request) && !hasApiKey && !hasIssuedSessionTokenShape(token)) {
+    clearSessionCookie(response);
+    sendAnonymousAuthBootstrap(response);
+    return;
+  }
   if (requestHasAuthMaterial(request)) {
     next();
     return;
