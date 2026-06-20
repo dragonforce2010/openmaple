@@ -381,6 +381,11 @@
       .cta p { margin: 12px 0 0; color: #c9c2b7; }
       .cta .btn { border-color: rgba(255,255,255,.24); color: var(--paper-2); background: rgba(255,255,255,.08); }
       .cta .btn.primary { border-color: var(--paper-2); background: var(--paper-2); color: var(--ink); }
+      .cta-actions { display: grid; gap: 14px; justify-items: end; }
+      .cta-actions .actions { justify-content: flex-end; margin-top: 0; }
+      .share-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; color: #c9c2b7; font-size: 13px; font-weight: 820; }
+      .share-row span { display: inline-flex; min-height: 34px; align-items: center; }
+      .share-row a { min-height: 34px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; background: rgba(255,255,255,.06); color: var(--paper-2); }
       .footer { display: flex; justify-content: space-between; gap: 20px; color: var(--muted); padding: 36px 0 54px; }
       .lightbox[hidden] { display: none; }
       .lightbox {
@@ -420,6 +425,9 @@
       @media (max-width: 980px) {
         .navlinks { display: none; }
         .hero-grid, .section-head, .quickstart, .feature-grid, .providers, .product-shots, .proof-strip, .cta { grid-template-columns: 1fr; }
+        .cta-actions { justify-items: start; }
+        .cta-actions .actions { justify-content: flex-start; }
+        .share-row { justify-content: flex-start; }
         .principles, .planes, .provider-grid { grid-template-columns: 1fr 1fr; }
         .product-shots img { min-height: 0; max-height: 680px; object-fit: contain; }
       }
@@ -596,8 +604,20 @@ storageProvider:
 
       <section class="wrap section">
         <div class="cta">
-          <div><h2>Ship a managed-agent path today.</h2><p>Start local, connect a runtime provider, and run a real session through the console, SDK, or CLI.</p></div>
-          <div class="actions"><a class="btn primary" href="#quickstart">Run locally</a><a class="btn" href="https://github.com/dragonforce2010/openmaple">View repo</a><a class="btn" href="https://www.npmjs.com/package/maple-agent-cli">CLI package</a></div>
+          <div><h2>Ship a managed-agent path today.</h2><p>Start local, connect a runtime provider, and run a real session through the console, SDK, or CLI. If this is useful to platform teams, pass the repo to them.</p></div>
+          <div class="cta-actions">
+            <div class="actions">
+              <a class="btn primary" href="#quickstart">Run locally</a>
+              <a class="btn" href="https://github.com/dragonforce2010/openmaple">View repo</a>
+              <a class="btn" href="https://www.npmjs.com/package/maple-agent-cli">CLI package</a>
+            </div>
+            <div class="share-row" aria-label="Share OpenMaple">
+              <span>Share:</span>
+              <a href="https://twitter.com/intent/tweet?text=OpenMaple%20-%20open-source%20managed-agent%20control%20plane%20without%20cloud%20lock-in%0A%0Ahttps%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple">X</a>
+              <a href="https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple&t=OpenMaple%20-%20open-source%20managed-agent%20control%20plane%20without%20cloud%20lock-in">HN</a>
+              <a href="https://www.reddit.com/submit?url=https%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple&title=OpenMaple%20-%20open-source%20managed-agent%20control%20plane%20without%20cloud%20lock-in">Reddit</a>
+            </div>
+          </div>
         </div>
       </section>
     </main>
