@@ -56,10 +56,11 @@ export function tenantRouteSlug(tenant: AccessibleTenant) {
   return normalizeRouteSlug(tenant.slug || tenant.name || tenant.id);
 }
 
-export function authBootstrapPath(route: WorkspaceRoute) {
-  if (!route.tenantSlug) return "/v1/auth/bootstrap";
+export function authBootstrapPath(route: WorkspaceRoute, verifySession = false) {
+  const query = verifySession ? "?verify_session=1" : "";
+  if (!route.tenantSlug) return `/v1/auth/bootstrap${query}`;
   const tenant = encodeURIComponent(route.tenantSlug);
-  return `/v1/auth/bootstrap/t/${tenant}${route.workspaceSlug ? `/w/${encodeURIComponent(route.workspaceSlug)}` : ""}`;
+  return `/v1/auth/bootstrap/t/${tenant}${route.workspaceSlug ? `/w/${encodeURIComponent(route.workspaceSlug)}` : ""}${query}`;
 }
 
 export function oauthStartPath(provider: string, route: WorkspaceRoute) {
