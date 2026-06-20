@@ -337,31 +337,6 @@
       .provider { min-height: 130px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
       .provider b { display: block; margin-bottom: 8px; color: var(--blue); }
       .provider p { margin: 0; color: var(--muted); }
-      .launch-pack {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
-      }
-      .launch-card {
-        min-height: 260px;
-        padding: 22px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-      }
-      .launch-card h3 { margin: 0 0 12px; font-size: 24px; line-height: 1.1; }
-      .launch-card p { margin: 0 0 14px; color: var(--muted); }
-      .copy-block {
-        margin: 0;
-        padding: 16px;
-        min-height: 132px;
-        overflow: auto;
-        white-space: pre-wrap;
-        color: #f5ebd7;
-        border-radius: 8px;
-        background: #1c211d;
-      }
-      .copy-block code { white-space: pre-wrap; overflow-wrap: anywhere; }
       .cta {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -414,7 +389,7 @@
       .zoom-caption { margin: 0 auto; color: #ede4d8; text-align: center; }
       @media (max-width: 980px) {
         .navlinks { display: none; }
-        .hero-grid, .section-head, .feature-grid, .providers, .product-shots, .proof-strip, .launch-pack, .cta { grid-template-columns: 1fr; }
+        .hero-grid, .section-head, .feature-grid, .providers, .product-shots, .proof-strip, .cta { grid-template-columns: 1fr; }
         .principles, .planes, .provider-grid { grid-template-columns: 1fr 1fr; }
         .product-shots img { min-height: 0; max-height: 680px; object-fit: contain; }
       }
@@ -435,7 +410,6 @@
           <a href="#platform">Platform</a>
           <a href="#features">Product</a>
           <a href="#providers">Providers</a>
-          <a href="#launch-pack">Launch Pack</a>
           <a href="https://github.com/dragonforce2010/openmaple/blob/main/README.zh-CN.md">中文</a>
           <a class="repo" href="https://github.com/dragonforce2010/openmaple">GitHub</a>
         </div>
@@ -567,67 +541,6 @@ storageProvider:
             <div class="provider"><b>Storage portability</b><p>Use TOS, OSS, S3, or GCS behind one artifact and file contract.</p></div>
             <div class="provider"><b>Loop portability</b><p>Run Claude Code and Codex chains under the same session event model.</p></div>
           </div>
-        </div>
-      </section>
-
-      <section id="launch-pack" class="wrap section">
-        <div class="section-head">
-          <h2>Copy, post, and point people to the repo.</h2>
-          <p>Short public-safe copy for sharing OpenMaple on GitHub, Hacker News, X, Bilibili, Xiaohongshu, or internal engineering channels.</p>
-        </div>
-        <div class="launch-pack">
-          <article class="launch-card">
-            <h3>One-line positioning</h3>
-            <p>Use this when a link preview or chat thread needs one sentence.</p>
-            <pre class="copy-block"><code>OpenMaple is an open-source managed-agent control plane: sessions, sandboxes, runtime pools, vault-backed tools, event logs, SDK, CLI, and provider adapters without cloud lock-in.</code></pre>
-          </article>
-          <article class="launch-card">
-            <h3>Show HN / Reddit title</h3>
-            <p>Direct, technical, and specific enough for platform engineers.</p>
-            <pre class="copy-block"><code>Show HN: OpenMaple - open-source managed-agent control plane without cloud lock-in</code></pre>
-          </article>
-          <article class="launch-card">
-            <h3>X / LinkedIn post</h3>
-            <p>Short enough to stand alone, with the product boundary stated.</p>
-            <pre class="copy-block"><code>OpenMaple is an open-source managed-agent control plane for teams that want Anthropic-style managed agents without binding runtime, sandbox, storage, or model access to one cloud.
-
-It includes a console, REST API, SDK, CLI, sessions, runtime pools, sandbox providers, vaults, and event logs.
-
-Repo: https://github.com/dragonforce2010/openmaple
-Site: https://dragonforce2010.github.io/openmaple/</code></pre>
-          </article>
-          <article class="launch-card">
-            <h3>中文短帖</h3>
-            <p>面向企业 IT、工程平台、Agent Infra 读者。</p>
-            <pre class="copy-block"><code>我把 managed agent 平台做成了一个开源 repo：OpenMaple。
-
-它不是单个 agent demo，而是一套控制面：Agent、Session、Runtime Pool、Sandbox、Vault、REST API、SDK、CLI、事件日志都在同一工程里。
-
-适合想自建企业级 Agent 平台、又不想被单一云厂商绑定的团队。
-
-GitHub: https://github.com/dragonforce2010/openmaple
-中文 README: https://github.com/dragonforce2010/openmaple/blob/main/README.zh-CN.md</code></pre>
-          </article>
-          <article class="launch-card">
-            <h3>Visual assets</h3>
-            <p>Use real product captures, not generated UI mockups.</p>
-            <pre class="copy-block"><code>Social card:
-https://dragonforce2010.github.io/openmaple/assets/openmaple-social-card.png
-
-Quickstart screenshot:
-https://dragonforce2010.github.io/openmaple/assets/screenshots/openmaple-quickstart.png
-
-Agents screenshot:
-https://dragonforce2010.github.io/openmaple/assets/screenshots/openmaple-agents.png</code></pre>
-          </article>
-          <article class="launch-card">
-            <h3>Claims to avoid</h3>
-            <p>Keep distribution honest. Credibility beats inflated claims.</p>
-            <pre class="copy-block"><code>Do not say OpenMaple is an official Anthropic product.
-Do not claim production adoption, benchmarks, or customer counts without current evidence.
-Do not describe generated UI as product proof.
-Do not imply every provider path is production-ready unless the code and docs prove it.</code></pre>
-          </article>
         </div>
       </section>
 

@@ -13,7 +13,7 @@ OpenMaple 是开放的 managed agent 控制面：把 Session、Sandbox、Runtime
 
 OpenMaple is not an Anthropic official product. It implements the same platform idea in an open stack: decouple the brain from the hands, persist session state, isolate computation, and keep agent harnesses replaceable.
 
-[Website](https://dragonforce2010.github.io/openmaple/) · [Launch Pack](https://dragonforce2010.github.io/openmaple/#launch-pack) · [中文 README](README.zh-CN.md) · [Release](https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
+[Website](https://dragonforce2010.github.io/openmaple/) · [中文 README](README.zh-CN.md) · [Release](https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
 
 <img src="assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder real console screenshot">
 
@@ -26,6 +26,17 @@ _Screenshots are public-safe crops from the running OpenMaple console. Workspace
 - **For engineering teams**: start from the web console, automate through REST, then package repeatable workflows with `maple-agent-sdk` and `maple-agent-cli`.
 - **For long-running agents**: keep session state outside the model context window and isolate tool execution from credentials.
 - **For contributors**: the public repo includes the console, API, SDK, CLI, provider contracts, and deployable runtime adapters.
+
+## Try the SDK Path
+
+Clone the repo, fill a workspace API key plus one agent/environment pair, then run one managed-agent session through the repo SDK source:
+
+```bash
+cp examples/minimal-sdk-run/.env.example examples/minimal-sdk-run/.env
+node examples/minimal-sdk-run/index.mjs
+```
+
+See [examples/minimal-sdk-run](examples/minimal-sdk-run/) for required variables and expected output.
 
 ## Why OpenMaple
 
