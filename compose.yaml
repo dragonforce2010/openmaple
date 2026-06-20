@@ -3,6 +3,9 @@ services:
     build:
       context: .
     image: managed-agents-platform:local
+    depends_on:
+      mysql:
+        condition: service_healthy
     ports:
       - "${MAPLE_PORT:-27951}:27951"
     environment:
@@ -12,7 +15,13 @@ services:
       SERVE_STATIC: "true"
       MAPLE_DATA_DIR: /app/.managed-agents
       MAPLE_SKILLS_ROOT: /root/.agents/skills
+      MAPLE_MYSQL_HOST: mysql
+      MAPLE_MYSQL_PORT: 3306
+      MAPLE_MYSQL_DATABASE: ${MAPLE_MYSQL_DATABASE:-maple}
+      MAPLE_MYSQL_USER: ${MAPLE_MYSQL_USER:-root}
+      MAPLE_MYSQL_PASSWORD: ${MAPLE_MYSQL_PASSWORD:-maple}
       MAPLE_DOCKER_WORKSPACE_HOST_ROOT: ${MAPLE_DOCKER_WORKSPACE_HOST_ROOT:-${PWD}/.managed-agents/sessions}
+      MAPLE_DEV_LOGIN: ${MAPLE_DEV_LOGIN:-true}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ARK_API_KEY: ${ARK_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
@@ -37,3 +46,20 @@ services:
       - ${HOME}/.agents:/root/.agents
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MAPLE_MYSQL_DATABASE:-maple}
+      MYSQL_ROOT_PASSWORD: ${MAPLE_MYSQL_PASSWORD:-maple}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

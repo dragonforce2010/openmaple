@@ -194,7 +194,10 @@ Docker Compose:
 ```bash
 docker compose up --build
 curl http://127.0.0.1:27951/health
+curl http://127.0.0.1:27951/v1/auth/bootstrap
 ```
+
+The compose stack starts the OpenMaple API/web console and a local MySQL 8 database. It uses `MAPLE_MYSQL_PASSWORD=maple` when no password is set, keeps database files in the `mysql_data` volume, and enables local dev login for the demo container.
 
 ## CLI
 

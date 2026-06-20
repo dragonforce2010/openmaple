@@ -123,6 +123,16 @@ bun run lint
 bun run build
 ```
 
+Docker Compose 会同时启动 OpenMaple API/Web 控制台和本地 MySQL 8：
+
+```bash
+docker compose up --build
+curl http://127.0.0.1:27951/health
+curl http://127.0.0.1:27951/v1/auth/bootstrap
+```
+
+未设置密码时，compose 默认使用 `MAPLE_MYSQL_PASSWORD=maple`，数据库文件保存在 `mysql_data` volume，并为 demo 容器打开本地开发登录。
+
 ## CLI
 
 ```bash
