@@ -3,7 +3,7 @@ import mysql from "mysql2/promise";
 
 export function mysqlConnectionConfig() {
   return {
-    host: env("MAPLE_MYSQL_HOST", "MYSQL_HOST", "vedbm-qkydajdkqldu.pri.mysql.vedb.volces.com"),
+    host: env("MAPLE_MYSQL_HOST", "MYSQL_HOST", "127.0.0.1"),
     port: Number(env("MAPLE_MYSQL_PORT", "MYSQL_PORT", "3306")),
     database: env("MAPLE_MYSQL_DATABASE", "MYSQL_DATABASE", "maple"),
     user: env("MAPLE_MYSQL_USER", "MYSQL_USER", "root"),

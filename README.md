@@ -13,9 +13,9 @@ OpenMaple 是开放的 managed agent 控制面：把 Session、Sandbox、Runtime
 
 OpenMaple is not an Anthropic official product. It implements the same platform idea in an open stack: decouple the brain from the hands, persist session state, isolate computation, and keep agent harnesses replaceable.
 
-[Website](https://dragonforce2010.github.io/openmaple/) · [Docs](https://dragonforce2010.github.io/openmaple/docs/) · [Launch kit](marketing/launch/media-kit.md) · [Reference README](reference/README.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
+[Website](https://dragonforce2010.github.io/openmaple/) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk)
 
-<img src="docs/site/screenshots/current-console-deployments.png" alt="OpenMaple deployments control plane screenshot" width="100%">
+<img src="assets/openmaple-mascot.svg" alt="OpenMaple mascot" width="120">
 
 ## 60-Second Read
 
@@ -23,7 +23,7 @@ OpenMaple is not an Anthropic official product. It implements the same platform 
 - **For enterprise IT**: keep cloud identity, runtime, sandbox, storage, and model access behind replaceable provider adapters.
 - **For engineering teams**: start from the web console, automate through REST, then package repeatable workflows with `maple-agent-sdk` and `maple-agent-cli`.
 - **For long-running agents**: keep session state outside the model context window and isolate tool execution from credentials.
-- **For contributors**: the public repo includes the console, API, SDK, CLI, provider contracts, docs, and current product screenshots.
+- **For contributors**: the public repo includes the console, API, SDK, CLI, provider contracts, and deployable runtime adapters.
 
 ## Why OpenMaple
 
@@ -114,12 +114,10 @@ flowchart LR
 
 | Claim | Evidence |
 |---|---|
-| Real console, not a mock landing page | Current screenshots under `docs/site/screenshots/` and the GitHub Pages site. |
 | Control plane is implemented | Express routes under `apps/control-plane-api/src/routes/` and typed SDK calls in `packages/sdk/`. |
 | Runtime and sandbox are separate | Environment and runtime pool contracts, veFaaS/E2B/Docker provider paths, and session event streaming. |
-| API, SDK, and CLI are first-class | `maple-agent-sdk`, `maple-agent-cli`, REST docs, and contract tests. |
+| API, SDK, and CLI are first-class | `maple-agent-sdk`, `maple-agent-cli`, route contracts, and package tests. |
 | Provider lock-in is not the model | Runtime, sandbox, storage, model, and cloud identity are represented as provider choices. |
-| Public launch assets are reusable | See [marketing/launch/media-kit.md](marketing/launch/media-kit.md) for positioning, post copy, screenshots, and demo scripts. |
 
 ### Runtime Boundary
 
@@ -129,17 +127,14 @@ flowchart LR
 - **Remote MySQL**: the data store exposes a synchronous better-sqlite3-style API, but the backing database is remote MySQL through a worker bridge.
 - **Provider portability**: veFaaS, E2B, Docker, and future Lambda/FC-style runtimes can sit behind the same session contract.
 
-## Product Modules
+## Product Surface
 
-These are real large-screen light-theme screenshots from the current OpenMaple online environment. No mobile crops, generated mocks, or legacy product-manual screenshots are used.
-
-| Quickstart builder | Agents registry |
-|---|---|
-| <img src="docs/site/screenshots/current-console-quickstart.png" alt="OpenMaple quickstart builder in the online console" width="520"> | <img src="docs/site/screenshots/current-console-agents.png" alt="OpenMaple agents registry in the online console" width="520"> |
-| **Deployments** | **Sessions event log** |
-| <img src="docs/site/screenshots/current-console-deployments.png" alt="OpenMaple deployments control plane in the online console" width="520"> | <img src="docs/site/screenshots/current-console-sessions.png" alt="OpenMaple sessions event log in the online console" width="520"> |
-| **Environments** | **Credential vaults** |
-| <img src="docs/site/screenshots/current-console-environments.png" alt="OpenMaple environments module in the online console" width="520"> | <img src="docs/site/screenshots/current-console-vaults.png" alt="OpenMaple credential vaults module in the online console" width="520"> |
+- **Quickstart**: generate an agent draft, bind an environment, attach vaults, and start a session.
+- **Agents**: version agent configs, tools, MCP servers, skills, models, and loop type.
+- **Deployments**: persist reusable launch templates and invoke them through API/CLI/SDK paths.
+- **Sessions**: inspect transcript, event log, status, runtime metadata, files, and artifacts.
+- **Environments**: configure runtime provider, sandbox provider, pool behavior, and workspace defaults.
+- **Vaults**: attach credentials by reference without exposing raw secret material in API responses.
 
 ## Repository Map
 
@@ -149,7 +144,6 @@ apps/control-plane-api/     Express API, auth, storage, runtime orchestration
 packages/sdk/               Node SDK: MapleClient and typed API helpers
 packages/cli/               Maple CLI: init, build, deploy, api, session, vault
 agents/                     Packaged agent skills and runtime-facing assets
-docs/                       Architecture, product manual, acceptance notes, screenshots
 tests/contracts/            Contract tests for docs, routes, branding, runtime behavior
 ```
 
@@ -173,7 +167,7 @@ Verify:
 ```bash
 bun run typecheck
 bun run lint
-bun run test:maple-docs
+bun run build
 ```
 
 Docker Compose:
@@ -221,8 +215,4 @@ await done;
 
 ## More
 
-- Long-form setup, provider notes, Docker details, and troubleshooting: [reference/README.md](reference/README.md)
-- Architecture docs: [docs/architecture/maple-platform-overview.md](docs/architecture/maple-platform-overview.md)
-- SDK/CLI onboarding: [docs/product-manual/maple-sdk-cli-onboarding.md](docs/product-manual/maple-sdk-cli-onboarding.md)
-- Runtime contract: [docs/design/2026-06-04-vefaas-runtime-contract.md](docs/design/2026-06-04-vefaas-runtime-contract.md)
 - Managed Agents platform pattern: [Anthropic engineering essay](https://www.anthropic.com/engineering/managed-agents)

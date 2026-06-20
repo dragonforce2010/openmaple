@@ -19,7 +19,7 @@ export function formatTime(value?: string) {
 
 export function authProviderLabel(provider: string) {
   const normalized = provider.trim().toLowerCase();
-  if (normalized === "lark_sso" || normalized === "bytesso") return "ByteDance SSO";
+  if (normalized === "lark_sso" || normalized === "bytesso") return "Enterprise SSO";
   if (normalized === "local") return "Developer";
   if (normalized === "oauth") return "OAuth";
   if (normalized === "oidc") return "OIDC";

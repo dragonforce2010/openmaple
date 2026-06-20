@@ -3,11 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const activeDocs = {
-  "CLAUDE.md": readFileSync("CLAUDE.md", "utf8"),
   "README.md": readFileSync("README.md", "utf8"),
-  "CONTEXT.md": readFileSync("CONTEXT.md", "utf8"),
-  "apps/admin-web/src/pages/docs/documentationIntroContent.tsx": readFileSync("apps/admin-web/src/pages/docs/documentationIntroContent.tsx", "utf8"),
-  "docs/architecture/maple-platform-architecture.md": readFileSync("docs/architecture/maple-platform-architecture.md", "utf8")
+  "apps/admin-web/src/pages/docs/documentationIntroContent.tsx": readFileSync("apps/admin-web/src/pages/docs/documentationIntroContent.tsx", "utf8")
 };
 const migrations = {
   "migrations/migrate_model_config_global.mjs": readFileSync("migrations/migrate_model_config_global.mjs", "utf8"),
@@ -36,7 +33,7 @@ for (const [path, source] of Object.entries(migrations)) {
   assert.equal(source.includes("../apps/control-plane-api/src/mysql_child.mjs"), false, `${path} should not import removed root shim`);
 }
 
-const trackedFiles = spawnSync("git", ["ls-files", "scripts", "migrations", "README.md", "CLAUDE.md", "CONTEXT.md"], {
+const trackedFiles = spawnSync("git", ["ls-files", "scripts", "migrations", "README.md"], {
   encoding: "utf8"
 }).stdout.trim().split("\n").filter(Boolean);
 

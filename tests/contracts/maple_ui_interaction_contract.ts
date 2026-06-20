@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const stableBase = "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com";
+const stableBase = "http://127.0.0.1:27951";
 
 const sources = {
   templates: readFileSync("apps/admin-web/src/config/templates.ts", "utf8"),
@@ -52,10 +52,10 @@ const userFacingSamples = [
 
 assert.equal(
   userFacingSamples.includes("http://127.0.0.1:27951"),
-  false,
-  "user-facing generated samples and docs must not default to local API base"
+  true,
+  "user-facing generated samples and docs should default to the local open-source API base"
 );
-assert.match(userFacingSamples, new RegExp(escapeRegExp(stableBase)), "samples should expose the stable cloud MAPLE_API_BASE_URL");
+assert.match(userFacingSamples, new RegExp(escapeRegExp(stableBase)), "samples should expose the local MAPLE_API_BASE_URL");
 assert.match(sources.codeSamples, /process\.env\.MAPLE_API_BASE_URL(?!\s*\|\|)/, "SDK snippets should require MAPLE_API_BASE_URL instead of hiding a localhost fallback");
 
 for (const forbidden of ["Blank agent config", "Deep researcher", "Structured extractor", "Field monitor"]) {

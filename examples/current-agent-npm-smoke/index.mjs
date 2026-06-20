@@ -9,7 +9,7 @@ for (const name of ["MAPLE_API_BASE_URL", "MAPLE_API_KEY", "MAPLE_DEV_API_KEY", 
   if (projectEnv[name]) process.env[name] = projectEnv[name];
 }
 
-const baseUrl = process.env.MAPLE_API_BASE_URL || "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com";
+const baseUrl = process.env.MAPLE_API_BASE_URL || "http://127.0.0.1:27951";
 const required = ["MAPLE_API_KEY", "MAPLE_WORKSPACE_ID", "MAPLE_AGENT_ID", "MAPLE_ENVIRONMENT_ID"];
 for (const name of required) {
   if (!process.env[name]) {

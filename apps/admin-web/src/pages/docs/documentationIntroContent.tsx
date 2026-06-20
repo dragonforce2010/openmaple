@@ -96,7 +96,7 @@ export function quickstartDoc(helpers: DocContentHelpers): DocPage {
                         "Copy the API base URL and workspace key from Maple console API settings; control-plane endpoints use the /v1 prefix."
                       )}
                     </p>
-                    <Code>{"export MAPLE_API_BASE_URL=\"${MAPLE_API_BASE_URL:-https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com}\"\nexport MAPLE_API_KEY=\"maple_ws_xxx\"\nexport MAPLE_WORKSPACE_ID=\"ws_xxx\""}</Code>
+                    <Code>{"export MAPLE_API_BASE_URL=\"${MAPLE_API_BASE_URL:-http://127.0.0.1:27951}\"\nexport MAPLE_API_KEY=\"maple_ws_xxx\"\nexport MAPLE_WORKSPACE_ID=\"ws_xxx\""}</Code>
                   </>
                 )
               },

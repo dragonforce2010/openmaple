@@ -197,7 +197,7 @@ wait "$STREAM_PID"`;
 
 function agentSampleContext(agent: Agent, environment?: Environment | null) {
   return {
-    baseUrl: "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com",
+    baseUrl: "http://127.0.0.1:27951",
     workspaceId: agent.workspace_id || environment?.workspace_id || "ws_xxx",
     agentId: agent.id,
     environmentId: environment?.id || "env_xxx",

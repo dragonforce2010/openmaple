@@ -10,7 +10,7 @@ npm install maple-agent-sdk
 import { MapleClient } from "maple-agent-sdk";
 
 const client = new MapleClient({
-  baseURL: "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com",
+  baseURL: "http://127.0.0.1:27951",
   apiKey: process.env.MAPLE_API_KEY || "maple_ws_xxx",
   workspaceId: "ws_xxx"
 });

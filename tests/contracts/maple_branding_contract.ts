@@ -39,10 +39,7 @@ const cli = [
 ].map((path) => readFileSync(path, "utf8")).join("\n");
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const html = readFileSync("apps/admin-web/index.html", "utf8");
-const spec = readFileSync("SPEC.md", "utf8");
 const readme = readFileSync("README.md", "utf8");
-const onboarding = readFileSync("docs/product-manual/maple-sdk-cli-onboarding.md", "utf8");
-const architecture = readFileSync("docs/design/2026-06-05-current-architecture.md", "utf8");
 
 for (const forbidden of [
   "Claude Console",
@@ -102,12 +99,7 @@ for (const command of [
   assert.match(cli, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `Maple CLI should expose ${command}`);
 }
 
-for (const [label, content] of [
-  ["README", readme],
-  ["SPEC", spec],
-  ["onboarding", onboarding],
-  ["architecture", architecture]
-] as const) {
+for (const [label, content] of [["README", readme]] as const) {
   for (const forbidden of ["magcli", "scripts/magcli", "ManagedAgentsClient", "MAGCLI_", "mag.manifest.json", ".mag/build"]) {
     assert.equal(content.includes(forbidden), false, `${label} should not mention ${forbidden}`);
   }

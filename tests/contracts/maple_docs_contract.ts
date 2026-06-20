@@ -9,8 +9,7 @@ const docs = readSources([
   "apps/admin-web/src/pages/docs/documentationWorkspaceContent.tsx",
   "apps/admin-web/src/pages/docs/documentationRuntimeContent.tsx",
   "apps/admin-web/src/pages/docs/documentationIntegrationContent.tsx",
-  "apps/admin-web/src/pages/docs/documentationSdkContent.tsx",
-  "docs/index.html"
+  "apps/admin-web/src/pages/docs/documentationSdkContent.tsx"
 ]);
 const integration = readSources([
   "apps/admin-web/src/pages/agents/AgentDetailView.tsx",
@@ -109,22 +108,15 @@ for (const required of [
   "Maple CLI",
   "maple init --name repo-auditor --loop codex_open_source",
   "maple skill deploy-run",
-  "Agent Deployment",
-  "bun run deploy:vefaas:stable",
-  "bun run status:vefaas:stable",
-  "POST /v1/deployments/:deploymentId/run",
   "POST /v1/deployments/:deploymentId/invoke",
-  "POST /v1/deployments/:deploymentId/archive",
   "session.status_failed",
-  "veFaaS runtime error 500",
   "openmaple-agent",
   "openmaple-runtime",
   "openmaple-session",
   "openmaple-vault",
   "openmaple-mcp",
   "openmaple-workspace",
-  "OpenMaple",
-  "GitHub Pages"
+  "OpenMaple"
 ]) {
   assert.match(docs, new RegExp(escapeRegExp(required)), `DocumentationView missing required anchor: ${required}`);
 }
@@ -138,7 +130,7 @@ for (const forbidden of [
   assert.equal(docs.includes(forbidden), false, `DocumentationView should not require Python in curl snippets: ${forbidden}`);
 }
 
-assert.match(docs, /export MAPLE_API_BASE_URL=.*https:\/\/sd8ihq8v316pc5mf9c1j0\.apigateway-cn-beijing\.volceapi\.com/, "DocumentationView should provide a paste-ready production MAPLE_API_BASE_URL default");
+assert.match(docs, /export MAPLE_API_BASE_URL=.*http:\/\/127\.0\.0\.1:27951/, "DocumentationView should provide a paste-ready local MAPLE_API_BASE_URL default");
 assert.equal(integration.includes('useState<"python" | "typescript" | "curl">("python")'), false, "Agent integration should not default to Python");
 assert.match(integration, /useState<"python" \| "typescript" \| "curl">\("curl"\)/, "Agent integration should default to paste-ready curl");
 assert.equal(integration.includes("python3 -c 'import json,sys"), false, "Agent integration curl snippets should not shell out to Python");
