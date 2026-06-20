@@ -101,7 +101,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.deployed.outputs.skip != 'true'
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Restore stable deployment state
         if: steps.deployed.outputs.skip != 'true'
@@ -140,6 +140,17 @@ jobs:
           MAPLE_MYSQL_USER: ${{ secrets.MAPLE_MYSQL_USER }}
           MAPLE_MYSQL_PASSWORD: ${{ secrets.MAPLE_MYSQL_PASSWORD }}
           MAPLE_SECRET_MASTER_KEY: ${{ secrets.MAPLE_SECRET_MASTER_KEY }}
+          MAPLE_LARK_APP_ID: ${{ secrets.MAPLE_LARK_APP_ID }}
+          MAPLE_LARK_APP_SECRET: ${{ secrets.MAPLE_LARK_APP_SECRET }}
+          MAPLE_LARK_CLIENT_ID: ${{ secrets.MAPLE_LARK_CLIENT_ID }}
+          MAPLE_LARK_CLIENT_SECRET: ${{ secrets.MAPLE_LARK_CLIENT_SECRET }}
+          MAPLE_LARK_AUTHORIZE_URL: ${{ vars.MAPLE_LARK_AUTHORIZE_URL }}
+          MAPLE_LARK_TOKEN_URL: ${{ vars.MAPLE_LARK_TOKEN_URL }}
+          MAPLE_LARK_USER_ACCESS_TOKEN_URL: ${{ vars.MAPLE_LARK_USER_ACCESS_TOKEN_URL }}
+          MAPLE_LARK_USERINFO_URL: ${{ vars.MAPLE_LARK_USERINFO_URL }}
+          MAPLE_LARK_APP_ACCESS_TOKEN_URL: ${{ vars.MAPLE_LARK_APP_ACCESS_TOKEN_URL }}
+          MAPLE_LARK_OPENAPI_BASE_URL: ${{ vars.MAPLE_LARK_OPENAPI_BASE_URL }}
+          MAPLE_LARK_SCOPE: ${{ vars.MAPLE_LARK_SCOPE }}
           ARK_API_KEY: ${{ secrets.ARK_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}

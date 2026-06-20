@@ -31,6 +31,7 @@ import type {
 import type { ToastType } from "../ui";
 
 type Toast = (message: string, kind?: ToastType) => void;
+const FIRST_PAINT_TIMEOUT_MS = 12_000;
 
 export function useBootstrapController(input: {
   toast: Toast;
@@ -137,7 +138,10 @@ export function useBootstrapController(input: {
 
   async function routeAfterAuth() {
     const requestedRoute = requestedWorkspaceRouteFromLocation();
-    const boot = await apiGet<{ user: User | null; tenants?: AccessibleTenant[]; recommended_view?: string; selected_tenant_id?: string; selected_workspace_id?: string }>(authBootstrapPath(requestedRoute));
+    const boot = await apiGet<{ user: User | null; tenants?: AccessibleTenant[]; recommended_view?: string; selected_tenant_id?: string; selected_workspace_id?: string }>(
+      authBootstrapPath(requestedRoute),
+      { timeoutMs: FIRST_PAINT_TIMEOUT_MS }
+    );
     input.setCurrentUser(boot.user);
     const tenants = boot.tenants ?? [];
     input.setAccessibleTenants(tenants);
@@ -242,10 +246,12 @@ export function useBootstrapController(input: {
     bootstrapStartedRef.current = true;
     (async () => {
       try {
-        const providers = await apiGet<ApiList<AuthProvider>>("/v1/auth/providers");
+        input.setError("");
+        const providers = await apiGet<ApiList<AuthProvider>>("/v1/auth/providers", { timeoutMs: FIRST_PAINT_TIMEOUT_MS });
         input.setAuthProviders(providers.data);
         await routeAfterAuth();
-      } catch {
+      } catch (reason) {
+        input.setError(errorMessage(reason));
         input.setCurrentUser((current) => current ?? null);
       } finally {
         input.setAuthChecked(true);
