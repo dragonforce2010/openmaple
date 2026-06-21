@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Local Docker walkthrough
+    url: https://dragonforce2010.github.io/openmaple/#local-docker-tour
+    about: Watch the current local trial path before filing setup feedback.
+  - name: Evaluation guide
+    url: https://github.com/dragonforce2010/openmaple/blob/main/EVALUATION.md
+    about: Use this when checking whether OpenMaple fits your evaluation needs.
+  - name: Provider readiness
+    url: https://github.com/dragonforce2010/openmaple/blob/main/PROVIDER_READINESS.md
+    about: Check which provider paths are runnable, credentialed, or currently stubs.

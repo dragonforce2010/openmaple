@@ -1,0 +1,49 @@
+name: Provider adapter request
+description: Request or help scope a runtime, sandbox, storage, model, or identity provider adapter.
+title: "[Provider]: "
+labels: ["enhancement", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when a provider boundary matters to your team. Please avoid secrets, account IDs, private hostnames, and customer data.
+  - type: dropdown
+    id: boundary
+    attributes:
+      label: Provider boundary
+      options:
+        - Runtime
+        - Sandbox
+        - Storage
+        - Model access
+        - Identity or OAuth
+        - Deployment
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider or platform
+      placeholder: AWS Lambda, Alibaba FC, Vercel Sandbox, S3, GCS, E2B, veFaaS, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow you need to support
+      description: Describe the agent runtime, sandbox, storage, or identity flow.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: What would prove this adapter is ready?
+      description: List the smoke test, E2E path, docs, or screenshots you would expect.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Public references
+      description: Link provider docs, APIs, SDKs, or public examples.
