@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
 import type { AgentConfig, AuthenticatedRequest, JsonRecord } from "./routeDeps";
 import {
   agentConfigSchema,
@@ -23,6 +24,7 @@ import {
   normalizeAgentLoop,
   updateAgent,
   updateEnvironment,
+  visibleModelConfigsForCurrentMode,
   workspaceIncludesModelConfig,
   z
 } from "./routeDeps";
@@ -83,7 +85,8 @@ function resolveAgentModelConfig(config: AgentConfig, workspaceId: string, rawBo
   const modelConfigId = config.model.config_id || "";
   if (modelConfigId) return workspaceIncludesModelConfig(workspaceId, modelConfigId) ? config : null;
   const terms = requestedModelTerms(rawBody);
-  const configs = listModelConfigs(workspaceId) as JsonRecord[];
+  const configs = visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]);
+  if (!configs.length && workspaceAllowsUnconfiguredModel(workspaceId)) return config;
   const matched = terms.length ? configs.find((modelConfig) => modelConfigMatchesTerms(modelConfig, terms)) : null;
   const fallback = !terms.length || wantsDefaultModel(terms) ? (getDefaultModelConfig(workspaceId) as JsonRecord | null) || configs[0] : null;
   const modelConfig = matched || fallback;
@@ -99,6 +102,11 @@ function resolveAgentModelConfig(config: AgentConfig, workspaceId: string, rawBo
       name: selection.name
     }
   };
+}
+
+function workspaceAllowsUnconfiguredModel(workspaceId: string) {
+  const workspace = getWorkspace(workspaceId) as JsonRecord | null;
+  return isLocalDockerMode() || (workspace?.runtime_provider === "local_docker" && workspace?.sandbox_provider === "local_docker");
 }
 
 function requestedModelTerms(rawBody: unknown) {

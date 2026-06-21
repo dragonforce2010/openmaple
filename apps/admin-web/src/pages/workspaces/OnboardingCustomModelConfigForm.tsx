@@ -72,7 +72,7 @@ export function OnboardingCustomModelConfigForm(props: { onAdd: (config: Onboard
         <span className="tc-ico"><Icon name="i-plus" size={18} /></span>
         <span className="tc-copy">
           <b>{L("添加模型", "Add model")}</b>
-          <span>{L("添加自定义模型接入点。预置模型已在上方列出。", "Add a custom model endpoint. Presets are listed above.")}</span>
+          <span>{L("添加自定义模型接入点，也可以开通后在模型页补充。", "Add a custom model endpoint, or add one later from Models.")}</span>
         </span>
         <Icon name="i-chevron-right" size={16} />
       </button>

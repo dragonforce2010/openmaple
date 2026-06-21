@@ -1,18 +1,21 @@
+x-openmaple-image: &openmaple-image
+  build:
+    context: .
+  image: openmaple:local
+
 services:
-  managed-agents-platform:
-    build:
-      context: .
-    image: managed-agents-platform:local
+  api:
+    <<: *openmaple-image
     depends_on:
       mysql:
         condition: service_healthy
     ports:
-      - "${MAPLE_PORT:-27951}:27951"
+      - "${MAPLE_API_PORT:-27951}:27951"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 27951
-      SERVE_STATIC: "true"
+      SERVE_STATIC: "false"
       MAPLE_DATA_DIR: /app/.managed-agents
       MAPLE_SKILLS_ROOT: /root/.agents/skills
       MAPLE_MYSQL_HOST: mysql
@@ -23,31 +26,48 @@ services:
       MAPLE_DOCKER_WORKSPACE_HOST_ROOT: ${MAPLE_DOCKER_WORKSPACE_HOST_ROOT:-${PWD}/.managed-agents/sessions}
       MAPLE_LOCAL_DOCKER_MODE: "true"
       MAPLE_DEV_LOGIN: ${MAPLE_DEV_LOGIN:-true}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ARK_API_KEY: ${ARK_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-}
-      ARK_MODEL: ${ARK_MODEL:-}
-      MAPLE_SANDBOX_CONFIG: ${MAPLE_SANDBOX_CONFIG:-/app/sandbox.config.json}
+      MAPLE_WEB_BASE_URL: ${MAPLE_WEB_BASE_URL:-http://127.0.0.1:${MAPLE_WEB_PORT:-8080}}
+      MAPLE_LOCAL_MODEL_CONFIG_FILE: ${MAPLE_LOCAL_MODEL_CONFIG_FILE:-config/local-model.json}
+      OPENAI_API_KEY: ${MAPLE_LOCAL_OPENAI_API_KEY:-}
+      ARK_API_KEY: ${MAPLE_LOCAL_ARK_API_KEY:-}
+      OPENAI_BASE_URL: ${MAPLE_LOCAL_OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${MAPLE_LOCAL_OPENAI_MODEL:-}
+      ARK_MODEL: ${MAPLE_LOCAL_ARK_MODEL:-}
       MAPLE_AGENT_RUNTIME_PROVIDER: ${MAPLE_AGENT_RUNTIME_PROVIDER:-local_docker}
       MAPLE_SANDBOX_PROVIDER: ${MAPLE_SANDBOX_PROVIDER:-local_docker}
       MAPLE_DOCKER_IMAGE: ${MAPLE_DOCKER_IMAGE:-node:22-bookworm}
-      E2B_API_KEY: ${E2B_API_KEY:-}
-      E2B_TEMPLATE: ${E2B_TEMPLATE:-base}
-      E2B_WORKSPACE_PATH: ${E2B_WORKSPACE_PATH:-/workspace}
-      E2B_TIMEOUT_MS: ${E2B_TIMEOUT_MS:-3600000}
-      MAPLE_LARK_OPENAPI_BASE_URL: ${MAPLE_LARK_OPENAPI_BASE_URL:-}
-      MAPLE_LARK_AUTHORIZE_URL: ${MAPLE_LARK_AUTHORIZE_URL:-}
-      MAPLE_LARK_APP_ACCESS_TOKEN_URL: ${MAPLE_LARK_APP_ACCESS_TOKEN_URL:-}
-      MAPLE_LARK_USER_ACCESS_TOKEN_URL: ${MAPLE_LARK_USER_ACCESS_TOKEN_URL:-}
-      MAPLE_LARK_USERINFO_URL: ${MAPLE_LARK_USERINFO_URL:-}
-      MAPLE_LARK_APP_ID: ${MAPLE_LARK_APP_ID:-}
-      MAPLE_LARK_APP_SECRET: ${MAPLE_LARK_APP_SECRET:-}
-      MAPLE_LARK_SCOPE: ${MAPLE_LARK_SCOPE:-}
     volumes:
       - ./.managed-agents:/app/.managed-agents
+      - ./config:/app/config:ro
       - ${HOME}/.agents:/root/.agents
       - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://127.0.0.1:27951/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    <<: *openmaple-image
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${MAPLE_WEB_PORT:-8080}:8080"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8080
+      MAPLE_WEB_STATIC_DIR: /app/dist
+      MAPLE_API_PROXY_TARGET: http://api:27951
+      MAPLE_DEV_API_KEY: ${MAPLE_DEV_API_KEY:-maple_dev_key}
+    command: ["bun", "apps/control-plane-api/src/web/web.ts"]
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     restart: unless-stopped
 
   mysql:

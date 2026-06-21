@@ -23,7 +23,7 @@ _Screenshots are public-safe crops from the running OpenMaple console. Workspace
 
 Feedback wanted: join the [launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30) to challenge the resource model, provider priorities, and first proof you would need before trying OpenMaple inside an engineering team.
 
-Fastest trial path: open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1), run `docker compose up --build`, then `npm run smoke:local`. You get the console, API, MySQL, local dev login, local Docker runtime pools, and local Docker sandbox pools without E2B, veFaaS, or OAuth credentials. Model keys are only needed when you run real model-backed loops.
+Fastest trial path: run `./scripts/setup-local-docker.sh` locally, or open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1) and run the same setup command. You get the web console on `http://127.0.0.1:8080/`, API, MySQL, local dev login, local Docker runtime pools, and local Docker sandbox pools without E2B, veFaaS, or OAuth credentials. Model keys are only needed when you run real model-backed loops.
 
 Evaluating for an internal platform spike? Start with the [30-minute evaluation guide](EVALUATION.md).
 
@@ -38,7 +38,7 @@ The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmap
 | Need to verify | Start here |
 |---|---|
 | It is a real product surface, not only architecture copy | [Watch the 2-minute product tour](https://dragonforce2010.github.io/openmaple/#tour) and inspect [real console screenshots](assets/screenshots/). |
-| A local managed-agent path can start without cloud credentials | Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1) or run `docker compose up --build`, then run `npm run smoke:local` and open `http://127.0.0.1:27951/`. The default Compose path uses `local_docker` for both runtime and sandbox pools. |
+| A local managed-agent path can start without cloud credentials | `./scripts/setup-local-docker.sh`, then open `http://127.0.0.1:8080/`. The local stack uses `local_docker` for both runtime and sandbox pools. |
 | It has a coherent managed-agent model | Follow the [30-minute evaluation guide](EVALUATION.md). |
 | It keeps provider claims honest | Check [provider readiness](PROVIDER_READINESS.md) before assuming an adapter is production-ready. |
 | It exposes UI, API, SDK, and CLI paths | Check the [SDK](packages/sdk/), [CLI](packages/cli/), and API surface below. |
@@ -57,26 +57,28 @@ The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmap
 Start the control plane, web console, local MySQL database, and local dev login with one command:
 
 ```bash
-docker compose up --build
+./scripts/setup-local-docker.sh
 ```
 
-Then verify and open:
+The script checks Docker, installs missing macOS packages when possible, creates `.env.local`, starts the stack, waits for health checks, and prints the URLs.
 
-```bash
-npm run smoke:local
-```
+Open:
 
 ```text
-Console: http://127.0.0.1:27951/
-Health:  http://127.0.0.1:27951/health
-Login:   http://127.0.0.1:27951/v1/auth/bootstrap
+Web console: http://127.0.0.1:8080/
+Local login:  http://127.0.0.1:8080/?dev_login=1
+API health:   http://127.0.0.1:27951/health
 ```
 
-The Compose path is self-contained for local evaluation: it builds OpenMaple, starts MySQL 8, enables local dev login, and persists data in the `mysql_data` volume. It defaults both the agent runtime provider and sandbox provider to `local_docker`, mounts the host Docker socket, and prewarms runtime/sandbox pools without E2B or veFaaS credentials. OAuth/SSO providers are hidden in local Docker mode; model keys are only needed when you run real model-backed agent loops.
+The local stack is self-contained for evaluation: it builds OpenMaple, starts separate `web`, `api`, and `mysql` services, enables local dev login, and persists data in the `mysql_data` volume. It defaults both the agent runtime provider and sandbox provider to `local_docker`, mounts the host Docker socket into the API service, and prewarms runtime/sandbox pools without E2B or veFaaS credentials. OAuth/SSO providers are hidden in local Docker mode; model keys are only needed when you run real model-backed agent loops.
 
-For host-side tests or scripts, Compose also exposes MySQL on `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`.
+Local Docker mode starts with an empty model pool and does not read host provider keys implicitly. To show a default model, copy `config/local-model.example.json` to `config/local-model.json`, set `base_url`, `model_name`, and `api_key_env`, then rerun setup. The bundled VolcoEngine presets are not seeded in local Docker mode unless you explicitly set `MAPLE_SEED_DEFAULT_MODELS=true`.
 
-No local Docker setup? Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1), wait for the devcontainer to finish, then run the same `docker compose up --build` and `npm run smoke:local` commands. Codespaces forwards port `27951` for the console/API.
+Optional demo data lives in `docker/local-demo-data.sql`. Set `MAPLE_SEED_DEMO_DATA=true` before running the setup script, or set it in `.env.local`, to import two demo tenants, users, agents, runtime/sandbox pool rows, and sessions.
+
+For host-side tests or scripts, the stack also exposes the API on `127.0.0.1:27951` and MySQL on `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`.
+
+No local Docker setup? Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1), wait for the devcontainer to finish, then run `./scripts/setup-local-docker.sh` and `npm run smoke:local`. Codespaces forwards the web console and API ports for you.
 
 ## Try the SDK Path
 
@@ -221,14 +223,13 @@ tests/contracts/            Contract tests for docs, routes, branding, runtime b
 
 ```bash
 bun install
-cp .env.example .env
 bun run dev
 ```
 
 Open:
 
 ```text
-Web Console: http://127.0.0.1:5173/
+Web Console: http://127.0.0.1:8080/
 API Server:  http://127.0.0.1:27951/
 ```
 
@@ -240,16 +241,16 @@ bun run lint
 bun run build
 ```
 
-Docker Compose:
+Local Docker stack:
 
 ```bash
-docker compose up --build
-npm run smoke:local
+./scripts/setup-local-docker.sh
+npm run smoke:local -- --base http://127.0.0.1:27951
 curl http://127.0.0.1:27951/health
-curl http://127.0.0.1:27951/v1/auth/bootstrap
+curl http://127.0.0.1:8080/health
 ```
 
-The compose stack starts the OpenMaple API/web console, local MySQL 8, local dev login, and default `local_docker` runtime/sandbox pools. It uses `MAPLE_MYSQL_PASSWORD=maple` when no password is set, keeps database files in the `mysql_data` volume, hides OAuth/SSO providers in local Docker mode, and only needs model keys when you run real model-backed agent loops.
+The local stack runs `web`, `api`, and `mysql` as separate services. `.env.example` contains only local Docker settings and optional model keys; online-only OAuth, veFaaS, TOS, E2B, and MCP client variables are intentionally omitted from the default local setup.
 
 ## CLI
 

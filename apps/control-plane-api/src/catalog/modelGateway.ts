@@ -1,17 +1,27 @@
-import { decryptSecret, encryptSecret, readSecret } from "../secrets";
+import { decryptSecret, readSecret } from "../secrets";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
+import {
+  defaultVolcoEngineModel,
+  ensureGlobalModelConfigs,
+  isBundledDefaultModelConfig,
+  visibleModelConfigsForCurrentMode
+} from "./modelGatewaySeed";
 import {
   GLOBAL_SCOPE_ID,
-  createModelConfig,
-  ensureGlobalDefaultModel,
-  getDefaultModelConfig,
   getDefaultModelConfigInternal,
   getModelConfig,
   getModelConfigInternal,
-  listGlobalModelConfigs,
-  listModelConfigs,
-  updateModelConfigSecret
+  listModelConfigs
 } from "../store";
 import type { JsonRecord } from "../types";
+export {
+  defaultVolcoEngineModel,
+  defaultVolcoEngineModels,
+  ensureDefaultVolcoEngineConfig,
+  ensureGlobalModelConfigs,
+  presetToTarget,
+  visibleModelConfigsForCurrentMode
+} from "./modelGatewaySeed";
 
 export type ModelTarget = {
   baseUrl: string;
@@ -37,120 +47,16 @@ export type ModelConnectivityResult = {
   message: string;
 };
 
-export const defaultVolcoEngineModels = [
-  {
-    name: "VolcoEngine",
-    providerType: "custom",
-    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-    modelName: "glm-4-7-251222",
-    presetKey: "volcoengine-glm-4-7-251222",
-    isDefault: true
-  },
-  {
-    name: "VolcoEngine Doubao Seed Flash",
-    providerType: "custom",
-    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-    modelName: "doubao-seed-1-6-flash-250615",
-    presetKey: "volcoengine-doubao-seed-1-6-flash-250615",
-    isDefault: false
-  },
-  {
-    name: "VolcoEngine Doubao Seed 2.0 Lite Multimodal",
-    providerType: "custom",
-    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-    modelName: "doubao-seed-2-0-lite-260428",
-    presetKey: "volcoengine-doubao-seed-2-0-lite-260428",
-    isDefault: false
-  },
-  {
-    name: "VolcoEngine DeepSeek V4 Flash",
-    providerType: "custom",
-    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-    modelName: "deepseek-v4-flash-260425",
-    presetKey: "volcoengine-deepseek-v4-flash-260425",
-    isDefault: false
-  }
-] as const;
-
-export const defaultVolcoEngineModel = defaultVolcoEngineModels[0];
-
-export function presetToTarget(presetKey: string) {
-  const arkPreset = defaultVolcoEngineModels.find((model) => model.presetKey === presetKey);
-  if (arkPreset) {
-    return {
-      name: arkPreset.name,
-      baseUrl: arkPreset.baseUrl,
-      modelName: arkPreset.modelName
-    };
-  }
-  if (presetKey === "maple-code") {
-    return {
-      name: "Maple Code",
-      baseUrl: process.env.OPENAI_BASE_URL || defaultVolcoEngineModel.baseUrl,
-      modelName: process.env.MAPLE_CODE_MODEL || defaultVolcoEngineModel.modelName
-    };
-  }
-  return {
-    name: "GPT5.5",
-    baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
-    modelName: "gpt-5.5"
-  };
-}
-
-// model configs are now global (workspace_id = "-1"), shared across all workspaces.
-// kept as an alias accepting an ignored userId so existing call sites keep compiling.
-export function ensureDefaultVolcoEngineConfig(_userId?: string) {
-  const seeded = ensureGlobalModelConfigs();
-  return seeded.find((config) => config.preset_key === defaultVolcoEngineModel.presetKey) || seeded[0];
-}
-
-export function ensureGlobalModelConfigs() {
-  const configs = listGlobalModelConfigs() as JsonRecord[];
-  const arkKey = arkProviderApiKey();
-  const encryptArkKey = () => (arkKey ? encryptSecret(arkKey) : null);
-  const api_key_hint = arkKey ? secretHint(arkKey) : null;
-  const results = defaultVolcoEngineModels.map((model) => {
-    const existing = configs.find((config) => {
-      return (
-        config.preset_key === model.presetKey ||
-        (String(config.base_url || "").replace(/\/$/, "") === model.baseUrl && config.model_name === model.modelName)
-      );
-    });
-    if (existing) {
-      const api_key_ciphertext = encryptArkKey();
-      if (api_key_ciphertext && !existing.has_api_key) {
-        return updateModelConfigSecret(String(existing.id), { api_key_ciphertext, api_key_hint }) as JsonRecord;
-      }
-      return existing;
-    }
-    return createModelConfig({
-      workspace_id: GLOBAL_SCOPE_ID,
-      tenant_id: GLOBAL_SCOPE_ID,
-      owner_user_id: null,
-      name: model.name,
-      provider_type: model.providerType,
-      base_url: model.baseUrl,
-      model_name: model.modelName,
-      preset_key: model.presetKey,
-      api_key_ciphertext: encryptArkKey(),
-      api_key_hint,
-      is_default: model.isDefault
-    }) as JsonRecord;
-  });
-  ensureGlobalDefaultModel();
-  return results;
-}
-
 export function selectModelForPrompt(input: { userId: string; prompt?: string; modelConfigId?: string | null; workspaceId?: string | null }): ModelSelection {
   ensureGlobalModelConfigs();
   const workspaceId = input.workspaceId ?? GLOBAL_SCOPE_ID;
   if (input.modelConfigId) {
     const explicit = getModelConfig(input.modelConfigId, workspaceId) as JsonRecord | null;
-    if (explicit) return modelSelectionFromConfig(explicit);
+    if (explicit && (!isLocalDockerMode() || !isBundledDefaultModelConfig(explicit))) return modelSelectionFromConfig(explicit);
     throw new Error(`Model config not found: ${input.modelConfigId}`);
   }
 
-  const configs = listModelConfigs(workspaceId) as JsonRecord[];
+  const configs = visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]);
   const prompt = (input.prompt || "").toLowerCase();
   if (promptNeedsMultimodalModel(prompt)) {
     const multimodal = configs.find(modelConfigLooksMultimodal);
@@ -175,12 +81,12 @@ export function selectModelForPrompt(input: { userId: string; prompt?: string; m
     if (reasoning) return modelSelectionFromConfig(reasoning);
   }
 
-  const defaultConfig = (getDefaultModelConfig(workspaceId) as JsonRecord | null) || configs[0];
+  const defaultConfig = configs.find((config) => config.is_default) || configs[0];
   if (defaultConfig) return modelSelectionFromConfig(defaultConfig);
 
   return {
     provider: "openai",
-    model: process.env.OPENAI_MODEL || process.env.ARK_MODEL || defaultVolcoEngineModel.modelName
+    model: isLocalDockerMode() ? defaultVolcoEngineModel.modelName : process.env.OPENAI_MODEL || process.env.ARK_MODEL || defaultVolcoEngineModel.modelName
   };
 }
 
@@ -213,9 +119,12 @@ export function modelSelectionFromConfig(config: JsonRecord): ModelSelection {
 export function resolveModelTarget(input: { userId?: string; modelConfigId?: string | null; workspaceId?: string | null }): ModelTarget {
   ensureGlobalModelConfigs();
   const workspaceId = input.workspaceId ?? GLOBAL_SCOPE_ID;
-  const config = input.modelConfigId
+  const config = visibleInternalModelConfig(
+    input.modelConfigId
     ? getModelConfigInternal(input.modelConfigId, workspaceId)
-    : getDefaultModelConfigInternal(workspaceId);
+    : getDefaultModelConfigInternal(workspaceId),
+    workspaceId
+  );
   if (config) {
     const row = config as JsonRecord;
     const apiKeyCiphertext = row.api_key_ciphertext ? String(row.api_key_ciphertext) : "";
@@ -229,6 +138,9 @@ export function resolveModelTarget(input: { userId?: string; modelConfigId?: str
       source: "user_config"
     };
   }
+  if (isLocalDockerMode() && process.env.MAPLE_LOCAL_ALLOW_ENV_MODEL !== "true") {
+    throw new Error("No provider credential configured for local Docker mode. Add config/local-model.json or set MAPLE_LOCAL_ALLOW_ENV_MODEL=true.");
+  }
   const apiKey = providerApiKey();
   if (!apiKey) throw new Error("No provider credential configured. Set OPENAI_API_KEY, ARK_API_KEY, or create a user model config.");
   const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
@@ -237,6 +149,13 @@ export function resolveModelTarget(input: { userId?: string; modelConfigId?: str
     process.env.ARK_MODEL ||
     (baseUrl.includes("volces.com") || baseUrl.includes("ark.cn-beijing") ? "doubao-seed-1-6-251015" : "gpt-4.1-mini");
   return { baseUrl, model, apiKey, source: "environment" };
+}
+
+function visibleInternalModelConfig(config: unknown, workspaceId: string) {
+  if (!config || !isLocalDockerMode() || !isBundledDefaultModelConfig(config as JsonRecord)) return config;
+  const visibleConfigs = visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]);
+  const visibleDefault = visibleConfigs.find((row) => row.is_default) || visibleConfigs[0];
+  return visibleDefault ? getModelConfigInternal(String(visibleDefault.id), workspaceId) : null;
 }
 
 function resolveConfigApiKey(row: JsonRecord, apiKeyCiphertext: string, apiKeyRef: string) {
@@ -341,16 +260,4 @@ function parseJson(text: string) {
 
 function providerApiKey() {
   return process.env.OPENAI_API_KEY || process.env.ARK_API_KEY;
-}
-
-function arkProviderApiKey() {
-  if (process.env.ARK_API_KEY) return process.env.ARK_API_KEY;
-  const openAiBase = process.env.OPENAI_BASE_URL || "";
-  return /volces\.com|ark\.cn-beijing/i.test(openAiBase) ? process.env.OPENAI_API_KEY || "" : "";
-}
-
-function secretHint(value: string) {
-  const trimmed = value.trim();
-  if (trimmed.length <= 8) return `${"*".repeat(Math.max(0, trimmed.length - 2))}${trimmed.slice(-2)}`;
-  return `${trimmed.slice(0, 3)}...${trimmed.slice(-4)}`;
 }

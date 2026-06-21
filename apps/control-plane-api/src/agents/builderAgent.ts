@@ -1,8 +1,10 @@
 import { QUICKSTART_BUILDER_PURPOSE, createBuilderAgentConfig, createBuilderEnvironmentConfig, createQuickstartEnvironmentConfig } from "@maple/super-agent";
 import { normalizeAgentLoop } from "../agentLoops";
 import { emitSessionEvent } from "../eventHub";
+import { visibleModelConfigsForCurrentMode } from "../modelGateway";
 import { callProvider, type ChatMessage, type ToolCall } from "../provider";
-import { createAgent, createEnvironment, createSession, createSessionEvent, getDefaultModelConfig, getEnvironment, getSession, getWorkspace, listAgents, listEnvironments, listSessionEvents, listSessions, updateSessionStatus, workspaceIncludesModelConfig } from "../store";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
+import { createAgent, createEnvironment, createSession, createSessionEvent, getEnvironment, getSession, getWorkspace, listAgents, listEnvironments, listModelConfigs, listSessionEvents, listSessions, updateSessionStatus, workspaceIncludesModelConfig } from "../store";
 import type { AgentConfig, AgentLoopType, JsonRecord, SessionEvent } from "../types";
 import { buildAgentDraft, buildLocalAgentDraft } from "./agentBuilder";
 import { builderProviderTools, builderSystemPrompt } from "./builderPrompts";
@@ -44,9 +46,10 @@ export function isHiddenSession(record: unknown) {
 }
 
 function modelFromWorkspace(workspaceId: string) {
-  const config = getDefaultModelConfig(workspaceId) as JsonRecord | null;
+  const configs = visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]);
+  const config = configs.find((modelConfig) => modelConfig.is_default) || configs[0] || null;
   if (!config) {
-    return { provider: "openai", id: process.env.OPENAI_MODEL || process.env.ARK_MODEL || "doubao-seed-1-6-251015", speed: "standard" };
+    return { provider: "openai", id: isLocalDockerMode() ? "local-docker-no-model" : process.env.OPENAI_MODEL || process.env.ARK_MODEL || "doubao-seed-1-6-251015", speed: "standard" };
   }
   return {
     provider: String(config.provider_type || "openai"),
@@ -191,15 +194,12 @@ function emitAgentMessage(sessionId: string, text: string, usage?: JsonRecord) {
   emitEvent(sessionId, "agent.message", { content: [{ type: "text", text }], usage: usage ?? {} }, "message_stop");
 }
 
-// Reasoning payload carries accumulated text so detail re-fetch remains idempotent.
 function emitAgentReasoning(sessionId: string, text: string, final: boolean) {
   if (!text) return;
   emitEvent(sessionId, final ? "agent.reasoning" : "agent.reasoning_delta", { text }, final ? "reasoning_stop" : null);
 }
 
-function emitBuilderStatus(sessionId: string, text: string) {
-  emitAgentReasoning(sessionId, text, false);
-}
+function emitBuilderStatus(sessionId: string, text: string) { emitAgentReasoning(sessionId, text, false); }
 
 function builderToolLabel(name: string) {
   if (name === "draft_agent_config") return "生成 Agent 草稿";
@@ -207,6 +207,10 @@ function builderToolLabel(name: string) {
   if (name === "create_agent") return "创建 Agent 资源";
   if (name === "create_environment") return "创建运行环境";
   return `执行 ${name}`;
+}
+
+function shouldUseLocalBuilderDraft(errorMessage: string) {
+  return /timeout|timed out|aborted/i.test(errorMessage) || isLocalDockerMode();
 }
 
 function emitAgentDraftCard(sessionId: string, prompt: string, draft: AgentConfig) {
@@ -293,7 +297,6 @@ export async function runQuickstartBuilderTurn(sessionId: string, _text: string,
   try {
     const messages = buildBuilderMessages(listSessionEvents(sessionId) as SessionEvent[], context);
     for (let turn = 0; turn < maxBuilderProviderTurns; turn += 1) {
-      // Throttle thinking to avoid hundreds of DB writes on long streams.
       let reasoningBuf = "";
       let lastReasoningFlush = 0;
       emitBuilderStatus(sessionId, turn === 0 ? "正在调用模型生成 Agent 草稿和下一步建议。" : "正在根据工具执行结果继续整理 Builder 回复。");
@@ -309,7 +312,6 @@ export async function runQuickstartBuilderTurn(sessionId: string, _text: string,
           }
         }
       });
-      // Close the thinking block before whatever comes next (message or tool calls).
       emitAgentReasoning(sessionId, reasoningBuf, true);
       if (providerResult.type === "message") {
         emitAgentMessage(sessionId, providerResult.content, providerResult.usage);
@@ -334,20 +336,17 @@ export async function runQuickstartBuilderTurn(sessionId: string, _text: string,
     const errorMessage = error instanceof Error ? error.message : String(error);
     const events = listSessionEvents(sessionId) as SessionEvent[];
     const prompt = latestUserText(events);
-    if (prompt && /timeout|timed out|aborted/i.test(errorMessage) && !latestCard(events, "agent_draft")) {
+    if (prompt && shouldUseLocalBuilderDraft(errorMessage) && !latestCard(events, "agent_draft")) {
       const draft = buildLocalAgentDraft(prompt, context.userId, context.modelConfigId ?? null, context.agentLoopType, context.workspaceId);
-      emitBuilderStatus(sessionId, "模型调用超时，已生成本地 Agent 草稿。");
+      emitBuilderStatus(sessionId, "模型调用不可用，已生成本地 Agent 草稿。");
       emitAgentDraftCard(sessionId, prompt, draft);
-      emitAgentMessage(sessionId, "模型调用超时，OpenMaple 已先生成一个本地草稿。你可以继续修改或直接创建 Agent。", { provider_error: errorMessage });
+      emitAgentMessage(sessionId, "模型调用不可用，OpenMaple 已先生成一个本地草稿。你可以继续修改或直接创建 Agent。", { provider_error: errorMessage });
       updateSessionStatus(sessionId, "idle");
       emitEvent(sessionId, "session.status_idle", { reason: "quickstart_builder.local_draft", provider_error: errorMessage });
       return;
     }
     updateSessionStatus(sessionId, "failed");
-    emitEvent(sessionId, "session.status_failed", {
-      reason: "quickstart_builder_failed",
-      error: errorMessage
-    });
+    emitEvent(sessionId, "session.status_failed", { reason: "quickstart_builder_failed", error: errorMessage });
     throw error;
   }
 }

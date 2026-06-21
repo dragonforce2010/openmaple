@@ -5,7 +5,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=27951 \
-    SERVE_STATIC=true \
+    SERVE_STATIC=false \
     MAPLE_DATA_DIR=/app/.managed-agents
 
 RUN apt-get update \

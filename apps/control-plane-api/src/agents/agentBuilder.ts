@@ -1,6 +1,7 @@
 import { defaultAgentLoop, isAgentLoopType, normalizeAgentLoop } from "../agentLoops";
 import { selectModelForPrompt, type ModelSelection } from "../modelGateway";
 import { callProviderText } from "../provider";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
 import type { AgentConfig, AgentLoopType } from "../types";
 
 // A single draft is one large generation (full agent config). 8s was too tight for
@@ -38,7 +39,7 @@ export async function buildAgentDraft(
   try {
     raw = await callProviderText(messages, { temperature: 0.1, max_tokens: 1400, userId, modelConfigId: selectedModel?.configId, workspaceId, timeoutMs: agentDraftTimeoutMs });
   } catch (error) {
-    if (isProviderTimeout(error)) return fallbackAgentDraft(prompt, selectedModel, loopType, "", error);
+    if (shouldFallbackAgentDraft(error, modelConfigId)) return fallbackAgentDraft(prompt, selectedModel, loopType, "", error);
     throw error;
   }
   try {
@@ -50,6 +51,12 @@ export async function buildAgentDraft(
 
 function isProviderTimeout(error: unknown) {
   return /timeout|timed out|aborted/i.test(error instanceof Error ? error.message : String(error));
+}
+
+function shouldFallbackAgentDraft(error: unknown, explicitModelConfigId?: string | null) {
+  if (isProviderTimeout(error)) return true;
+  if (explicitModelConfigId || !isLocalDockerMode()) return false;
+  return true;
 }
 
 export function buildLocalAgentDraft(

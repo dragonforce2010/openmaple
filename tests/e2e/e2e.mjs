@@ -507,9 +507,14 @@ const testSession = await step("Post-login test session bootstrap", async () => 
   return body;
 });
 
-const defaultModelConfigs = await step("Model gateway seeds four default VolcoEngine configs", async () => {
+const defaultModelConfigs = await step(useE2BSandbox ? "Model gateway seeds four default VolcoEngine configs" : "Local Docker starts without bundled model pool", async () => {
   const listed = await request("/v1/model_configs");
   const expectedModels = ["glm-4-7-251222", "doubao-seed-1-6-flash-250615", "doubao-seed-2-0-lite-260428", "deepseek-v4-flash-260425"];
+  if (!useE2BSandbox) {
+    const bundled = listed.data?.filter((item) => item.base_url === "https://ark.cn-beijing.volces.com/api/v3" && expectedModels.includes(item.model_name)) ?? [];
+    if (bundled.length) throw new Error(`local Docker must not expose bundled VolcoEngine configs: ${JSON.stringify(listed.data)}`);
+    return [];
+  }
   const configs = expectedModels.map((modelName) => listed.data?.find((item) => item.base_url === "https://ark.cn-beijing.volces.com/api/v3" && item.model_name === modelName));
   if (configs.some((config) => !config)) throw new Error(`default VolcoEngine configs missing: ${JSON.stringify(listed.data)}`);
   for (const config of configs) {
@@ -603,7 +608,7 @@ await step("Quickstart builder super-agent creates draft, agent, and environment
     method: "POST",
     body: JSON.stringify({
       workspace_id: workspaceOnboarding.workspace,
-      model_config_id: defaultModelConfigs[0].id,
+      model_config_id: defaultModelConfigs[0]?.id,
       agent_loop_type: "anthropic_claude_code"
     })
   });
@@ -622,7 +627,7 @@ await step("Quickstart builder super-agent creates draft, agent, and environment
     method: "POST",
     body: JSON.stringify({
       text: `Create a customer onboarding analyst agent ${stamp}`,
-      model_config_id: defaultModelConfigs[0].id,
+      model_config_id: defaultModelConfigs[0]?.id,
       agent_loop_type: "anthropic_claude_code"
     })
   });
@@ -696,6 +701,7 @@ await step("Agent draft fails fast when provider config is invalid", async () =>
   if (body.error !== "agent_draft_generation_failed") throw new Error(`unexpected draft error: ${JSON.stringify(body)}`);
   if (body.draft) throw new Error(`broken provider must not return a draft: ${JSON.stringify(body.draft)}`);
   if (elapsedMs > 12_000) throw new Error(`provider failure was too slow: ${elapsedMs}ms`);
+  await requestRaw(`/v1/model_configs/${brokenModel.id}`, { method: "DELETE" });
   return { elapsedMs, error: body.error };
 });
 
@@ -795,19 +801,19 @@ const draft = await step("Natural-language agent draft generation", async () => 
   });
   if (!body.draft?.name || !body.draft?.system) throw new Error("draft missing name/system");
   if (!Array.isArray(body.draft.tools)) throw new Error("draft.tools is not normalized array");
-  if (!body.draft.model?.config_id) throw new Error(`draft did not select a model config: ${JSON.stringify(body.draft.model)}`);
+  if (useE2BSandbox && !body.draft.model?.config_id) throw new Error(`draft did not select a model config: ${JSON.stringify(body.draft.model)}`);
   if (!["anthropic_claude_code", "codex_open_source"].includes(body.draft.agent_loop?.type)) throw new Error(`draft missing agent_loop: ${JSON.stringify(body.draft.agent_loop)}`);
   return { name: body.draft.name, model: body.draft.model, toolCount: body.draft.tools.length, mcpCount: body.draft.mcp_servers?.length ?? 0, draft: body.draft };
 });
 
 const stableModelConfig = defaultModelConfigs.find((config) => config.model === "glm-4-7-251222") ?? defaultModelConfigs[0];
-const runtimeAgentModel = {
+const runtimeAgentModel = stableModelConfig ? {
   provider: stableModelConfig.provider_type || "custom",
   id: stableModelConfig.model,
   name: stableModelConfig.name || stableModelConfig.model,
   config_id: stableModelConfig.id,
   speed: "standard"
-};
+} : { ...(draft.draft.model ?? {}), provider: draft.draft.model?.provider || "openai", id: draft.draft.model?.id || "default", speed: "standard" };
 
 const agent = await step("Create reviewed agent", async () => {
   const body = await request("/v1/agents", {

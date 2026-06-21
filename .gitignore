@@ -2,6 +2,8 @@ node_modules
 dist
 .managed-agents
 .env
+.env.local
+config/local-model.json
 .DS_Store
 __pycache__/
 *.pyc

@@ -132,18 +132,27 @@ export function WorkspaceOnboardingSteps(props: {
           </label>
         </div> : <div className="cred-box"><div className="cred-head"><Icon name="i-server" size={14} /> Local Docker</div><div className="panel-empty">{L("无需云账号。Docker Compose 会挂载本机 Docker daemon，并用 node:22-bookworm 启动运行时容器。", "No cloud account required. Docker Compose mounts the local Docker daemon and starts runtime containers from node:22-bookworm.")}</div></div>}
         <div className="cfg-head"><Icon name="i-gauge" size={16} /> <b>{L("运行时池配置", "Runtime pool")}</b></div>
-        <div className="pool-grid">
-          <label className="form">{L("预热函数数", "Prewarmed functions")}<input className="fld" type="number" min={1} step={1} value={props.desiredSizeInput} onChange={(event) => props.setDesiredSizeInput(event.target.value)} /></label>
-          <label className="form">{L("单函数最小实例", "Min instances per function")}<input className="fld" type="number" min={0} max={MAX_RUNTIME_INSTANCES} step={1} value={props.minInstancesInput} onChange={(event) => props.setMinInstancesInput(boundedIntString(event.target.value, 0, MAX_RUNTIME_INSTANCES))} /></label>
-          <label className="form">{L("单函数最大实例", "Max instances per function")}<input className="fld" type="number" min={1} max={MAX_RUNTIME_INSTANCES} step={1} value={props.maxInstancesInput} onChange={(event) => props.setMaxInstancesInput(boundedIntString(event.target.value, 1, MAX_RUNTIME_INSTANCES))} /></label>
-          <label className="form">{L("单实例并发", "Concurrency per instance")}<input className="fld" type="number" min={1} max={MAX_RUNTIME_CONCURRENCY} step={1} value={props.maxConcurrencyInput} onChange={(event) => props.setMaxConcurrencyInput(boundedIntString(event.target.value, 1, MAX_RUNTIME_CONCURRENCY))} /></label>
-          <label className="form">CPU Milli<input className="fld" type="number" min={250} step={250} value={props.cpuMilliInput} onChange={(event) => props.setCpuMilliInput(event.target.value)} /></label>
-          <label className="form">Memory MB<input className="fld" type="number" min={512} step={128} value={props.memoryMbInput} onChange={(event) => props.setMemoryMbInput(event.target.value)} /></label>
-        </div>
-        <div className="qps-estimate">
-          <div><span>{L("预热容量估算", "Warm capacity estimate")}</span><b>{props.warmQps.toLocaleString()} QPS</b><small>{props.desiredSize} × {props.minInstances} × {props.maxConcurrency}</small></div>
-          <div><span>{L("峰值容量估算", "Peak capacity estimate")}</span><b>{props.peakQps.toLocaleString()} QPS</b><small>{props.desiredSize} × {props.maxInstances} × {props.maxConcurrency}</small></div>
-        </div>
+        {props.runtimeProvider === "local_docker" ? (
+          <>
+            <label className="form">{L("预热 Runtime 数", "Prewarmed runtimes")}<input className="fld" type="number" min={1} step={1} value={props.desiredSizeInput} onChange={(event) => props.setDesiredSizeInput(event.target.value)} /></label>
+            <div className="qps-estimate"><div><span>{L("池化目标", "Pool target")}</span><b>{props.desiredSize}</b><small>{L("本机 Docker runtime member，按需绑定 Session。", "Local Docker runtime members are bound to sessions on demand.")}</small></div></div>
+          </>
+        ) : (
+          <>
+            <div className="pool-grid">
+              <label className="form">{L("预热函数数", "Prewarmed functions")}<input className="fld" type="number" min={1} step={1} value={props.desiredSizeInput} onChange={(event) => props.setDesiredSizeInput(event.target.value)} /></label>
+              <label className="form">{L("单函数最小实例", "Min instances per function")}<input className="fld" type="number" min={0} max={MAX_RUNTIME_INSTANCES} step={1} value={props.minInstancesInput} onChange={(event) => props.setMinInstancesInput(boundedIntString(event.target.value, 0, MAX_RUNTIME_INSTANCES))} /></label>
+              <label className="form">{L("单函数最大实例", "Max instances per function")}<input className="fld" type="number" min={1} max={MAX_RUNTIME_INSTANCES} step={1} value={props.maxInstancesInput} onChange={(event) => props.setMaxInstancesInput(boundedIntString(event.target.value, 1, MAX_RUNTIME_INSTANCES))} /></label>
+              <label className="form">{L("单实例并发", "Concurrency per instance")}<input className="fld" type="number" min={1} max={MAX_RUNTIME_CONCURRENCY} step={1} value={props.maxConcurrencyInput} onChange={(event) => props.setMaxConcurrencyInput(boundedIntString(event.target.value, 1, MAX_RUNTIME_CONCURRENCY))} /></label>
+              <label className="form">CPU Milli<input className="fld" type="number" min={250} step={250} value={props.cpuMilliInput} onChange={(event) => props.setCpuMilliInput(event.target.value)} /></label>
+              <label className="form">Memory MB<input className="fld" type="number" min={512} step={128} value={props.memoryMbInput} onChange={(event) => props.setMemoryMbInput(event.target.value)} /></label>
+            </div>
+            <div className="qps-estimate">
+              <div><span>{L("预热容量估算", "Warm capacity estimate")}</span><b>{props.warmQps.toLocaleString()} QPS</b><small>{props.desiredSize} × {props.minInstances} × {props.maxConcurrency}</small></div>
+              <div><span>{L("峰值容量估算", "Peak capacity estimate")}</span><b>{props.peakQps.toLocaleString()} QPS</b><small>{props.desiredSize} × {props.maxInstances} × {props.maxConcurrency}</small></div>
+            </div>
+          </>
+        )}
       </>
     );
   }

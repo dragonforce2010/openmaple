@@ -1,15 +1,17 @@
 import { MAPLE_AGENT_PURPOSE, createMapleAgentConfig } from "@maple/super-agent";
 import { emitSessionEvent } from "../eventHub";
+import { visibleModelConfigsForCurrentMode } from "../modelGateway";
 import { callProvider, type ChatMessage } from "../provider";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
 import {
   createAgent,
   createEnvironment,
   createSession,
   createSessionEvent,
-  getDefaultModelConfig,
   getSession,
   listAgents,
   listEnvironments,
+  listModelConfigs,
   listSessionEvents,
   listSessions,
   updateSessionStatus
@@ -43,9 +45,10 @@ export function isAskMapleSession(session: unknown) {
 }
 
 function modelFromWorkspace(workspaceId: string) {
-  const config = getDefaultModelConfig(workspaceId) as JsonRecord | null;
+  const configs = visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]);
+  const config = configs.find((modelConfig) => modelConfig.is_default) || configs[0] || null;
   if (!config) {
-    return { provider: "openai", id: process.env.OPENAI_MODEL || process.env.ARK_MODEL || "doubao-seed-1-6-251015", speed: "standard" };
+    return { provider: "openai", id: isLocalDockerMode() ? "local-docker-no-model" : process.env.OPENAI_MODEL || process.env.ARK_MODEL || "doubao-seed-1-6-251015", speed: "standard" };
   }
   return {
     provider: String(config.provider_type || "openai"),
@@ -200,6 +203,21 @@ function askMapleMessages(detail: SessionDetailLike, question: string): ChatMess
   ];
 }
 
+function shouldUseLocalAnswer(error: unknown) {
+  return isLocalDockerMode();
+}
+
+function localAskMapleAnswer(detail: SessionDetailLike, question: string) {
+  const stats = askMapleSessionStats(detail);
+  return [
+    "本地 Docker 模式下模型调用不可用，先返回基于事件日志的确定性摘要。",
+    `问题: ${question}`,
+    `Session 状态: ${String(asRecord(detail.session).status || "unknown")}`,
+    `事件数: ${stats.events}，工具调用: ${stats.tool_calls}，完成: ${stats.completed_tool_calls}，未完成: ${stats.non_completed_tool_calls}`,
+    targetSessionContext(detail)
+  ].join("\n");
+}
+
 const ASK_SUGGESTED_ACTIONS = [
   { id: "summarize", label: "总结上下文", question: "总结这个 session 的上下文和当前状态" },
   { id: "tools", label: "解释工具调用", question: "解释这个 session 里工具调用做了什么" },
@@ -245,6 +263,15 @@ export async function runAskMapleTurn(context: AskMapleContext, detail: SessionD
     emitEvent(askSessionId, "session.status_idle", { reason: "ask_maple.answer_ready", stop_reason: { type: "end_turn" } });
     return { answer, suggested_actions: ASK_SUGGESTED_ACTIONS, stats, ask_session: getSession(askSessionId), events: listSessionEvents(askSessionId) };
   } catch (error) {
+    if (shouldUseLocalAnswer(error)) {
+      const answer = localAskMapleAnswer(detail, question);
+      emitAskReasoning(askSessionId, "模型调用不可用，使用本地 session 事件生成摘要。", true);
+      emitEvent(askSessionId, "ui.card", { card_type: "ask_maple_answer", target_session_id: context.targetSessionId, answer, suggested_actions: ASK_SUGGESTED_ACTIONS, stats }, "ask_maple_answer");
+      emitEvent(askSessionId, "agent.message", { content: [{ type: "text", text: answer }], usage: { provider_error: error instanceof Error ? error.message : String(error), local_fallback: true } }, "message_stop");
+      updateSessionStatus(askSessionId, "idle");
+      emitEvent(askSessionId, "session.status_idle", { reason: "ask_maple.local_answer", stop_reason: { type: "end_turn" } });
+      return { answer, suggested_actions: ASK_SUGGESTED_ACTIONS, stats, ask_session: getSession(askSessionId), events: listSessionEvents(askSessionId) };
+    }
     updateSessionStatus(askSessionId, "failed");
     emitEvent(askSessionId, "session.status_failed", { reason: "ask_maple_failed", error: error instanceof Error ? error.message : String(error) });
     throw error;
