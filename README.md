@@ -31,7 +31,7 @@ Prefer video first?
 
 <a href="https://dragonforce2010.github.io/openmaple/#tour"><img src="assets/openmaple-social-card.png" alt="Watch the 2-minute OpenMaple platform tour"></a>
 
-The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmaple/#tour) plays on the project site and is also available on [YouTube](https://www.youtube.com/watch?v=zYhgkFomZ7M). It is built from the running console and real end-to-end screenshots. The [local Docker walkthrough](https://dragonforce2010.github.io/openmaple/#local-docker-tour) focuses on the one-command setup, onboarding forms, runtime/sandbox pools, and session UI.
+The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmaple/#tour) plays on the project site and is also available on [YouTube](https://www.youtube.com/watch?v=zYhgkFomZ7M). It is built from the running console and real end-to-end screenshots. The [local Docker walkthrough](https://dragonforce2010.github.io/openmaple/#local-docker-tour) focuses on the one-command setup, workspace settings, runtime/sandbox pools, sessions, and quickstart UI.
 
 ## First Proofs
 
@@ -85,17 +85,19 @@ No local Docker setup? Open [GitHub Codespaces](https://codespaces.new/dragonfor
 
 ### Local Docker UI Proof
 
-These screenshots come from the same running local Docker stack used for the current E2E proof: setup script, browser onboarding, workspace settings, local runtime/sandbox pools, and a seeded session timeline.
+These HD screenshots come from the same running local Docker stack used for the current E2E proof: setup script, dashboard, workspace settings, local runtime/sandbox pools, sessions, and quickstart. Each image is captured at `5120x2880` from the real product UI.
 
-| Onboarding workspace | Runtime provider |
+| Setup + smoke | Demo workspace |
 |---|---|
-| <img src="assets/screenshots/openmaple-local-onboarding-workspace.png" alt="OpenMaple local Docker onboarding workspace form screenshot"> | <img src="assets/screenshots/openmaple-local-onboarding-runtime.png" alt="OpenMaple local Docker onboarding runtime provider screenshot"> |
-| Sandbox provider | Empty model pool |
-| <img src="assets/screenshots/openmaple-local-onboarding-sandbox.png" alt="OpenMaple local Docker onboarding sandbox provider screenshot"> | <img src="assets/screenshots/openmaple-local-onboarding-models.png" alt="OpenMaple local Docker onboarding model pool screenshot"> |
-| Runtime pool members | Sandbox pool members |
-| <img src="assets/screenshots/openmaple-local-runtime-pool-drawer.png" alt="OpenMaple local Docker runtime pool member drawer screenshot"> | <img src="assets/screenshots/openmaple-local-sandbox-pool-drawer.png" alt="OpenMaple local Docker sandbox pool member drawer screenshot"> |
-| Session timeline | Model settings |
-| <img src="assets/screenshots/openmaple-local-session-dashboard.png" alt="OpenMaple local Docker session transcript and event timeline screenshot"> | <img src="assets/screenshots/openmaple-local-settings-models.png" alt="OpenMaple local Docker model settings screenshot"> |
+| <img src="assets/screenshots/openmaple-local-setup-terminal.png" alt="OpenMaple local Docker setup terminal output showing one command, smoke checks, and local login URL"> | <img src="assets/screenshots/openmaple-local-dashboard.png" alt="OpenMaple local Docker demo workspace dashboard screenshot"> |
+| Settings overview | Runtime provider |
+| <img src="assets/screenshots/openmaple-local-settings-overview.png" alt="OpenMaple local Docker workspace settings overview screenshot"> | <img src="assets/screenshots/openmaple-local-settings-runtime.png" alt="OpenMaple local Docker runtime provider settings screenshot"> |
+| Runtime pool members | Sandbox provider |
+| <img src="assets/screenshots/openmaple-local-runtime-pool-drawer.png" alt="OpenMaple local Docker runtime pool member drawer screenshot"> | <img src="assets/screenshots/openmaple-local-settings-sandbox.png" alt="OpenMaple local Docker sandbox provider settings screenshot"> |
+| Sandbox pool members | Sessions list |
+| <img src="assets/screenshots/openmaple-local-sandbox-pool-drawer.png" alt="OpenMaple local Docker sandbox pool member drawer screenshot"> | <img src="assets/screenshots/openmaple-local-sessions-list.png" alt="OpenMaple local Docker sessions list screenshot"> |
+| Session timeline | Quickstart |
+| <img src="assets/screenshots/openmaple-local-session-dashboard.png" alt="OpenMaple local Docker session transcript and event timeline screenshot"> | <img src="assets/screenshots/openmaple-local-quickstart.png" alt="OpenMaple local Docker quickstart builder screenshot"> |
 
 ## Try the SDK Path
 

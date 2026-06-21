@@ -8,6 +8,8 @@ import { chromium } from "playwright";
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const videoDir = join(repoRoot, "assets/videos");
 const frameDir = join(repoRoot, ".tmp-local-docker-tour-frames");
+const width = 2560;
+const height = 1440;
 mkdirSync(videoDir, { recursive: true });
 mkdirSync(frameDir, { recursive: true });
 
@@ -18,51 +20,56 @@ const slides = [
     "The script prints local login and health URLs."
   ],
   [
-    "assets/screenshots/openmaple-local-onboarding-tenant.png",
-    "Local dev login opens tenant setup in the browser.",
-    "The form is filled from the running local Docker stack."
+    "assets/screenshots/openmaple-local-dashboard.png",
+    "Local demo data opens directly in the console.",
+    "A seeded workspace shows agents sessions and targets from the same stack."
   ],
   [
-    "assets/screenshots/openmaple-local-onboarding-workspace.png",
-    "Create the workspace and slug without cloud credentials.",
-    "The console validates the local route before continuing."
+    "assets/screenshots/openmaple-local-settings-overview.png",
+    "Workspace settings show the local provider contract.",
+    "Runtime sandbox and model configuration stay visible in one drawer."
   ],
   [
-    "assets/screenshots/openmaple-local-onboarding-runtime.png",
-    "Runtime provider defaults to Local Docker.",
+    "assets/screenshots/openmaple-local-settings-runtime.png",
+    "Runtime provider is Local Docker.",
     "Docker Compose mounts the local daemon and starts runtime containers."
   ],
   [
-    "assets/screenshots/openmaple-local-onboarding-sandbox.png",
-    "Sandbox provider defaults to Local Docker.",
-    "Tool execution uses local container sandboxes with a small standby pool."
-  ],
-  [
-    "assets/screenshots/openmaple-local-onboarding-models.png",
-    "Model pool can start empty.",
-    "Add model keys only when running real model backed loops."
-  ],
-  [
     "assets/screenshots/openmaple-local-runtime-pool-drawer.png",
-    "Runtime pool members are visible in workspace settings.",
-    "Prewarmed local Docker members show active session counts."
+    "Runtime pool members are inspectable.",
+    "Active local Docker members show image workspace session count and labels."
+  ],
+  [
+    "assets/screenshots/openmaple-local-settings-sandbox.png",
+    "Sandbox provider is Local Docker too.",
+    "The local path does not require E2B or veFaaS credentials."
   ],
   [
     "assets/screenshots/openmaple-local-sandbox-pool-drawer.png",
-    "Sandbox pool members are visible too.",
-    "Standby local Docker sandboxes show image status and claim fields."
+    "Sandbox pool members expose container metadata.",
+    "Standby members show docker member id image claim fields and TTL."
+  ],
+  [
+    "assets/screenshots/openmaple-local-sessions-list.png",
+    "Sessions stay attached to the local workspace.",
+    "The list view keeps agent run state and session identifiers visible."
   ],
   [
     "assets/screenshots/openmaple-local-session-dashboard.png",
     "Sessions show transcript events and local Docker metadata.",
     "The same local stack exposes UI API SDK and CLI paths."
+  ],
+  [
+    "assets/screenshots/openmaple-local-quickstart.png",
+    "Quickstart remains available after local setup.",
+    "Users can move from trial stack to agent creation without switching systems."
   ]
 ];
 
 const browser = await launchBrowser();
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   for (let index = 0; index < slides.length; index += 1) {
     const [image, title, subtitle] = slides[index];
     const imageUrl = `data:image/png;base64,${readFileSync(join(repoRoot, image)).toString("base64")}`;
@@ -73,16 +80,16 @@ try {
           <style>
             * { box-sizing: border-box; }
             body {
-              width: 1920px;
-              height: 1080px;
+              width: ${width}px;
+              height: ${height}px;
               margin: 0;
               overflow: hidden;
               background: #f4efe6;
               font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             }
             .stage {
-              width: 1920px;
-              height: 900px;
+              width: ${width}px;
+              height: 1190px;
               display: grid;
               place-items: center;
               padding: 34px 62px 28px;
@@ -97,8 +104,8 @@ try {
               background: #fffaf1;
             }
             .caption {
-              width: 1920px;
-              height: 180px;
+              width: ${width}px;
+              height: 250px;
               display: grid;
               align-content: center;
               gap: 12px;
@@ -106,8 +113,8 @@ try {
               color: #fffaf1;
               background: #1c1d19;
             }
-            h1 { margin: 0; font-size: 44px; line-height: 1.1; letter-spacing: 0; }
-            p { margin: 0; color: #c9c2b7; font-size: 28px; line-height: 1.28; }
+            h1 { margin: 0; font-size: 56px; line-height: 1.1; letter-spacing: 0; }
+            p { margin: 0; color: #c9c2b7; font-size: 34px; line-height: 1.28; }
           </style>
         </head>
         <body>
@@ -130,7 +137,7 @@ for (let index = 0; index < slides.length; index += 1) {
   args.push("-loop", "1", "-t", "4", "-i", join(frameDir, `frame-${String(index).padStart(2, "0")}.png`));
 }
 
-const filters = slides.map((_, index) => `[${index}:v]scale=1920:1080,setsar=1[v${index}]`);
+const filters = slides.map((_, index) => `[${index}:v]scale=${width}:${height},setsar=1[v${index}]`);
 filters.push(`${slides.map((_, index) => `[v${index}]`).join("")}concat=n=${slides.length}:v=1:a=0,format=yuv420p[v]`);
 
 args.push(
@@ -140,6 +147,22 @@ args.push(
   "[v]",
   "-r",
   "30",
+  "-c:v",
+  "libx264",
+  "-preset",
+  "slow",
+  "-b:v",
+  "12000k",
+  "-minrate",
+  "12000k",
+  "-maxrate",
+  "12000k",
+  "-bufsize",
+  "24000k",
+  "-x264-params",
+  "nal-hrd=cbr:force-cfr=1",
+  "-pix_fmt",
+  "yuv420p",
   "-movflags",
   "+faststart",
   join(videoDir, "openmaple-local-docker-tour.mp4")
