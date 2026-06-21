@@ -106,20 +106,22 @@ const html = `<!doctype html>
       }
       .pills {
         display: flex;
+        flex-wrap: wrap;
         gap: 10px;
         margin-top: 24px;
+        max-width: 440px;
       }
       .pill {
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        height: 44px;
-        padding: 0 16px;
+        height: 40px;
+        padding: 0 14px;
         border: 1px solid var(--line-strong);
         border-radius: 9px;
         background: var(--panel);
         color: var(--ink);
-        font-size: 21px;
+        font-size: 19px;
         line-height: 1;
         font-weight: 850;
         white-space: nowrap;
@@ -210,11 +212,11 @@ const html = `<!doctype html>
       </div>
       <section class="main">
         <div>
-          <p class="headline">Managed agents without cloud lock-in</p>
-          <p class="copy">Open-source control plane for sessions, sandboxes, runtime pools, vault-backed tools, SDK, CLI, and provider adapters.</p>
+          <p class="headline">Self-contained local Docker managed agents</p>
+          <p class="copy">Docker Compose starts the console, API, MySQL, local Docker runtime pools, and sandbox pools.</p>
           <div class="pills" aria-label="OpenMaple surfaces">
-            <span class="pill"><span class="dot"></span>Console</span>
-            <span class="pill"><span class="dot"></span>REST API</span>
+            <span class="pill"><span class="dot"></span>Compose</span>
+            <span class="pill"><span class="dot"></span>Local Docker</span>
             <span class="pill"><span class="dot"></span>SDK</span>
             <span class="pill"><span class="dot"></span>CLI</span>
           </div>
@@ -227,7 +229,7 @@ const html = `<!doctype html>
       <footer class="footer">
         <div>
           <div class="url">github.com/dragonforce2010/openmaple</div>
-          <div class="tagline">Self-hostable managed-agent platform</div>
+          <div class="tagline">docker compose up --build</div>
         </div>
         <div class="badge">Public-safe capture from the running product</div>
       </footer>
@@ -236,7 +238,18 @@ const html = `<!doctype html>
 </html>`;
 
 await mkdir(dirname(outputPath), { recursive: true });
-const browser = await chromium.launch();
+async function launchBrowser() {
+  try {
+    return await chromium.launch();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("Executable doesn't exist")) {
+      return chromium.launch({ channel: "chrome" });
+    }
+    throw error;
+  }
+}
+
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
 await page.setContent(html, { waitUntil: "load" });
 await page.screenshot({ path: outputPath, type: "png" });

@@ -27,14 +27,14 @@ Prefer video first?
 
 <a href="https://dragonforce2010.github.io/openmaple/#tour"><img src="assets/openmaple-social-card.png" alt="Watch the 2-minute OpenMaple platform tour"></a>
 
-The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmaple/#tour) plays on the project site and is built from the running console and real end-to-end screenshots.
+The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmaple/#tour) plays on the project site and is also available on [YouTube](https://www.youtube.com/watch?v=zYhgkFomZ7M). It is built from the running console and real end-to-end screenshots.
 
 ## First Proofs
 
 | Need to verify | Start here |
 |---|---|
 | It is a real product surface, not only architecture copy | [Watch the 2-minute product tour](https://dragonforce2010.github.io/openmaple/#tour) and inspect [real console screenshots](assets/screenshots/). |
-| The control plane can start without cloud credentials | `docker compose up --build`, then run `npm run smoke:local` and open `http://127.0.0.1:27951/`. |
+| A local managed-agent path can start without cloud credentials | `docker compose up --build`, then run `npm run smoke:local` and open `http://127.0.0.1:27951/`. The default Compose path uses `local_docker` for both runtime and sandbox pools. |
 | It has a coherent managed-agent model | Follow the [30-minute evaluation guide](EVALUATION.md). |
 | It keeps provider claims honest | Check [provider readiness](PROVIDER_READINESS.md) before assuming an adapter is production-ready. |
 | It exposes UI, API, SDK, and CLI paths | Check the [SDK](packages/sdk/), [CLI](packages/cli/), and API surface below. |
@@ -44,6 +44,7 @@ The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmap
 - **For platform teams**: build a self-hostable managed-agent platform instead of wiring one-off agent demos.
 - **For enterprise IT**: keep cloud identity, runtime, sandbox, storage, and model access behind replaceable provider adapters.
 - **For engineering teams**: start from the web console, automate through REST, then package repeatable workflows with `maple-agent-sdk` and `maple-agent-cli`.
+- **For local evaluation**: run the console, API, MySQL, local Docker runtime pool, and local Docker sandbox pool with Docker Compose before connecting cloud credentials.
 - **For long-running agents**: keep session state outside the model context window and isolate tool execution from credentials.
 - **For contributors**: the public repo includes the console, API, SDK, CLI, provider contracts, and deployable runtime adapters.
 
@@ -242,7 +243,7 @@ curl http://127.0.0.1:27951/health
 curl http://127.0.0.1:27951/v1/auth/bootstrap
 ```
 
-The compose stack starts the OpenMaple API/web console and a local MySQL 8 database. It uses `MAPLE_MYSQL_PASSWORD=maple` when no password is set, keeps database files in the `mysql_data` volume, and enables local dev login for the demo container.
+The compose stack starts the OpenMaple API/web console, local MySQL 8, local dev login, and default `local_docker` runtime/sandbox pools. It uses `MAPLE_MYSQL_PASSWORD=maple` when no password is set, keeps database files in the `mysql_data` volume, hides OAuth/SSO providers in local Docker mode, and only needs model keys when you run real model-backed agent loops.
 
 ## CLI
 

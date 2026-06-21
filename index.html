@@ -4,10 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OpenMaple · Managed Agents without Cloud Lock-in</title>
-    <meta name="description" content="OpenMaple is an open-source managed-agent control plane: sessions, sandboxes, runtimes, vault-backed tools, SDK, CLI, provider adapters, and real console workflows." />
+    <meta name="description" content="OpenMaple is an open-source managed-agent control plane with self-contained local Docker runtime and sandbox evaluation." />
     <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
     <meta property="og:title" content="OpenMaple · Managed Agents without Cloud Lock-in" />
-    <meta property="og:description" content="Open-source managed-agent control plane for sessions, sandboxes, runtime pools, vault-backed tools, SDKs, CLIs, and audit logs." />
+    <meta property="og:description" content="Run the console, API, MySQL, local Docker runtime, and local Docker sandbox pools with Docker Compose." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://dragonforce2010.github.io/openmaple/" />
     <meta property="og:image" content="https://dragonforce2010.github.io/openmaple/assets/openmaple-social-card.png" />
@@ -19,7 +19,7 @@
     <meta property="og:video:type" content="video/mp4" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="OpenMaple · Managed Agents without Cloud Lock-in" />
-    <meta name="twitter:description" content="Open-source managed-agent control plane without cloud lock-in." />
+    <meta name="twitter:description" content="Self-contained local Docker managed-agent evaluation, then provider adapters for cloud runtime and sandbox paths." />
     <meta name="twitter:image" content="https://dragonforce2010.github.io/openmaple/assets/openmaple-social-card.png" />
     <meta name="twitter:image:alt" content="OpenMaple managed-agent control plane social preview with real console screenshot" />
     <link rel="canonical" href="https://dragonforce2010.github.io/openmaple/" />
@@ -31,7 +31,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "OpenMaple",
-        "description": "OpenMaple is an open-source managed-agent control plane for sessions, sandboxes, runtime pools, vault-backed tools, SDKs, CLIs, provider adapters, and audit logs.",
+        "description": "OpenMaple is an open-source managed-agent control plane with self-contained local Docker runtime and sandbox evaluation.",
         "codeRepository": "https://github.com/dragonforce2010/openmaple",
         "url": "https://dragonforce2010.github.io/openmaple/",
         "license": "https://github.com/dragonforce2010/openmaple/blob/main/LICENSE",
@@ -534,7 +534,7 @@
           <h1>OpenMaple</h1>
           <div class="hero-grid">
             <div>
-              <p class="lead"><strong>An open-source control plane for long-running agents.</strong> OpenMaple turns agent prototypes into sessions, sandboxes, runtime pools, vault-backed tools, event logs, SDK calls, and CLI workflows you can run on your own cloud.</p>
+              <p class="lead"><strong>An open-source control plane for long-running agents.</strong> OpenMaple turns agent prototypes into sessions, sandboxes, runtime pools, vault-backed tools, event logs, SDK calls, and CLI workflows you can start locally with Docker and later run on your own cloud.</p>
               <div class="actions">
                 <a class="btn primary" href="#quickstart">Run locally</a>
                 <a class="btn" href="#tour">Watch tour</a>
@@ -558,7 +558,7 @@
           <div class="proof-strip">
             <div class="proof-cell"><b>Console + API</b><span>React console and Express control plane live in the same open repo.</span></div>
             <div class="proof-cell"><b>SDK + CLI</b><span>Programmatic entry points are packaged as `maple-agent-sdk` and `maple-agent-cli`.</span></div>
-            <div class="proof-cell"><b>Provider adapters</b><span>Runtime, sandbox, storage, and model layers stay replaceable.</span></div>
+            <div class="proof-cell"><b>Provider adapters</b><span>Start with local Docker runtime/sandbox pools, then replace providers by policy.</span></div>
           </div>
         </div>
       </section>
@@ -566,6 +566,7 @@
         <div class="video-proof-head">
           <h2>Watch the real product tour.</h2>
           <p>A 2-minute walkthrough built from the running console: agent creation, cited sandbox sessions, vaults, CLI, SDK, skills, deployments, and observability.</p>
+          <div class="actions"><a class="btn" href="https://www.youtube.com/watch?v=zYhgkFomZ7M">Watch on YouTube</a></div>
         </div>
         <video class="product-video" controls preload="metadata" poster="./assets/screenshots/openmaple-quickstart.png">
           <source src="./assets/videos/openmaple-platform-tour.mp4" type="video/mp4" />
@@ -574,8 +575,8 @@
       </section>
       <section id="quickstart" class="wrap quickstart">
         <div class="quickstart-copy">
-          <h2>Run the control plane locally.</h2>
-          <p>OpenMaple ships a self-contained Docker Compose path: app, console, API, local MySQL, and dev login. Model and sandbox provider keys are only needed when you run real agent loops.</p>
+          <h2>Run managed agents locally.</h2>
+          <p>OpenMaple ships a self-contained Docker Compose path: app, console, API, local MySQL, dev login, local Docker runtime pools, and local Docker sandbox pools. E2B and veFaaS keys are not needed for the default local path; model keys are only needed for real model-backed loops.</p>
           <div class="actions">
             <a class="btn primary" href="https://github.com/dragonforce2010/openmaple#run-it-locally">Open README</a>
             <a class="btn" href="https://github.com/dragonforce2010/openmaple/blob/main/EVALUATION.md">Evaluation guide</a>
@@ -640,8 +641,8 @@ curl $BASE/v1/auth/bootstrap</code></pre>
         </div>
         <div class="planes">
           <article class="plane"><div><small>01</small><h3>Control Plane</h3><p>Workspace truth, agents, sessions, vaults, model configs, members, API keys, and audit-ready event records.</p></div><ul><li>Tenant-scoped access</li><li>Workspace API keys</li><li>Session event timeline</li></ul></article>
-          <article class="plane"><div><small>02</small><h3>Runtime Plane</h3><p>Agent loops run behind provider adapters: veFaaS today, AWS Lambda / Alibaba FC / local runners tomorrow.</p></div><ul><li>Runtime pools</li><li>Background provisioning</li><li>Loop-level health</li></ul></article>
-          <article class="plane"><div><small>03</small><h3>Sandbox Plane</h3><p>Tool execution stays isolated from control data. Swap E2B, veFaaS Sandbox, Vercel, or Docker without rewriting agents.</p></div><ul><li>Tool calls</li><li>Artifacts</li><li>Credential references</li></ul></article>
+          <article class="plane"><div><small>02</small><h3>Runtime Plane</h3><p>Agent loops run behind provider adapters: local Docker for self-contained evaluation, veFaaS for cloud deployment, and Lambda / FC-style paths as provider work expands.</p></div><ul><li>Runtime pools</li><li>Background provisioning</li><li>Loop-level health</li></ul></article>
+          <article class="plane"><div><small>03</small><h3>Sandbox Plane</h3><p>Tool execution stays isolated from control data. Use local Docker by default, or swap to E2B, veFaaS Sandbox, Vercel, and future providers by policy.</p></div><ul><li>Tool calls</li><li>Artifacts</li><li>Credential references</li></ul></article>
         </div>
       </section>
 
@@ -687,16 +688,16 @@ curl $BASE/v1/auth/bootstrap</code></pre>
   auth: aksk | oidc | role
 
 runtimeProvider:
-  type: vefaas | fc | lambda | local
+  type: local_docker | vefaas | fc | lambda
 
 sandboxProvider:
-  type: vefaas_sandbox | e2b | vercel | docker
+  type: local_docker | e2b | vefaas_sandbox | vercel
 
 storageProvider:
   type: tos | oss | s3 | gcs</code></pre>
           <div class="provider-grid">
-            <div class="provider"><b>Runtime portability</b><p>Move agent loops between veFaaS, Alibaba FC, AWS Lambda, or local development.</p></div>
-            <div class="provider"><b>Sandbox portability</b><p>Route tool execution to E2B, veFaaS Sandbox, Vercel, or Docker by policy.</p></div>
+            <div class="provider"><b>Runtime portability</b><p>Start with local Docker, then move agent loops to veFaaS, Alibaba FC, AWS Lambda, or other provider adapters.</p></div>
+            <div class="provider"><b>Sandbox portability</b><p>Route tool execution to local Docker, E2B, veFaaS Sandbox, or Vercel by policy.</p></div>
             <div class="provider"><b>Storage portability</b><p>Use TOS, OSS, S3, or GCS behind one artifact and file contract.</p></div>
             <div class="provider"><b>Loop portability</b><p>Run Claude Code and Codex chains under the same session event model.</p></div>
           </div>
@@ -705,7 +706,7 @@ storageProvider:
 
       <section class="wrap section">
         <div class="cta">
-          <div><h2>Ship a managed-agent path today.</h2><p>Start local, connect a runtime provider, and run a real session through the console, SDK, or CLI. If this is useful to platform teams, pass the repo to them.</p></div>
+          <div><h2>Ship a managed-agent path today.</h2><p>Start with Docker Compose, inspect the local Docker runtime and sandbox pools, then connect cloud providers when the evaluation needs them. If this is useful to platform teams, pass the repo to them.</p></div>
           <div class="cta-actions">
             <div class="actions">
               <a class="btn primary" href="#quickstart">Run locally</a>
@@ -715,9 +716,9 @@ storageProvider:
             </div>
             <div class="share-row" aria-label="Share OpenMaple">
               <span>Share:</span>
-              <a href="https://twitter.com/intent/tweet?text=OpenMaple%20-%20open-source%20managed-agent%20control%20plane%20without%20cloud%20lock-in%0A%0Ahttps%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple">X</a>
-              <a href="https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple&t=OpenMaple%20-%20open-source%20managed-agent%20control%20plane%20without%20cloud%20lock-in">HN</a>
-              <a href="https://www.reddit.com/submit?url=https%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple&title=OpenMaple%20-%20open-source%20managed-agent%20control%20plane%20without%20cloud%20lock-in">Reddit</a>
+              <a href="https://twitter.com/intent/tweet?text=OpenMaple%20-%20open-source%20managed%20agents%20with%20self-contained%20local%20Docker%20runtime%20and%20sandbox%20pools%0A%0Ahttps%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple">X</a>
+              <a href="https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple&t=OpenMaple%20-%20open-source%20managed%20agents%20with%20local%20Docker%20runtime%20and%20sandbox%20pools">HN</a>
+              <a href="https://www.reddit.com/submit?url=https%3A%2F%2Fgithub.com%2Fdragonforce2010%2Fopenmaple&title=OpenMaple%20-%20open-source%20managed%20agents%20with%20local%20Docker%20runtime%20and%20sandbox%20pools">Reddit</a>
             </div>
           </div>
         </div>
