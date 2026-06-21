@@ -149,7 +149,7 @@ export function useWorkspaceActions(input: {
     }
   }
 
-  async function createWorkspaceApiKey(displayName = `Workspace integration ${input.workspaceKeys.length + 1}`) {
+  async function createWorkspaceApiKey(displayName = `Workspace integration ${input.workspaceKeys.length + 1}`, options?: { stayOnView?: boolean }) {
     const workspaceId = input.selectedWorkspaceId || input.selectedWorkspace?.id || "";
     if (!workspaceId) throw new Error(input.L("没有可用的工作区。", "No workspace is selected."));
     const trimmedName = displayName.trim();
@@ -160,8 +160,12 @@ export function useWorkspaceActions(input: {
     });
     input.setIssuedWorkspaceApiKey(key.key ?? "");
     input.toast(input.L("Workspace API key 已创建", "Workspace API key issued"), "ok");
-    input.setView("api_keys");
-    void input.refresh(workspaceId).catch((reason) => input.setError(errorMessage(reason)));
+    if (!options?.stayOnView) input.setView("api_keys");
+    try {
+      await input.refresh(workspaceId);
+    } catch (reason) {
+      input.setError(errorMessage(reason));
+    }
   }
 
   async function renameWorkspaceApiKey(key: WorkspaceApiKey, displayName: string) {

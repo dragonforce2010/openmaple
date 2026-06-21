@@ -6,28 +6,41 @@ import { Icon } from "../../ui";
 type LFn = (zh: string, en: string) => string;
 
 export function RuntimePoolDetails({ pool, L, summaryOnly, onOpenMembers }: { pool: RuntimePool; L: LFn; summaryOnly?: boolean; onOpenMembers?: (status?: string) => void }) {
+  const localDocker = pool.provider === "local_docker";
   const minInstances = pool.min_instances_per_function ?? 0;
   const warmQps = pool.desired_size * minInstances * pool.max_concurrency_per_instance;
   const peakQps = pool.desired_size * pool.max_instances_per_function * pool.max_concurrency_per_instance;
   const memberTotal = pool.member_total ?? pool.members.length;
   const activeMembers = pool.member_status_counts?.active ?? pool.members.filter((member) => member.status === "active").length;
+  const image = localRuntimeImage(pool);
   return (
     <div className="runtime-pool-detail">
       <div className="runtime-pool-card">
         <div className="runtime-pool-head">
           <span className="runtime-pool-provider">
-            <Icon name="i-cloud" size={15} />
+            <Icon name={localDocker ? "i-server" : "i-cloud"} size={15} />
             <b>{providerLabel(pool.provider)}</b>
             <code className="mono">{shortText(pool.id, 18)}</code>
           </span>
           <b className={`status ${statusClass(pool.status)}`}>{pool.status}</b>
         </div>
         <div className="runtime-stat-grid">
-          <CompactMetric label={L("函数容量", "Functions")} value={`${pool.desired_size}`} hint={`${minInstances}-${pool.max_instances_per_function} ${L("实例/函数", "inst/function")}`} />
-          <CompactMetric label={L("并发", "Concurrency")} value={`${pool.max_concurrency_per_instance}`} hint={L("每实例", "per instance")} />
-          <CompactMetric label={L("资源", "Resources")} value={`${pool.cpu_milli}m`} hint={`${pool.memory_mb} MB`} />
-          <CompactMetric label="QPS" value={`${warmQps.toLocaleString()} / ${peakQps.toLocaleString()}`} hint={L("预热 / 峰值", "warm / peak")} />
-          <CompactMetric label={L("函数成员", "Members")} value={memberTotal} hint={`${activeMembers} active`} onClick={onOpenMembers ? () => onOpenMembers() : undefined} />
+          {localDocker ? (
+            <>
+              <CompactMetric label={L("预热 Runtime", "Prewarmed runtimes")} value={`${pool.desired_size}`} hint={L("本机 Docker member", "local Docker members")} />
+              <CompactMetric label={L("活跃成员", "Active members")} value={activeMembers} hint={`${memberTotal} total`} onClick={onOpenMembers ? () => onOpenMembers("active") : undefined} />
+              <CompactMetric label="Image" value={shortText(image, 22)} hint={L("容器镜像", "container image")} />
+              <CompactMetric label={L("工作目录", "Workspace")} value="/workspace" hint={L("按 Session 挂载", "mounted per session")} />
+            </>
+          ) : (
+            <>
+              <CompactMetric label={L("函数容量", "Functions")} value={`${pool.desired_size}`} hint={`${minInstances}-${pool.max_instances_per_function} ${L("实例/函数", "inst/function")}`} />
+              <CompactMetric label={L("并发", "Concurrency")} value={`${pool.max_concurrency_per_instance}`} hint={L("每实例", "per instance")} />
+              <CompactMetric label={L("资源", "Resources")} value={`${pool.cpu_milli}m`} hint={`${pool.memory_mb} MB`} />
+              <CompactMetric label="QPS" value={`${warmQps.toLocaleString()} / ${peakQps.toLocaleString()}`} hint={L("预热 / 峰值", "warm / peak")} />
+              <CompactMetric label={L("函数成员", "Members")} value={memberTotal} hint={`${activeMembers} active`} onClick={onOpenMembers ? () => onOpenMembers() : undefined} />
+            </>
+          )}
         </div>
         {pool.members.length ? (
           <div className="runtime-member-chips compact">
@@ -59,12 +72,18 @@ export function RuntimePoolDetails({ pool, L, summaryOnly, onOpenMembers }: { po
 
 export function SandboxPoolDetails({ pool, L, summaryOnly, onOpenMembers }: { pool: SandboxPool | null; L: LFn; summaryOnly?: boolean; onOpenMembers?: (status?: string) => void }) {
   if (!pool) return <div className="panel-empty">{L("暂无沙箱池信息。", "No sandbox pool information yet.")}</div>;
+  const localDocker = pool.provider === "local_docker";
+  const standbyMembers = pool.member_status_counts?.standby ?? pool.members.filter((member) => member.status === "standby").length;
+  const claimedMembers = pool.member_status_counts?.claimed ?? pool.members.filter((member) => member.status === "claimed").length;
+  const image = localSandboxImage(pool);
   return (
     <div className="sandbox-pool-detail">
       <div className="tile-grid c3 runtime-tiles">
-        <Metric label="Provider" value={pool.provider} hint="sandbox pool" />
-        <Metric label={L("目标 standby", "Desired standby")} value={pool.desired_size} hint={L("个沙箱", "sandboxes")} onClick={() => onOpenMembers?.("standby")} />
+        <Metric label="Provider" value={providerLabel(pool.provider)} hint={localDocker ? "local Docker sandbox pool" : "sandbox pool"} />
+        <Metric label={L("目标 standby", "Desired standby")} value={pool.desired_size} hint={localDocker ? L("本地 Docker member", "local Docker members") : L("个沙箱", "sandboxes")} onClick={() => onOpenMembers?.("standby")} />
         <Metric label="TTL" value={`${Math.round(pool.standby_ttl_ms / 60000)}m`} hint={L("待命过期", "standby expiry")} />
+        {localDocker ? <Metric label="Image" value={shortText(image, 24)} hint={L("领取时启动容器", "container starts on claim")} /> : null}
+        {localDocker ? <Metric label="Claimed" value={claimedMembers} hint={`${standbyMembers} standby`} onClick={() => onOpenMembers?.("claimed")} /> : null}
       </div>
       {!summaryOnly ? (
         <>
@@ -80,6 +99,23 @@ export function SandboxPoolDetails({ pool, L, summaryOnly, onOpenMembers }: { po
 
 export function RuntimeMemberCard({ member, L }: { member: RuntimePoolMember; L: LFn }) {
   const config = record(member.config);
+  if (member.provider === "local_docker" || stringValue(config.provider) === "local_docker") {
+    return (
+      <article className="runtime-member-card">
+        <div className="runtime-member-head">
+          <span><Icon name="i-server" size={14} /> {member.id}</span>
+          <b className={`status ${member.status}`}>{member.status}</b>
+        </div>
+        <DetailRow label="provider" value="local_docker" />
+        <DetailRow label="image" value={stringValue(config.image) || "node:22-bookworm"} />
+        <DetailRow label={L("工作目录", "Workspace path")} value={stringValue(config.workspace_path) || "/workspace"} />
+        <DetailRow label={L("活跃会话", "Active sessions")} value={member.active_session_count} />
+        <DetailRow label={L("权重", "Weight")} value={member.weight} />
+        <DetailRow label={L("区域", "Region")} value={member.region || "local"} />
+        <pre className="runtime-config-json">{JSON.stringify(config, null, 2)}</pre>
+      </article>
+    );
+  }
   const consoleHref = vefaasFunctionConsoleHref(member);
   return (
     <article className="runtime-member-card">
@@ -102,6 +138,7 @@ export function RuntimeMemberCard({ member, L }: { member: RuntimePoolMember; L:
 
 export function SandboxMemberCard({ member, L, highlightSessionId }: { member: SandboxPool["members"][number]; L: LFn; highlightSessionId?: string }) {
   const config = record(member.config);
+  const localDocker = member.provider === "local_docker" || stringValue(config.provider) === "local_docker";
   const functionId = stringValue(config.function_id ?? config.cloud_function_id);
   const gatewayUrl = stringValue(config.gateway_url ?? config.invoke_url);
   const mine = Boolean(highlightSessionId) && member.claimed_session_id === highlightSessionId;
@@ -111,9 +148,9 @@ export function SandboxMemberCard({ member, L, highlightSessionId }: { member: S
         <span><Icon name="i-server" size={14} /> {member.sandbox_id || member.id}{mine ? <em className="member-mine">{L("本会话", "This session")}</em> : null}</span>
         <b className={`status ${member.status}`}>{member.status}</b>
       </div>
-      <DetailRow label="sandbox_id" value={member.sandbox_id || "-"} />
-      <DetailRow label="function_id" value={functionId || "-"} />
-      <DetailRow label="gateway_url" value={gatewayUrl ? <ExternalLink href={gatewayUrl}>{shortText(gatewayUrl, 72)}</ExternalLink> : "-"} />
+      <DetailRow label={localDocker ? "docker_member_id" : "sandbox_id"} value={member.sandbox_id || "-"} />
+      {localDocker ? <DetailRow label="image" value={stringValue(config.image) || "node:22-bookworm"} /> : <DetailRow label="function_id" value={functionId || "-"} />}
+      {localDocker ? <DetailRow label="container_name" value={stringValue(config.container_name) || "-"} /> : <DetailRow label="gateway_url" value={gatewayUrl ? <ExternalLink href={gatewayUrl}>{shortText(gatewayUrl, 72)}</ExternalLink> : "-"} />}
       <DetailRow label="claimed_session_id" value={member.claimed_session_id || "-"} />
       <DetailRow label="claimed_agent_id" value={member.claimed_agent_id || "-"} />
       <DetailRow label={L("过期时间", "Expires")} value={member.expires_at || "-"} />
@@ -146,10 +183,11 @@ function CompactMetric({ label, value, hint, onClick }: { label: string; value: 
 }
 
 function MemberChip({ member, L }: { member: RuntimePoolMember; L: LFn }) {
+  const localDocker = member.provider === "local_docker" || stringValue(record(member.config).provider) === "local_docker";
   return (
     <span className={`chip runtime ${statusClass(member.status)}`}>
-      <Icon name="i-cloud" size={12} />
-      <b>{shortText(member.cloud_function_id || member.id, 18)}</b>
+      <Icon name={localDocker ? "i-server" : "i-cloud"} size={12} />
+      <b>{shortText(localDocker ? member.id : member.cloud_function_id || member.id, 18)}</b>
       <em>{member.active_session_count} {L("会话", "sessions")}</em>
     </span>
   );
@@ -175,7 +213,19 @@ function vefaasFunctionConsoleHref(member: RuntimePoolMember) {
 }
 
 function providerLabel(provider: string) {
+  if (provider === "local_docker") return "Local Docker";
   return provider === "vefaas" ? "VeFaaS" : provider;
+}
+
+function localRuntimeImage(pool: RuntimePool) {
+  const poolConfig = record(pool.config);
+  const memberConfig = record(pool.members[0]?.config);
+  return stringValue(poolConfig.image ?? memberConfig.image) || "node:22-bookworm";
+}
+
+function localSandboxImage(pool: SandboxPool) {
+  const memberConfig = record(pool.members[0]?.config);
+  return stringValue(memberConfig.image) || "node:22-bookworm";
 }
 
 function statusClass(status: string) {

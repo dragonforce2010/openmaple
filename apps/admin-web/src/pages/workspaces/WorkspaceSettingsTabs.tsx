@@ -32,7 +32,7 @@ export function WorkspaceRuntimeTab(props: {
     <>
       <div className="cfg-head"><Icon name="i-gauge" size={16} /> <b>{props.L("运行时池", "Runtime pool")}</b></div>
       <div className="cfg-cards">
-        <RuntimeProviderCard runtimeProvider={props.runtimeProvider} providerCredentials={props.providerCredentials} onDetails={() => props.onOpenRuntimePool?.()} />
+        <RuntimeProviderCard runtimeProvider={props.runtimeProvider} runtimePool={props.runtimePool} providerCredentials={props.providerCredentials} onDetails={() => props.onOpenRuntimePool?.()} />
       </div>
       {props.runtimeError ? <div className="modal-note"><Icon name="i-alert" size={16} /> {props.runtimeError}</div> : null}
       {!props.runtimePool && !props.runtimeError ? <div className="empty-state">{props.L("正在加载运行时池…", "Loading runtime pool...")}</div> : null}
@@ -46,7 +46,10 @@ export function WorkspaceRuntimeTab(props: {
   );
 }
 
-export function RuntimeProviderCard(props: { runtimeProvider: string; providerCredentials?: JsonRecord; onDetails?: () => void }) {
+export function RuntimeProviderCard(props: { runtimeProvider: string; runtimePool?: RuntimePool | null; providerCredentials?: JsonRecord; onDetails?: () => void }) {
+  if (props.runtimeProvider === "local_docker") {
+    return <ProviderSettingsCard icon="i-server" title="Local Docker Runtime" subtitle="Host Docker agent runtime" active fields={["DOCKER_SOCKET", "IMAGE", "PREWARMED_MEMBERS"]} snapshot={localDockerRuntimeSnapshot(props.runtimePool)} onDetails={props.onDetails} />;
+  }
   return <ProviderSettingsCard icon="i-cloud" title="VeFaaS Runtime" subtitle="Agent runtime provider" active={props.runtimeProvider === "vefaas"} fields={["VOLCENGINE_ACCESS_KEY", "VOLCENGINE_SECRET_KEY"]} snapshot={props.providerCredentials?.vefaas} onDetails={props.onDetails} />;
 }
 
@@ -78,6 +81,15 @@ function sandboxProviderCard(props: {
   providerCredentials?: JsonRecord;
   sandboxConfig?: JsonRecord;
 }) {
+  if (props.sandboxProvider === "local_docker") {
+    return {
+      icon: "i-server",
+      title: "Local Docker Sandbox",
+      active: true,
+      fields: ["DOCKER_SOCKET", "IMAGE", "NETWORKING"],
+      snapshot: localDockerSandboxSnapshot(props.sandboxConfig)
+    };
+  }
   if (props.sandboxProvider === "vefaas") {
     return {
       icon: "i-cloud",
@@ -93,6 +105,26 @@ function sandboxProviderCard(props: {
     active: props.sandboxProvider === "e2b",
     fields: ["E2B_API_KEY"],
     snapshot: props.providerCredentials?.e2b
+  };
+}
+
+function localDockerRuntimeSnapshot(pool?: RuntimePool | null) {
+  const config = recordValue(pool?.config);
+  const memberConfig = recordValue(pool?.members?.[0]?.config);
+  return {
+    DOCKER_SOCKET: "/var/run/docker.sock",
+    IMAGE: stringValue(config.image ?? memberConfig.image) || "node:22-bookworm",
+    PREWARMED_MEMBERS: String(pool?.desired_size ?? pool?.member_total ?? pool?.members?.length ?? "")
+  };
+}
+
+function localDockerSandboxSnapshot(sandboxConfig?: JsonRecord) {
+  const config = recordValue(sandboxConfig?.local_docker ?? sandboxConfig?.docker ?? sandboxConfig);
+  const networking = recordValue(config.networking);
+  return {
+    DOCKER_SOCKET: "/var/run/docker.sock",
+    IMAGE: stringValue(config.image) || "node:22-bookworm",
+    NETWORKING: stringValue(networking.mode) || "limited"
   };
 }
 

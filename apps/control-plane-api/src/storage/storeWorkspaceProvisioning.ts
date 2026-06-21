@@ -28,7 +28,7 @@ function runtimePoolProvider(workspaceId: string) {
 }
 
 function localDockerRuntimeProvisioning(workspaceId: string, index: number, poolConfig: RuntimePoolConfig, defaults: ReturnType<typeof getSandboxDefaults>) {
-  const envs = publicRuntimePoolMemberEnvs(runtimePoolMemberEnvs({}, workspaceId, index));
+  const envs = publicRuntimePoolMemberEnvs(runtimePoolMemberEnvs({}, workspaceId, index, "managed-agents-platform-local-docker"));
   return {
     cloud_function_id: "",
     cloud_app_id: "",
@@ -157,7 +157,7 @@ function agentLoopModelProviderEnvs() {
   return envs;
 }
 
-function runtimePoolMemberEnvs(base: Record<string, string>, workspaceId: string, index: number) {
+function runtimePoolMemberEnvs(base: Record<string, string>, workspaceId: string, index: number, loopRuntime = "managed-agents-platform-vefaas") {
   return {
     ...base,
     ...agentLoopModelProviderEnvs(),
@@ -165,7 +165,7 @@ function runtimePoolMemberEnvs(base: Record<string, string>, workspaceId: string
     MAPLE_RUNTIME_POOL_MEMBER_INDEX: String(index + 1),
     MAPLE_AGENT_RUNTIME_ROLE: "agent_loop",
     MAPLE_AGENT_TEMPLATE_SOURCE: "runtime_request",
-    MAPLE_AGENT_LOOP_RUNTIME: "managed-agents-platform-vefaas"
+    MAPLE_AGENT_LOOP_RUNTIME: loopRuntime
   };
 }
 

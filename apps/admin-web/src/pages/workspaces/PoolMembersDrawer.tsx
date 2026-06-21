@@ -26,6 +26,7 @@ export function PoolMembersDrawer(props: {
   const [status, setStatus] = useState(props.target.status ?? "all");
   const [page, setPage] = useState(1);
   const [members, setMembers] = useState<Member[]>([]);
+  const [poolProvider, setPoolProvider] = useState("");
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<PoolMemberStatusCounts>({});
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,7 @@ export function PoolMembersDrawer(props: {
       .then((pool) => {
         if (cancelled) return;
         setMembers(pool.members ?? []);
+        setPoolProvider(String(pool.provider || ""));
         setTotal(pool.member_total ?? pool.members?.length ?? 0);
         setCounts(pool.member_status_counts ?? {});
         setError("");
@@ -62,8 +64,12 @@ export function PoolMembersDrawer(props: {
   const start = (page - 1) * PAGE_SIZE;
   const title = props.target.kind === "runtime" ? props.L("运行时池函数", "Runtime pool functions") : props.L("沙箱池成员", "Sandbox pool members");
   const subtitle = props.target.kind === "runtime"
-    ? props.L("VeFaaS runtime pool member 状态", "VeFaaS runtime pool member status")
-    : props.L("standby / claimed / failed 沙箱状态", "standby / claimed / failed sandbox status");
+    ? poolProvider === "local_docker"
+      ? props.L("Local Docker runtime member 状态", "Local Docker runtime member status")
+      : props.L("VeFaaS runtime pool member 状态", "VeFaaS runtime pool member status")
+    : poolProvider === "local_docker"
+      ? props.L("Local Docker standby / claimed / failed 成员状态", "Local Docker standby / claimed / failed member status")
+      : props.L("standby / claimed / failed 沙箱状态", "standby / claimed / failed sandbox status");
 
   function changeStatus(next: string) {
     setStatus(next);

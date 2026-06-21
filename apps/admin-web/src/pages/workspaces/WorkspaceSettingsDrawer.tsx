@@ -30,7 +30,7 @@ export function WorkspaceSettingsDrawer(props: {
   modelConfigs: ModelConfig[];
   issuedKey: string;
   onClose: () => void;
-  onCreateKey: (displayName?: string) => Promise<void>;
+  onCreateKey: (displayName?: string, options?: { stayOnView?: boolean }) => Promise<void>;
   onRenameKey: (key: WorkspaceApiKey, displayName: string) => Promise<void>;
   onToggleKey: (key: WorkspaceApiKey) => Promise<void>;
   onDeleteKey: (key: WorkspaceApiKey) => Promise<void>;
@@ -89,7 +89,7 @@ export function WorkspaceSettingsDrawer(props: {
   async function createKey() {
     setCreatingKey(true);
     try {
-      await props.onCreateKey(keyName.trim() || settingsApiKeyPlaceholder);
+      await props.onCreateKey(keyName.trim() || settingsApiKeyPlaceholder, { stayOnView: true });
       setKeyName("");
       setTab("keys");
     } finally {
@@ -281,8 +281,8 @@ export function WorkspaceSettingsDrawer(props: {
                 </section>
                 <div className="settings-overview-grid">
                   <div className="t-row"><span>{L("工作区 ID", "Workspace ID")}</span><b className="mono">{String(workspaceConfig.slug ?? props.workspace.id)}</b></div>
-                  <div className="t-row"><span>{L("运行时", "Runtime")}</span><b>{runtimeProvider}</b></div>
-                  <div className="t-row"><span>{L("沙箱", "Sandbox")}</span><b>{sandboxProvider}</b></div>
+                  <div className="t-row"><span>{L("运行时", "Runtime")}</span><b>{providerLabel(runtimeProvider)}</b></div>
+                  <div className="t-row"><span>{L("沙箱", "Sandbox")}</span><b>{providerLabel(sandboxProvider)}</b></div>
                   <div className="t-row"><span>{L("云厂商", "Cloud providers")}</span><b>{cloudProviderNames || "-"}</b></div>
                   <div className="t-row"><span>{L("创建时间", "Created")}</span><b>{formatTime(props.workspace.created_at)}</b></div>
                 </div>
@@ -397,3 +397,4 @@ export function WorkspaceSettingsDrawer(props: {
     </>
   );
 }
+const providerLabel = (provider: string) => provider === "local_docker" ? "Local Docker" : provider === "vefaas" ? "VeFaaS" : provider.toUpperCase();
