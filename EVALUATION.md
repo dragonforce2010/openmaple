@@ -25,7 +25,7 @@ OpenMaple is the wrong fit when you only need:
 | Timebox | Check | Evidence to collect |
 |---|---|---|
 | 0-5 min | Read the repo boundary | README, license, public screenshots, release, CI status, and this guide. |
-| 5-15 min | Run the local control plane | Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1) or run locally with `docker compose up --build`, then `npm run smoke:local`, `GET /health`, and browser access to `http://127.0.0.1:27951/`. |
+| 5-15 min | Run the local control plane | Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1) or run locally with `./scripts/setup-local-docker.sh`, then `npm run smoke:local -- --base http://127.0.0.1:27951`, `GET /health`, and browser access to `http://127.0.0.1:8080/`. |
 | 15-20 min | Inspect managed-agent resources | Create or review agent, environment, session, vault, runtime pool, and event-log resources in the console. |
 | 20-25 min | Check automation paths | Confirm the REST API, `maple-agent-sdk`, and `maple-agent-cli` map to the same resource model. |
 | 25-30 min | Decide the next adapter | Read [provider readiness](PROVIDER_READINESS.md), then pick the runtime, sandbox, storage, or model provider your team would need before a deeper trial. |
