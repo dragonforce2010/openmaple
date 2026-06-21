@@ -28,7 +28,7 @@ OpenMaple is the wrong fit when you only need:
 | 5-15 min | Run the local control plane | `docker compose up --build`, `GET /health`, and browser access to `http://127.0.0.1:27951/`. |
 | 15-20 min | Inspect managed-agent resources | Create or review agent, environment, session, vault, runtime pool, and event-log resources in the console. |
 | 20-25 min | Check automation paths | Confirm the REST API, `maple-agent-sdk`, and `maple-agent-cli` map to the same resource model. |
-| 25-30 min | Decide the next adapter | Pick the runtime, sandbox, storage, or model provider your team would need before a deeper trial. |
+| 25-30 min | Decide the next adapter | Read [provider readiness](PROVIDER_READINESS.md), then pick the runtime, sandbox, storage, or model provider your team would need before a deeper trial. |
 
 The goal is not to prove production readiness in 30 minutes. The goal is to decide whether the architecture is credible enough for a real internal spike.
 
@@ -42,6 +42,7 @@ A successful first evaluation should prove:
 - Session events preserve durable state for messages, tool calls, status changes, artifacts, failures, and runtime metadata.
 - Vault-backed credentials are referenced by sessions instead of passed as raw secrets.
 - Provider choices are visible enough that your team can identify where a cloud-specific adapter would live.
+- Provider readiness is explicit enough that your team can distinguish runnable paths, credentialed paths, and configuration stubs.
 
 Stop the trial if you cannot prove those points from the current repo, running app, or source code.
 
@@ -70,5 +71,5 @@ If a provider cannot fit one of these boundaries cleanly, open a discussion befo
 - Real product screenshots are in [assets/screenshots](assets/screenshots/).
 - The website renders those screenshots directly: [dragonforce2010.github.io/openmaple](https://dragonforce2010.github.io/openmaple/).
 - The public release is [v0.1.0](https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0).
+- Provider status is tracked in [provider readiness](PROVIDER_READINESS.md).
 - Feedback and provider-priority discussion lives in [Discussion #30](https://github.com/dragonforce2010/openmaple/discussions/30).
-

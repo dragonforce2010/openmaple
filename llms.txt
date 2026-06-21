@@ -11,6 +11,7 @@ OpenMaple implements the managed-agent operating idea in an open stack: split ag
 - English README: https://github.com/dragonforce2010/openmaple#readme
 - Chinese README: https://github.com/dragonforce2010/openmaple/blob/main/README.zh-CN.md
 - Evaluation guide: https://github.com/dragonforce2010/openmaple/blob/main/EVALUATION.md
+- Provider readiness: https://github.com/dragonforce2010/openmaple/blob/main/PROVIDER_READINESS.md
 - Roadmap: https://github.com/dragonforce2010/openmaple/blob/main/ROADMAP.md
 - Release v0.1.0: https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0
 - Launch discussion: https://github.com/dragonforce2010/openmaple/discussions/30
@@ -34,6 +35,7 @@ OpenMaple implements the managed-agent operating idea in an open stack: split ag
 ## What To Inspect
 
 - Managed-agent concepts: agent, environment, session, vault, runtime pool, sandbox provider, provider adapter.
+- Provider readiness separates runnable local paths, credentialed paths, and configuration stubs.
 - Real product screenshots are published on the site and in repository assets.
 - Local quickstart is documented in the README and uses `compose.yaml`.
 - The public tour video is built from the running console and real end-to-end screenshots.

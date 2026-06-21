@@ -14,6 +14,7 @@ OpenMaple is an open-source managed-agent control plane. The roadmap is organize
 - Add more runnable examples for session streaming, vault credentials, deployment runs, and provider adapters.
 - Improve first-run onboarding for local Docker, E2B, and veFaaS-backed sandboxes.
 - Publish provider-readiness notes that separate demo paths, beta paths, and production-ready paths.
+- Keep [provider readiness](PROVIDER_READINESS.md) current as adapters move from configuration stubs to runnable paths.
 - Expand SDK examples for TypeScript projects that want to embed managed-agent sessions.
 
 ## Later

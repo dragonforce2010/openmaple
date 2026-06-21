@@ -1,6 +1,6 @@
 # OpenMaple
 
-[English](README.md) · [官网](https://dragonforce2010.github.io/openmaple/) · [Evaluation guide](EVALUATION.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk) · [v0.1.0 Release](https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0) · [Launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30)
+[English](README.md) · [官网](https://dragonforce2010.github.io/openmaple/) · [Evaluation guide](EVALUATION.md) · [Provider readiness](PROVIDER_READINESS.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk) · [v0.1.0 Release](https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0) · [Launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30)
 
 **不绑定单一云厂商的开源 managed-agent 控制面。**
 
@@ -29,6 +29,7 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 | 它是真实产品界面，不只是架构文案 | 看 [2 分钟产品视频](assets/videos/openmaple-platform-tour.mp4)，再检查 [真实控制台截图](assets/screenshots/)。 |
 | 它不需要云凭证也能本地启动 | 运行 `docker compose up --build`，再打开 `http://127.0.0.1:27951/`。 |
 | 它有一致的 managed-agent 资源模型 | 按 [30-minute evaluation guide](EVALUATION.md) 走一遍。 |
+| 它没有夸大 provider 能力 | 看 [provider readiness](PROVIDER_READINESS.md)，先确认哪些 adapter 已实现、哪些只是配置入口。 |
 | 它同时暴露 UI、API、SDK、CLI 路径 | 看 [SDK](packages/sdk/)、[CLI](packages/cli/) 和下面的 API/架构说明。 |
 
 ## 为什么值得看
