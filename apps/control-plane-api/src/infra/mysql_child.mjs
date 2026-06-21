@@ -90,6 +90,7 @@ function translateSql(sql) {
 
 function translateCreateTable(sql) {
   return sql
+    .replace(/\b([A-Za-z_][A-Za-z0-9_]*)\s+TEXT\b/gi, (_all, column) => `${column} ${columnType(column)}`)
     .split("\n")
     .map((line) => {
       const match = /^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s+TEXT(\s+[^,]*)?(,?)\s*$/.exec(line);

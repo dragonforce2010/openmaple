@@ -67,7 +67,9 @@ Health:  http://127.0.0.1:27951/health
 Login:   http://127.0.0.1:27951/v1/auth/bootstrap
 ```
 
-The Compose path is a control-plane trial: it builds OpenMaple, starts MySQL 8, enables local dev login, and persists data in the `mysql_data` volume. Real agent loops, model calls, and external sandbox execution still require the matching provider keys and environment settings.
+The Compose path is self-contained for local evaluation: it builds OpenMaple, starts MySQL 8, enables local dev login, and persists data in the `mysql_data` volume. It defaults both the agent runtime provider and sandbox provider to `local_docker`, mounts the host Docker socket, and prewarms runtime/sandbox pools without E2B or veFaaS credentials. OAuth/SSO providers are hidden in local Docker mode; model keys are only needed when you run real model-backed agent loops.
+
+For host-side tests or scripts, Compose also exposes MySQL on `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`.
 
 ## Try the SDK Path
 

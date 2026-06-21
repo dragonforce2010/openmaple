@@ -9,6 +9,8 @@ import {
   MAX_RUNTIME_CONCURRENCY,
   MAX_RUNTIME_INSTANCES,
   MAX_SANDBOX_POOL_SIZE,
+  type OnboardingRuntimeProvider,
+  type OnboardingSandboxProvider,
   boundedIntString
 } from "./WorkspaceOnboardingConfig";
 
@@ -57,8 +59,10 @@ export function WorkspaceOnboardingSteps(props: {
   maxConcurrency: number;
   warmQps: number;
   peakQps: number;
-  sandboxProvider: "e2b" | "vefaas";
-  setSandboxProvider: (value: "e2b" | "vefaas") => void;
+  runtimeProvider: OnboardingRuntimeProvider;
+  setRuntimeProvider: (value: OnboardingRuntimeProvider) => void;
+  sandboxProvider: OnboardingSandboxProvider;
+  setSandboxProvider: (value: OnboardingSandboxProvider) => void;
   e2bApiKey: string;
   setE2bApiKey: (value: string) => void;
   vefaasSandboxFunctionId: string;
@@ -115,17 +119,18 @@ export function WorkspaceOnboardingSteps(props: {
       <>
         <div className="cfg-head"><Icon name="i-cloud" size={16} /> <b>{L("运行时 Provider", "Runtime provider")}</b></div>
         <div className="cfg-cards">
-          <div className="prov-card on"><div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("运行时 Provider", "Runtime provider")}</span><span className="pc-check"><Icon name="i-check" size={15} /></span></div>
+          <button type="button" className={`prov-card ${props.runtimeProvider === "local_docker" ? "on" : ""}`} onClick={() => props.setRuntimeProvider("local_docker")}><div className="pc-ic"><Icon name="i-server" size={18} /></div><b>Local Docker</b><span>{L("本地容器运行时", "Local container runtime")}</span>{props.runtimeProvider === "local_docker" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
+          <button type="button" className={`prov-card ${props.runtimeProvider === "vefaas" ? "on" : ""}`} onClick={() => props.setRuntimeProvider("vefaas")}><div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("云端 Agent 运行时", "Cloud agent runtime")}</span>{props.runtimeProvider === "vefaas" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
           <div className="prov-card disabled" aria-disabled="true" title={L("敬请期待", "Coming soon")}><div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>AWS Lambda</b><span>{L("敬请期待", "Coming soon")}</span></div>
         </div>
-        <div className="cred-box">
+        {props.runtimeProvider === "vefaas" ? <div className="cred-box">
           <div className="cred-head"><Icon name="i-key" size={14} /> VeFaaS {L("凭据", "credentials")}</div>
           <label className="form">VOLCENGINE_ACCESS_KEY<input className="fld" value={props.vefaasAccessKey} autoComplete="off" placeholder="VOLCENGINE_ACCESS_KEY" onChange={(event) => props.setVefaasAccessKey(event.target.value)} /></label>
           <label className="form">VOLCENGINE_SECRET_KEY<input className="fld" type="password" value={props.vefaasSecretKey} autoComplete="off" placeholder="VOLCENGINE_SECRET_KEY" onChange={(event) => props.setVefaasSecretKey(event.target.value)} /></label>
           <label className="form">VEFAAS_REGION
             <Select value={props.vefaasRegion} options={[{ value: "cn-beijing", label: "cn-beijing" }, { value: "cn-shanghai", label: "cn-shanghai" }, { value: "cn-guangzhou", label: "cn-guangzhou" }, { value: "ap-southeast-1", label: "ap-southeast-1" }]} onChange={props.setVefaasRegion} />
           </label>
-        </div>
+        </div> : <div className="cred-box"><div className="cred-head"><Icon name="i-server" size={14} /> Local Docker</div><div className="panel-empty">{L("无需云账号。Docker Compose 会挂载本机 Docker daemon，并用 node:22-bookworm 启动运行时容器。", "No cloud account required. Docker Compose mounts the local Docker daemon and starts runtime containers from node:22-bookworm.")}</div></div>}
         <div className="cfg-head"><Icon name="i-gauge" size={16} /> <b>{L("运行时池配置", "Runtime pool")}</b></div>
         <div className="pool-grid">
           <label className="form">{L("预热函数数", "Prewarmed functions")}<input className="fld" type="number" min={1} step={1} value={props.desiredSizeInput} onChange={(event) => props.setDesiredSizeInput(event.target.value)} /></label>
@@ -147,10 +152,13 @@ export function WorkspaceOnboardingSteps(props: {
       <>
         <div className="cfg-head"><Icon name="i-server" size={16} /> <b>{L("沙箱 Provider", "Sandbox provider")}</b></div>
         <div className="cfg-cards">
+          <button type="button" className={`prov-card ${props.sandboxProvider === "local_docker" ? "on" : ""}`} onClick={() => props.setSandboxProvider("local_docker")}><div className="pc-ic"><Icon name="i-server" size={18} /></div><b>Local Docker</b><span>{L("本地容器沙箱", "Local container sandbox")}</span>{props.sandboxProvider === "local_docker" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
           <button type="button" className={`prov-card ${props.sandboxProvider === "e2b" ? "on" : ""}`} onClick={() => props.setSandboxProvider("e2b")}><div className="pc-ic"><Icon name="i-server" size={18} /></div><b>E2B</b><span>{L("E2B 云沙箱", "E2B cloud sandbox")}</span>{props.sandboxProvider === "e2b" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
           <button type="button" className={`prov-card ${props.sandboxProvider === "vefaas" ? "on" : ""}`} onClick={() => props.setSandboxProvider("vefaas")}><div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("火山云沙箱", "Volcengine cloud sandbox")}</span>{props.sandboxProvider === "vefaas" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
         </div>
-        {props.sandboxProvider === "e2b" ? (
+        {props.sandboxProvider === "local_docker" ? (
+          <div className="cred-box"><div className="cred-head"><Icon name="i-server" size={14} /> Local Docker Sandbox</div><div className="panel-empty">{L("无需 API Key。沙箱池会在本机 Docker 上按需领取容器，并挂载每个 Session 的工作目录。", "No API key required. The sandbox pool claims local Docker containers on demand and mounts each session workspace.")}</div></div>
+        ) : props.sandboxProvider === "e2b" ? (
           <div className="cred-box"><div className="cred-head"><Icon name="i-key" size={14} /> E2B {L("凭据", "credentials")}</div><label className="form">E2B_API_KEY<input className="fld" type="password" value={props.e2bApiKey} autoComplete="off" placeholder="E2B_API_KEY" onChange={(event) => props.setE2bApiKey(event.target.value)} /></label></div>
         ) : (
           <div className="cred-box">

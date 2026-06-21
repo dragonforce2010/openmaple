@@ -67,7 +67,8 @@ function builderEnvironmentConfig() {
 
 function quickEnvConfig(mode: "unrestricted" | "none", workspaceId: string) {
   const workspace = getWorkspace(workspaceId) as JsonRecord | null;
-  const sandboxProvider = String(workspace?.sandbox_provider || "e2b") === "vefaas" ? "vefaas" : "e2b";
+  const rawProvider = String(workspace?.sandbox_provider || "e2b");
+  const sandboxProvider = rawProvider === "local_docker" ? "local_docker" : rawProvider === "vefaas" ? "vefaas" : "e2b";
   return createQuickstartEnvironmentConfig(mode, sandboxProvider);
 }
 

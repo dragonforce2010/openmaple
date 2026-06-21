@@ -72,8 +72,8 @@ export type WorkspaceOnboardingInput = {
   user_id: string;
   tenant: { name: string; description?: string };
   workspace: { name: string; description?: string; slug?: string };
-  runtime_provider: "vefaas";
-  sandbox_provider: "e2b" | "vefaas";
+  runtime_provider: "vefaas" | "local_docker";
+  sandbox_provider: "e2b" | "vefaas" | "local_docker" | "daytona";
   sandbox_config?: JsonRecord;
   sandbox_pool?: SandboxPoolConfig;
   runtime_pool: RuntimePoolConfig;

@@ -107,7 +107,7 @@ const workspaceOnboardingBaseSchema = z.object({
     description: z.string().default(""),
     slug: z.string().min(3, "workspace slug must be 3-30 characters (leave empty to auto-generate)").max(30).optional()
   }),
-  runtime_provider: z.enum(["vefaas"]).default("vefaas"),
+  runtime_provider: z.enum(["vefaas", "local_docker"]).default("vefaas"),
   runtime_pool: z.object({
     desired_size: z.coerce.number().int().nonnegative().default(3),
     min_instances_per_function: z.coerce.number().int().nonnegative().default(1),
@@ -116,7 +116,7 @@ const workspaceOnboardingBaseSchema = z.object({
     cpu_milli: z.coerce.number().int().positive().default(2000),
     memory_mb: z.coerce.number().int().positive().default(4096)
   }),
-  sandbox_provider: z.enum(["e2b", "vefaas"]).default("e2b"),
+  sandbox_provider: z.enum(["e2b", "vefaas", "local_docker", "daytona"]).default("e2b"),
   sandbox_config: z.record(z.string(), z.unknown()).default({}),
   sandbox_pool: z
     .object({

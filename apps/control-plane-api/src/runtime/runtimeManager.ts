@@ -12,7 +12,7 @@ import {
   type NormalizedSandboxRuntimeConfig
 } from "./sandboxConfig";
 import { installSessionPackages } from "./sandboxPackageInstall";
-import { claimPooledSandboxRuntime, replenishWorkspaceSandboxPool } from "./sandboxPoolManager";
+import { claimPooledDockerRuntime, claimPooledSandboxRuntime, replenishWorkspaceSandboxPool } from "./sandboxPoolManager";
 import { ensureVefaasRuntime, invokeVefaas, vefaasLoopAgentConfig, vefaasLoopAgentEnv } from "./vefaasAgentRuntime";
 import { ensureVefaasSandboxRuntime, killVefaasSandbox } from "./vefaasSandboxRuntime";
 
@@ -38,6 +38,7 @@ export async function ensureSessionRuntime(sessionId: string): Promise<RuntimeIn
       return runtime;
     }
     if (agentRuntime.provider === "aws_lambda") return ensureAwsLambdaRuntime(agentRuntime);
+    if (agentRuntime.provider === "local_docker") return ensureConfiguredSandboxRuntime(session, localDockerSandboxFromAgentRuntime(agentRuntime));
     return ensureConfiguredSandboxRuntime(session, config.sandbox);
   });
 }
@@ -126,6 +127,7 @@ export async function killSessionSandboxRuntime(sessionId: string) {
 
 async function ensureConfiguredSandboxRuntime(session: JsonRecord & { id: string; workspace_path: string; environment_id: string }, config: NormalizedSandboxRuntimeConfig): Promise<RuntimeInfo> {
   if (config.provider === "e2b") return ensureE2BRuntime(session, config);
+  if (config.provider === "daytona") return ensureDaytonaSandboxRuntime(config);
   if (config.provider === "vercel") return ensureVercelSandboxRuntime(config);
   if (config.provider === "vefaas") {
     const canClaimPool = process.env.MAPLE_SANDBOX_POOL_CLAIM !== "false";
@@ -135,7 +137,7 @@ async function ensureConfiguredSandboxRuntime(session: JsonRecord & { id: string
     if (workspaceId && process.env.MAPLE_SANDBOX_POOL_AUTOREPLENISH !== "false") void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
     return runtime;
   }
-  return ensureDockerRuntime(session, config);
+  return ensureDockerRuntime(session, config, { acquireRuntime: () => claimPooledDockerRuntime(session, config) });
 }
 
 export function withWorkspaceRuntimeCredentials(environment: JsonRecord): JsonRecord {
@@ -180,6 +182,15 @@ function sessionAgentRuntimeConfig(session: JsonRecord, fallback: NormalizedAgen
   const agentRuntime = asRecord(metadata.agent_runtime);
   const provider = String(agentRuntime.provider || agentRuntime.type || "");
   if (provider === "local") return { provider: "local" };
+  if (provider === "local_docker" || provider === "docker") {
+    return {
+      provider: "local_docker",
+      image: String(agentRuntime.image || "node:22-bookworm"),
+      networking: asRecord(agentRuntime.networking),
+      timeout_ms: Number(agentRuntime.timeout_ms || 120_000),
+      envs: stringifyRecord(asRecord(agentRuntime.envs))
+    };
+  }
   if (provider === "aws_lambda") {
     return {
       provider: "aws_lambda",
@@ -200,6 +211,15 @@ function sessionAgentRuntimeConfig(session: JsonRecord, fallback: NormalizedAgen
     workspace_path: String(agentRuntime.sandbox_workspace_path || agentRuntime.workspace_path || (fallback.provider === "vefaas" ? fallback.workspace_path : "/workspace")),
     timeout_ms: Number(agentRuntime.timeout_ms || (fallback.provider === "vefaas" ? fallback.timeout_ms : 120_000)),
     envs: stringifyRecord({ ...(fallback.provider === "vefaas" ? fallback.envs : {}), ...asRecord(agentRuntime.envs) })
+  };
+}
+
+function localDockerSandboxFromAgentRuntime(config: Extract<NormalizedAgentRuntimeConfig, { provider: "local_docker" }>): Extract<NormalizedSandboxRuntimeConfig, { provider: "local_docker" }> {
+  return {
+    provider: "local_docker",
+    image: config.image,
+    networking: config.networking,
+    sandbox_options: ["docker"]
   };
 }
 
@@ -231,4 +251,11 @@ async function ensureVercelSandboxRuntime(config: Extract<NormalizedSandboxRunti
     throw new Error("Vercel sandbox requires sandbox.vercel.project_id or VERCEL_SANDBOX_PROJECT_ID.");
   }
   throw new Error("Vercel sandbox provider is configured but the sandbox adapter is not implemented yet.");
+}
+
+async function ensureDaytonaSandboxRuntime(config: Extract<NormalizedSandboxRuntimeConfig, { provider: "daytona" }>): Promise<RuntimeInfo> {
+  if (!config.server_url) {
+    throw new Error("Daytona sandbox requires sandbox.daytona.server_url or DAYTONA_SERVER_URL.");
+  }
+  throw new Error("Daytona sandbox provider is configured but the sandbox adapter is not implemented yet.");
 }

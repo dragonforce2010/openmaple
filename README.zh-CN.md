@@ -60,7 +60,9 @@ Health:  http://127.0.0.1:27951/health
 Login:   http://127.0.0.1:27951/v1/auth/bootstrap
 ```
 
-Compose 路径是控制面试用路径：它会构建 OpenMaple，启动 MySQL 8，打开本地开发登录，并把数据保存在 `mysql_data` volume。真实 agent loop、模型调用和外部 sandbox 执行仍需要对应 provider key 和环境配置。
+Compose 路径对本地评估是自包含的：它会构建 OpenMaple，启动 MySQL 8，打开本地开发登录，并把数据保存在 `mysql_data` volume。默认 runtime provider 和 sandbox provider 都是 `local_docker`，会挂载宿主机 Docker socket，并初始化 runtime/sandbox 池，不需要 E2B 或 veFaaS 凭证。本地 Docker 模式隐藏 OAuth/SSO 登录；只有运行真实模型驱动的 agent loop 时才需要模型 key。
+
+需要从宿主机跑测试或脚本时，Compose 也会把 MySQL 暴露到 `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`。
 
 ## 先跑一个 SDK 路径
 

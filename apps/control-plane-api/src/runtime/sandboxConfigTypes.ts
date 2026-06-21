@@ -1,7 +1,7 @@
 import type { JsonRecord } from "../types";
 
-export type AgentRuntimeProvider = "local" | "vefaas" | "aws_lambda";
-export type SandboxProvider = "e2b" | "local_docker" | "vercel" | "vefaas";
+export type AgentRuntimeProvider = "local" | "local_docker" | "vefaas" | "aws_lambda";
+export type SandboxProvider = "e2b" | "local_docker" | "daytona" | "vercel" | "vefaas";
 export type EffectiveRuntimeProvider = AgentRuntimeProvider | SandboxProvider;
 
 export type EnvironmentPackage = { manager: string; name: string };
@@ -20,6 +20,13 @@ export type SandboxDefaults = {
     image: string;
     networking: JsonRecord;
     sandbox_options: string[];
+  };
+  daytona: {
+    api_key: string;
+    server_url: string;
+    workspace_class: string;
+    timeout_ms: number;
+    envs: Record<string, string>;
   };
   vercel: {
     api_key: string;
@@ -63,6 +70,13 @@ export type SandboxDefaults = {
 export type NormalizedAgentRuntimeConfig =
   | { provider: "local" }
   | {
+      provider: "local_docker";
+      image: string;
+      networking: JsonRecord;
+      timeout_ms: number;
+      envs: Record<string, string>;
+    }
+  | {
       provider: "vefaas";
       invoke_url: string;
       api_key: string;
@@ -95,6 +109,14 @@ export type NormalizedSandboxRuntimeConfig =
       image: string;
       networking: JsonRecord;
       sandbox_options: string[];
+    }
+  | {
+      provider: "daytona";
+      api_key: string;
+      server_url: string;
+      workspace_class: string;
+      timeout_ms: number;
+      envs: Record<string, string>;
     }
   | {
       provider: "vercel";
@@ -146,6 +168,13 @@ export const builtInDefaults: SandboxDefaults = {
       allow_package_managers: true
     },
     sandbox_options: ["docker", "colima", "local_process_fallback"]
+  },
+  daytona: {
+    api_key: "",
+    server_url: "",
+    workspace_class: "default",
+    timeout_ms: 60 * 60 * 1000,
+    envs: {}
   },
   vercel: {
     api_key: "",

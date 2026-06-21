@@ -4,6 +4,9 @@ export const MAX_RUNTIME_INSTANCES = 100;
 export const MAX_RUNTIME_CONCURRENCY = 1000;
 export const MAX_SANDBOX_POOL_SIZE = 100;
 
+export type OnboardingRuntimeProvider = "local_docker" | "vefaas";
+export type OnboardingSandboxProvider = "local_docker" | "e2b" | "vefaas";
+
 export type WorkspaceOnboardingSubmitInput = {
   tenantName: string;
   tenantDescription: string;
@@ -19,10 +22,11 @@ export type WorkspaceOnboardingSubmitInput = {
   modelConfigIds: string[];
   customModelConfigs: OnboardingCustomModelConfig[];
   apiKeyName: string;
+  runtimeProvider: OnboardingRuntimeProvider;
   vefaasAccessKey: string;
   vefaasSecretKey: string;
   vefaasRegion: string;
-  sandboxProvider: "e2b" | "vefaas";
+  sandboxProvider: OnboardingSandboxProvider;
   e2bApiKey: string;
   vefaasSandboxFunctionId: string;
   vefaasSandboxGatewayUrl: string;

@@ -87,7 +87,7 @@ app.post("/v1/workspace_onboarding", async (request: AuthenticatedRequest, respo
   const parsed = workspaceOnboardingSchema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json(parsed.error.flatten());
   const onboardingCreds = parsed.data.provider_credentials as Record<string, Record<string, unknown> | undefined>;
-  const missingCreds = missingWorkspaceProvisioningCredentials(parsed.data.sandbox_provider, onboardingCreds, parsed.data.sandbox_config);
+  const missingCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, onboardingCreds, parsed.data.sandbox_config);
   if (missingCreds.length) return response.status(400).json({ error: "provider_credentials_required", missing: missingCreds });
   ensureGlobalModelConfigs();
   const missingModelConfigId = parsed.data.model_config_ids.find((modelConfigId) => !modelConfigAvailableForProvisioning(modelConfigId, user.id));
@@ -133,7 +133,7 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
   const parsed = workspaceCreateSchema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json(parsed.error.flatten());
   const createCreds = parsed.data.provider_credentials as Record<string, Record<string, unknown> | undefined>;
-  const missingCreateCreds = missingWorkspaceProvisioningCredentials(parsed.data.sandbox_provider, createCreds, parsed.data.sandbox_config);
+  const missingCreateCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, createCreds, parsed.data.sandbox_config);
   if (missingCreateCreds.length) return response.status(400).json({ error: "provider_credentials_required", missing: missingCreateCreds });
   const tenantId = parsed.data.tenant_id || String(((listTenantAdminTenants(user.id) as JsonRecord[])[0]?.id ?? ""));
   // brand-new users (no tenant yet) onboard their first tenant+workspace here; only enforce
@@ -153,24 +153,36 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
 });
 
 function missingWorkspaceProvisioningCredentials(
-  sandboxProvider: "e2b" | "vefaas",
+  runtimeProvider: "vefaas" | "local_docker",
+  sandboxProvider: "e2b" | "vefaas" | "local_docker" | "daytona",
   providerCredentials: Record<string, Record<string, unknown> | undefined>,
   sandboxConfig: Record<string, unknown>
 ) {
   const vefaasCreds = providerCredentials?.vefaas ?? {};
   const e2bCreds = providerCredentials?.e2b ?? {};
   const vefaasSandboxCreds = providerCredentials?.vefaas_sandbox ?? {};
+  const daytonaCreds = providerCredentials?.daytona ?? {};
   const vefaasSandboxConfig = asRecord(sandboxConfig.vefaas ?? sandboxConfig.vefaas_sandbox ?? sandboxConfig);
-  const required: Array<[string, unknown]> = [
-    ["VOLCENGINE_ACCESS_KEY", vefaasCreds.VOLCENGINE_ACCESS_KEY],
-    ["VOLCENGINE_SECRET_KEY", vefaasCreds.VOLCENGINE_SECRET_KEY],
-    ["VEFAAS_REGION", vefaasCreds.VEFAAS_REGION]
-  ];
+  const daytonaConfig = asRecord(sandboxConfig.daytona ?? sandboxConfig.daytona_sandbox ?? sandboxConfig);
+  const required: Array<[string, unknown]> = [];
+  if (runtimeProvider === "vefaas") {
+    required.push(
+      ["VOLCENGINE_ACCESS_KEY", vefaasCreds.VOLCENGINE_ACCESS_KEY],
+      ["VOLCENGINE_SECRET_KEY", vefaasCreds.VOLCENGINE_SECRET_KEY],
+      ["VEFAAS_REGION", vefaasCreds.VEFAAS_REGION]
+    );
+  }
   if (sandboxProvider === "e2b") required.push(["E2B_API_KEY", e2bCreds.E2B_API_KEY]);
   if (sandboxProvider === "vefaas") {
     required.push(
       ["VEFAAS_SANDBOX_FUNCTION_ID", vefaasSandboxConfig.function_id ?? vefaasSandboxCreds.VEFAAS_SANDBOX_FUNCTION_ID],
       ["VEFAAS_SANDBOX_GATEWAY_URL", vefaasSandboxConfig.gateway_url ?? vefaasSandboxCreds.VEFAAS_SANDBOX_GATEWAY_URL]
+    );
+  }
+  if (sandboxProvider === "daytona") {
+    required.push(
+      ["DAYTONA_SERVER_URL", daytonaConfig.server_url ?? daytonaCreds.DAYTONA_SERVER_URL],
+      ["DAYTONA_API_KEY", daytonaConfig.api_key ?? daytonaCreds.DAYTONA_API_KEY]
     );
   }
   return required.filter(([, value]) => !String(value ?? "").trim()).map(([key]) => key);

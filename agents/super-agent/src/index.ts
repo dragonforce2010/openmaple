@@ -77,13 +77,15 @@ export function createBuilderEnvironmentConfig() {
   };
 }
 
-export function createQuickstartEnvironmentConfig(mode: "unrestricted" | "none", sandboxProvider: "e2b" | "vefaas" = "e2b") {
+export function createQuickstartEnvironmentConfig(mode: "unrestricted" | "none", sandboxProvider: "local_docker" | "e2b" | "vefaas" = "e2b") {
   // Honor the workspace's configured sandbox provider instead of hardcoding e2b — a vefaas
   // workspace must get a vefaas environment. Provider-specific connection details (function_id,
   // gateway, etc.) are resolved at runtime by sandboxConfig.ts from env/workspace config, the
   // same way ensureDefaultEnvironments does it.
   const sandbox =
-    sandboxProvider === "vefaas"
+    sandboxProvider === "local_docker"
+      ? { provider: "local_docker", local_docker: { image: "node:22-bookworm" } }
+      : sandboxProvider === "vefaas"
       ? { provider: "vefaas", vefaas: { workspace_path: "/home/tiger/workspace", timeout_ms: 3_600_000 } }
       : { provider: "e2b", e2b: { template: "base", workspace_path: "/workspace", timeout_ms: 3_600_000 } };
   return {

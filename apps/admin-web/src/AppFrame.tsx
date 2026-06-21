@@ -80,7 +80,7 @@ export function AppFrame(props: Record<string, any>) {
           providers={authProviders}
           error={error}
           onLogin={async () => {
-            await routeAfterAuth();
+            await routeAfterAuth(true, true);
           }}
         />
       </I18nContext.Provider>
@@ -202,7 +202,7 @@ export function AppFrame(props: Record<string, any>) {
             vault={quickVault}
             quickSessionId={quickSessionId}
             environments={environments}
-            sandboxProvider={selectedWorkspace?.sandbox_provider === "vefaas" ? "vefaas" : "e2b"}
+            sandboxProvider={selectedWorkspace?.sandbox_provider === "local_docker" ? "local_docker" : selectedWorkspace?.sandbox_provider === "vefaas" ? "vefaas" : "e2b"}
             modelConfigs={modelConfigs}
             selectedModelId={selectedDraftModelId}
             setSelectedModelId={selectDraftModel}

@@ -13,6 +13,18 @@ RUN apt-get update \
     && apt-get clean
 
 COPY package.json bun.lock ./
+COPY apps/admin-web/package.json apps/admin-web/package.json
+COPY apps/control-plane-api/package.json apps/control-plane-api/package.json
+COPY agents/super-agent/package.json agents/super-agent/package.json
+COPY packages/chat-kit/package.json packages/chat-kit/package.json
+COPY packages/cli/package.json packages/cli/package.json
+COPY packages/components/package.json packages/components/package.json
+COPY packages/runtime-core/package.json packages/runtime-core/package.json
+COPY packages/runtime-vefaas/package.json packages/runtime-vefaas/package.json
+COPY packages/sandbox-core/package.json packages/sandbox-core/package.json
+COPY packages/sandbox-e2b/package.json packages/sandbox-e2b/package.json
+COPY packages/sandbox-vefaas/package.json packages/sandbox-vefaas/package.json
+COPY packages/sdk/package.json packages/sdk/package.json
 RUN bun install --frozen-lockfile
 
 COPY . .

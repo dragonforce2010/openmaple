@@ -22,6 +22,7 @@ export function createModelConfig(input: {
   const id = `modelcfg_${nanoid(10)}`;
   const workspaceId = input.workspace_id ?? GLOBAL_SCOPE_ID;
   const tenantId = input.tenant_id ?? GLOBAL_SCOPE_ID;
+  const ownerUserId = input.owner_user_id ?? GLOBAL_SCOPE_ID;
   const existingDefault = db
     .prepare("SELECT id FROM model_configs WHERE workspace_id = ? AND is_default = 1")
     .get(workspaceId) as JsonRecord | undefined;
@@ -34,10 +35,10 @@ export function createModelConfig(input: {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      input.owner_user_id ?? null,
+      ownerUserId,
       workspaceId,
       tenantId,
-      input.created_by_user_id ?? input.owner_user_id ?? null,
+      input.created_by_user_id ?? ownerUserId,
       input.name,
       input.provider_type,
       input.base_url.replace(/\/$/, ""),

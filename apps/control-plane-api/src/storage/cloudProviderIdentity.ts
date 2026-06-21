@@ -9,6 +9,20 @@ type IdentityInput = {
 export function cloudProviderIdentities(input: IdentityInput) {
   const credentials = recordValue(input.providerCredentials);
   const identities: Record<string, JsonRecord> = {};
+  if (input.runtimeProvider === "local_docker" || input.sandboxProvider === "local_docker") {
+    identities.local_docker = {
+      provider: "local_docker",
+      label: "Local Docker",
+      identity_type: "host_docker_socket",
+      credential_source: "docker.sock",
+      region: "local",
+      services: compact([
+        input.runtimeProvider === "local_docker" ? "runtime:local_docker" : "",
+        input.sandboxProvider === "local_docker" ? "sandbox:local_docker" : ""
+      ]),
+      configured: true
+    };
+  }
   const volcengineCreds = recordValue(credentials.vefaas);
   if (Object.keys(volcengineCreds).length || input.runtimeProvider === "vefaas" || input.sandboxProvider === "vefaas") {
     identities.volcengine = {

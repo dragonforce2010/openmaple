@@ -9,6 +9,8 @@ const execFileAsync = promisify(execFile);
 
 async function runtimePoolMemberProvisioning(workspaceId: string, index: number, poolConfig: RuntimePoolConfig, providerCredentials?: JsonRecord) {
   const defaults = getSandboxDefaults();
+  const provider = runtimePoolProvider(workspaceId);
+  if (provider === "local_docker") return localDockerRuntimeProvisioning(workspaceId, index, poolConfig, defaults);
   const vefaasCreds = (providerCredentials?.vefaas ?? {}) as Record<string, unknown>;
   const hasVolcengineCredentials = Boolean(
     (process.env.VOLCENGINE_ACCESS_KEY || process.env.VOLC_ACCESSKEY || vefaasCreds.VOLCENGINE_ACCESS_KEY) &&
@@ -18,6 +20,30 @@ async function runtimePoolMemberProvisioning(workspaceId: string, index: number,
     throw new Error("workspace runtime pool provisioning requires VOLCENGINE_ACCESS_KEY/VOLCENGINE_SECRET_KEY.");
   }
   return await directVefaasRuntimeProvisioning(workspaceId, index, poolConfig, defaults, providerCredentials);
+}
+
+function runtimePoolProvider(workspaceId: string) {
+  const row = db.prepare("SELECT provider FROM workspace_runtime_pools WHERE workspace_id = ? ORDER BY created_at ASC LIMIT 1").get(workspaceId) as JsonRecord | undefined;
+  return String(row?.provider || "vefaas");
+}
+
+function localDockerRuntimeProvisioning(workspaceId: string, index: number, poolConfig: RuntimePoolConfig, defaults: ReturnType<typeof getSandboxDefaults>) {
+  const envs = publicRuntimePoolMemberEnvs(runtimePoolMemberEnvs({}, workspaceId, index));
+  return {
+    cloud_function_id: "",
+    cloud_app_id: "",
+    invoke_url: "",
+    region: "local",
+    config: {
+      provider: "local_docker",
+      image: defaults.local_docker.image,
+      workspace_path: "/workspace",
+      timeout_ms: 120_000,
+      envs,
+      cpu_milli: poolConfig.cpu_milli,
+      memory_mb: poolConfig.memory_mb
+    }
+  };
 }
 
 async function directVefaasRuntimeProvisioning(workspaceId: string, index: number, poolConfig: RuntimePoolConfig, defaults: ReturnType<typeof getSandboxDefaults>, providerCredentials?: JsonRecord) {
@@ -109,9 +135,11 @@ export async function provisionPoolMembersBackground(workspaceId: string, member
       updateRuntimePoolMember(memberId, { status: "failed", config: { provisioning_error: error instanceof Error ? error.message : String(error) } });
     }
   }
-  // Provision the tenant's TOS bucket alongside the runtime pool (best-effort; the upload path
-  // re-ensures it, so a failure here is non-fatal — it just defers creation to first upload).
-  await ensureWorkspaceBucket(workspaceId).catch((error) => console.warn("[provision] ensureWorkspaceBucket failed", workspaceId, error));
+  if (runtimePoolProvider(workspaceId) !== "local_docker") {
+    // Provision the tenant's TOS bucket alongside cloud runtime pools (best-effort; the upload path
+    // re-ensures it, so a failure here is non-fatal — it just defers creation to first upload).
+    await ensureWorkspaceBucket(workspaceId).catch((error) => console.warn("[provision] ensureWorkspaceBucket failed", workspaceId, error));
+  }
 }
 
 function agentLoopModelProviderEnvs() {

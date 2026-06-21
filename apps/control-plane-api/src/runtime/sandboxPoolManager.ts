@@ -9,9 +9,11 @@ import {
   getWorkspaceSandboxPool,
   markSandboxPoolMemberClaimed,
   markSandboxPoolMemberFailed,
-  markSandboxPoolMemberReady
+  markSandboxPoolMemberReady,
+  updateSandboxPoolMemberRuntime
 } from "../store";
 import type { JsonRecord } from "../types";
+import { createDockerRuntimeContainer } from "./dockerRuntime";
 import { asRecord } from "./runtimeCommon";
 import type { VefaasSandboxRuntimeInfo } from "./runtimeTypes";
 import { normalizeSandboxConfig, type NormalizedSandboxRuntimeConfig } from "./sandboxConfig";
@@ -23,11 +25,13 @@ import {
 } from "./vefaasSandboxRuntime";
 
 type VefaasSandboxConfig = Extract<NormalizedSandboxRuntimeConfig, { provider: "vefaas" }>;
+type LocalDockerSandboxConfig = Extract<NormalizedSandboxRuntimeConfig, { provider: "local_docker" }>;
 
 export async function replenishWorkspaceSandboxPool(workspaceId: string) {
   const pool = getWorkspaceSandboxPool(workspaceId);
   if (!pool) return { workspace_id: workspaceId, created: 0, reason: "workspace_not_found" };
   expireSandboxPoolMembers(workspaceId, pool.provider);
+  if (pool.provider === "local_docker") return replenishLocalDockerSandboxPool(workspaceId, pool.desired_size, pool.standby_ttl_ms);
   if (pool.provider !== "vefaas") return { workspace_id: workspaceId, provider: pool.provider, created: 0, reason: "provider_not_implemented" };
   const config = workspaceSandboxRuntimeConfig(workspaceId);
   if (config.provider !== "vefaas") return { workspace_id: workspaceId, provider: pool.provider, created: 0, reason: "provider_config_missing" };
@@ -35,6 +39,56 @@ export async function replenishWorkspaceSandboxPool(workspaceId: string) {
   const missing = Math.max(0, pool.desired_size - current);
   const created = await runLimited(Array.from({ length: missing }), 5, () => provisionVefaasStandby(workspaceId, config, pool.standby_ttl_ms));
   return { workspace_id: workspaceId, provider: "vefaas", desired_size: pool.desired_size, created: created.filter(Boolean).length };
+}
+
+async function replenishLocalDockerSandboxPool(workspaceId: string, desiredSize: number, ttlMs: number) {
+  const config = workspaceSandboxRuntimeConfig(workspaceId);
+  if (config.provider !== "local_docker") return { workspace_id: workspaceId, provider: "local_docker", created: 0, reason: "provider_config_missing" };
+  const current = countSandboxPoolStandbyCapacity(workspaceId, "local_docker");
+  const missing = Math.max(0, desiredSize - current);
+  const created = await runLimited(Array.from({ length: missing }), 10, () => provisionLocalDockerStandby(workspaceId, config, ttlMs));
+  return { workspace_id: workspaceId, provider: "local_docker", desired_size: desiredSize, created: created.filter(Boolean).length };
+}
+
+export async function claimPooledDockerRuntime(
+  session: JsonRecord & { id: string; workspace_path: string },
+  config: LocalDockerSandboxConfig
+) {
+  const workspaceId = String(session.workspace_id || asRecord(session.metadata).workspace_id || "");
+  if (!workspaceId) return null;
+  const pool = getWorkspaceSandboxPool(workspaceId);
+  if (!pool || pool.provider !== "local_docker") return null;
+  expireSandboxPoolMembers(workspaceId, "local_docker");
+  const expiresAt = expiresIn(pool.standby_ttl_ms);
+  const member = markSandboxPoolMemberClaimed({
+    workspace_id: workspaceId,
+    provider: "local_docker",
+    session_id: session.id,
+    agent_id: String(session.agent_id || ""),
+    expires_at: expiresAt
+  });
+  if (!member) {
+    void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
+    return null;
+  }
+  try {
+    const runtime = await createDockerRuntimeContainer({
+      name: `maple_pool_${String(member.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}_${Date.now()}_${String(session.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}`,
+      image: config.image,
+      workspacePath: session.workspace_path,
+      networking: config.networking
+    });
+    updateSandboxPoolMemberRuntime(member.id, {
+      sandbox_id: runtime.container_id,
+      config: { ...poolMemberConfig(config, pool.standby_ttl_ms), container_name: runtime.container_name, session_id: session.id }
+    });
+    void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
+    return runtime;
+  } catch (error) {
+    markSandboxPoolMemberFailed(member.id, error);
+    void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
+    return null;
+  }
 }
 
 export async function claimPooledSandboxRuntime(
@@ -89,10 +143,12 @@ function workspaceSandboxRuntimeConfig(workspaceId: string): NormalizedSandboxRu
   const e2bCreds = asRecord(providerCredentials.e2b);
   const workspaceVefaas = asRecord(sandboxConfig.vefaas ?? sandboxConfig.vefaas_sandbox ?? sandboxConfig);
   const workspaceE2b = asRecord(sandboxConfig.e2b ?? sandboxConfig);
+  const localDocker = asRecord(sandboxConfig.local_docker ?? sandboxConfig.docker ?? sandboxConfig);
   return normalizeSandboxConfig({
     sandbox_provider: provider,
     sandbox: {
       provider,
+      local_docker: localDocker,
       e2b: { ...workspaceE2b, api_key: workspaceE2b.api_key || e2bCreds.E2B_API_KEY },
       vefaas: {
         ...workspaceVefaas,
@@ -105,6 +161,16 @@ function workspaceSandboxRuntimeConfig(workspaceId: string): NormalizedSandboxRu
       }
     }
   }).sandbox;
+}
+
+async function provisionLocalDockerStandby(workspaceId: string, config: LocalDockerSandboxConfig, ttlMs: number) {
+  const member = createSandboxPoolMember({ workspace_id: workspaceId, provider: "local_docker", config: poolMemberConfig(config, ttlMs) });
+  if (!member) return null;
+  return markSandboxPoolMemberReady(member.id, {
+    sandbox_id: `local_docker:${member.id}`,
+    expires_at: expiresIn(ttlMs),
+    config: poolMemberConfig(config, ttlMs)
+  });
 }
 
 async function provisionVefaasStandby(workspaceId: string, config: VefaasSandboxConfig, ttlMs: number) {
@@ -184,7 +250,14 @@ async function runLimited<T>(items: unknown[], limit: number, task: () => Promis
   return results;
 }
 
-function poolMemberConfig(config: VefaasSandboxConfig, ttlMs: number) {
+function poolMemberConfig(config: VefaasSandboxConfig | LocalDockerSandboxConfig, ttlMs: number) {
+  if (config.provider === "local_docker") {
+    return {
+      image: config.image,
+      networking: config.networking,
+      standby_ttl_ms: ttlMs
+    };
+  }
   return {
     function_id: config.function_id,
     gateway_url: config.gateway_url,
