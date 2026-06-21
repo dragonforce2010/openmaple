@@ -1,6 +1,6 @@
 # OpenMaple
 
-[English](README.md) · [官网](https://dragonforce2010.github.io/openmaple/) · [Evaluation guide](EVALUATION.md) · [Provider readiness](PROVIDER_READINESS.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk) · [v0.1.0 Release](https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0) · [Launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30)
+[English](README.md) · [官网](https://dragonforce2010.github.io/openmaple/) · [Evaluation guide](EVALUATION.md) · [Provider readiness](PROVIDER_READINESS.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [npm CLI](https://www.npmjs.com/package/maple-agent-cli) · [npm SDK](https://www.npmjs.com/package/maple-agent-sdk) · [Latest release](https://github.com/dragonforce2010/openmaple/releases/latest) · [Launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30)
 
 **不绑定单一云厂商的开源 managed-agent 控制面。**
 
