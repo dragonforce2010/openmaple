@@ -14,7 +14,7 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 
 欢迎在 [launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30) 里直接挑战资源模型、provider 优先级，以及一个企业工程团队试用前最需要看到的证据。
 
-最快试用路径：打开 [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1)，运行 `docker compose up --build`，再执行 `npm run smoke:local`。你会得到 Console、API、MySQL、本地开发登录、本地 Docker runtime pool 和本地 Docker sandbox pool；默认路径不需要 E2B、veFaaS 或 OAuth 凭证。只有运行真实模型驱动的 loop 时才需要模型 key。
+最快试用路径：本机运行 `./scripts/setup-local-docker.sh`，或打开 [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1) 后运行同一个 setup 命令。你会得到 `http://127.0.0.1:8080/` 上的 Web Console、API、MySQL、本地开发登录、本地 Docker runtime pool 和本地 Docker sandbox pool；默认路径不需要 E2B、veFaaS 或 OAuth 凭证。只有运行真实模型驱动的 loop 时才需要模型 key。
 
 如果你在做内部平台评估，先看 [30-minute evaluation guide](EVALUATION.md)。
 
@@ -29,7 +29,7 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 | 需要验证什么 | 从哪里开始 |
 |---|---|
 | 它是真实产品界面，不只是架构文案 | 看 [2 分钟产品视频](https://dragonforce2010.github.io/openmaple/#tour)，再检查 [真实控制台截图](assets/screenshots/)。 |
-| 本地 managed-agent 路径不需要云凭证也能启动 | 打开 [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1)，或在本机运行 `docker compose up --build`，再执行 `npm run smoke:local`，打开 `http://127.0.0.1:27951/`。默认 Compose 路径的 runtime pool 和 sandbox pool 都使用 `local_docker`。 |
+| 本地 managed-agent 路径不需要云凭证也能启动 | 运行 `./scripts/setup-local-docker.sh`，打开 `http://127.0.0.1:8080/`。本地栈的 runtime pool 和 sandbox pool 都使用 `local_docker`。 |
 | 它有一致的 managed-agent 资源模型 | 按 [30-minute evaluation guide](EVALUATION.md) 走一遍。 |
 | 它没有夸大 provider 能力 | 看 [provider readiness](PROVIDER_READINESS.md)，先确认哪些 adapter 已实现、哪些只是配置入口。 |
 | 它同时暴露 UI、API、SDK、CLI 路径 | 看 [SDK](packages/sdk/)、[CLI](packages/cli/) 和下面的 API/架构说明。 |
@@ -48,26 +48,22 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 一个命令启动控制面、Web 控制台、本地 MySQL 和本地开发登录：
 
 ```bash
-docker compose up --build
+./scripts/setup-local-docker.sh
 ```
 
-然后验证并打开：
-
-```bash
-npm run smoke:local
-```
+脚本会检查 Docker，在 macOS 上尽量自动安装缺失组件，生成 `.env.local`，启动服务，等待健康检查，并返回访问地址。
 
 ```text
-Console: http://127.0.0.1:27951/
-Health:  http://127.0.0.1:27951/health
-Login:   http://127.0.0.1:27951/v1/auth/bootstrap
+Web console: http://127.0.0.1:8080/
+Local login:  http://127.0.0.1:8080/?dev_login=1
+API health:   http://127.0.0.1:27951/health
 ```
 
-Compose 路径对本地评估是自包含的：它会构建 OpenMaple，启动 MySQL 8，打开本地开发登录，并把数据保存在 `mysql_data` volume。默认 runtime provider 和 sandbox provider 都是 `local_docker`，会挂载宿主机 Docker socket，并初始化 runtime/sandbox 池，不需要 E2B 或 veFaaS 凭证。本地 Docker 模式隐藏 OAuth/SSO 登录；只有运行真实模型驱动的 agent loop 时才需要模型 key。
+本地栈对评估是自包含的：它会构建 OpenMaple，启动独立的 `web`、`api`、`mysql` 服务，打开本地开发登录，并把数据保存在 `mysql_data` volume。默认 runtime provider 和 sandbox provider 都是 `local_docker`，API 服务会挂载宿主机 Docker socket，并初始化 runtime/sandbox 池，不需要 E2B 或 veFaaS 凭证。本地 Docker 模式隐藏 OAuth/SSO 登录；只有运行真实模型驱动的 agent loop 时才需要模型 key。
 
-需要从宿主机跑测试或脚本时，Compose 也会把 MySQL 暴露到 `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`。
+需要从宿主机跑测试或脚本时，本地栈也会把 API 暴露到 `127.0.0.1:27951`，把 MySQL 暴露到 `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`。
 
-本机没有 Docker 环境时，可以直接打开 [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1)，等待 devcontainer 初始化完成后运行同样的 `docker compose up --build` 和 `npm run smoke:local`。Codespaces 会转发 `27951` 端口作为 Console/API 入口。
+本机没有 Docker 环境时，可以直接打开 [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1)，等待 devcontainer 初始化完成后运行 `./scripts/setup-local-docker.sh` 和 `npm run smoke:local`。Codespaces 会转发 Web Console 和 API 端口。
 
 ## 先跑一个 SDK 路径
 
@@ -153,14 +149,13 @@ flowchart LR
 
 ```bash
 bun install
-cp .env.example .env
 bun run dev
 ```
 
 打开：
 
 ```text
-Web Console: http://127.0.0.1:5173/
+Web Console: http://127.0.0.1:8080/
 API Server:  http://127.0.0.1:27951/
 ```
 
@@ -172,16 +167,16 @@ bun run lint
 bun run build
 ```
 
-Docker Compose 会同时启动 OpenMaple API/Web 控制台、本地 MySQL 8 和本地开发登录：
+本地 Docker 栈会启动独立的 OpenMaple Web、API、本地 MySQL 8 和本地开发登录：
 
 ```bash
-docker compose up --build
-npm run smoke:local
+./scripts/setup-local-docker.sh
+npm run smoke:local -- --base http://127.0.0.1:27951
 curl http://127.0.0.1:27951/health
-curl http://127.0.0.1:27951/v1/auth/bootstrap
+curl http://127.0.0.1:8080/health
 ```
 
-未设置密码时，compose 默认使用 `MAPLE_MYSQL_PASSWORD=maple`，数据库文件保存在 `mysql_data` volume。默认 runtime provider 和 sandbox provider 都是 `local_docker`，本地 Docker 模式会隐藏 OAuth/SSO provider；只有运行真实模型驱动的 agent loop 时才需要模型 key。
+未设置密码时，本地栈默认使用 `MAPLE_MYSQL_PASSWORD=maple`，数据库文件保存在 `mysql_data` volume。`.env.example` 只保留 local Docker 设置和可选模型 key；OAuth、veFaaS、TOS、E2B、MCP client 这类线上变量不会污染默认本地配置。
 
 ## CLI
 

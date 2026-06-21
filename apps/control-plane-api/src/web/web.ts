@@ -3,7 +3,7 @@ import { join, resolve, sep } from "node:path";
 import { prototypeResponse } from "./prototype";
 
 const hostname = process.env.HOST || "127.0.0.1";
-const port = Number(process.env.PORT || process.env.MAPLE_WEB_PORT || 5173);
+const port = Number(process.env.MAPLE_WEB_PORT || process.env.PORT || 8080);
 const apiProxyTarget = process.env.MAPLE_API_PROXY_TARGET || process.env.E2E_API_BASE || "http://127.0.0.1:27951";
 const staticDir = process.env.MAPLE_WEB_STATIC_DIR ? resolve(process.env.MAPLE_WEB_STATIC_DIR) : null;
 const prototypeHtmlPath = resolve(process.env.MAPLE_PROTOTYPE_UI || "ui-design/MaplePrototype.html");

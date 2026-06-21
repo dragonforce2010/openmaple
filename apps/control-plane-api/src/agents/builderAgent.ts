@@ -191,15 +191,12 @@ function emitAgentMessage(sessionId: string, text: string, usage?: JsonRecord) {
   emitEvent(sessionId, "agent.message", { content: [{ type: "text", text }], usage: usage ?? {} }, "message_stop");
 }
 
-// Reasoning payload carries accumulated text so detail re-fetch remains idempotent.
 function emitAgentReasoning(sessionId: string, text: string, final: boolean) {
   if (!text) return;
   emitEvent(sessionId, final ? "agent.reasoning" : "agent.reasoning_delta", { text }, final ? "reasoning_stop" : null);
 }
 
-function emitBuilderStatus(sessionId: string, text: string) {
-  emitAgentReasoning(sessionId, text, false);
-}
+function emitBuilderStatus(sessionId: string, text: string) { emitAgentReasoning(sessionId, text, false); }
 
 function builderToolLabel(name: string) {
   if (name === "draft_agent_config") return "生成 Agent 草稿";
@@ -207,6 +204,14 @@ function builderToolLabel(name: string) {
   if (name === "create_agent") return "创建 Agent 资源";
   if (name === "create_environment") return "创建运行环境";
   return `执行 ${name}`;
+}
+
+function localDockerModeEnabled() {
+  return ["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) || (process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" && process.env.MAPLE_SANDBOX_PROVIDER === "local_docker");
+}
+
+function shouldUseLocalBuilderDraft(errorMessage: string) {
+  return /timeout|timed out|aborted/i.test(errorMessage) || (localDockerModeEnabled() && /401|403|auth|unauthori[sz]ed|api key|credential|provider credential/i.test(errorMessage));
 }
 
 function emitAgentDraftCard(sessionId: string, prompt: string, draft: AgentConfig) {
@@ -293,7 +298,6 @@ export async function runQuickstartBuilderTurn(sessionId: string, _text: string,
   try {
     const messages = buildBuilderMessages(listSessionEvents(sessionId) as SessionEvent[], context);
     for (let turn = 0; turn < maxBuilderProviderTurns; turn += 1) {
-      // Throttle thinking to avoid hundreds of DB writes on long streams.
       let reasoningBuf = "";
       let lastReasoningFlush = 0;
       emitBuilderStatus(sessionId, turn === 0 ? "正在调用模型生成 Agent 草稿和下一步建议。" : "正在根据工具执行结果继续整理 Builder 回复。");
@@ -309,7 +313,6 @@ export async function runQuickstartBuilderTurn(sessionId: string, _text: string,
           }
         }
       });
-      // Close the thinking block before whatever comes next (message or tool calls).
       emitAgentReasoning(sessionId, reasoningBuf, true);
       if (providerResult.type === "message") {
         emitAgentMessage(sessionId, providerResult.content, providerResult.usage);
@@ -334,20 +337,17 @@ export async function runQuickstartBuilderTurn(sessionId: string, _text: string,
     const errorMessage = error instanceof Error ? error.message : String(error);
     const events = listSessionEvents(sessionId) as SessionEvent[];
     const prompt = latestUserText(events);
-    if (prompt && /timeout|timed out|aborted/i.test(errorMessage) && !latestCard(events, "agent_draft")) {
+    if (prompt && shouldUseLocalBuilderDraft(errorMessage) && !latestCard(events, "agent_draft")) {
       const draft = buildLocalAgentDraft(prompt, context.userId, context.modelConfigId ?? null, context.agentLoopType, context.workspaceId);
-      emitBuilderStatus(sessionId, "模型调用超时，已生成本地 Agent 草稿。");
+      emitBuilderStatus(sessionId, "模型调用不可用，已生成本地 Agent 草稿。");
       emitAgentDraftCard(sessionId, prompt, draft);
-      emitAgentMessage(sessionId, "模型调用超时，OpenMaple 已先生成一个本地草稿。你可以继续修改或直接创建 Agent。", { provider_error: errorMessage });
+      emitAgentMessage(sessionId, "模型调用不可用，OpenMaple 已先生成一个本地草稿。你可以继续修改或直接创建 Agent。", { provider_error: errorMessage });
       updateSessionStatus(sessionId, "idle");
       emitEvent(sessionId, "session.status_idle", { reason: "quickstart_builder.local_draft", provider_error: errorMessage });
       return;
     }
     updateSessionStatus(sessionId, "failed");
-    emitEvent(sessionId, "session.status_failed", {
-      reason: "quickstart_builder_failed",
-      error: errorMessage
-    });
+    emitEvent(sessionId, "session.status_failed", { reason: "quickstart_builder_failed", error: errorMessage });
     throw error;
   }
 }

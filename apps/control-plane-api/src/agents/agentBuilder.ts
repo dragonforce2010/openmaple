@@ -38,7 +38,7 @@ export async function buildAgentDraft(
   try {
     raw = await callProviderText(messages, { temperature: 0.1, max_tokens: 1400, userId, modelConfigId: selectedModel?.configId, workspaceId, timeoutMs: agentDraftTimeoutMs });
   } catch (error) {
-    if (isProviderTimeout(error)) return fallbackAgentDraft(prompt, selectedModel, loopType, "", error);
+    if (shouldFallbackAgentDraft(error, modelConfigId)) return fallbackAgentDraft(prompt, selectedModel, loopType, "", error);
     throw error;
   }
   try {
@@ -50,6 +50,16 @@ export async function buildAgentDraft(
 
 function isProviderTimeout(error: unknown) {
   return /timeout|timed out|aborted/i.test(error instanceof Error ? error.message : String(error));
+}
+
+function localDockerModeEnabled() {
+  return ["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) || (process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" && process.env.MAPLE_SANDBOX_PROVIDER === "local_docker");
+}
+
+function shouldFallbackAgentDraft(error: unknown, explicitModelConfigId?: string | null) {
+  if (isProviderTimeout(error)) return true;
+  if (explicitModelConfigId || !localDockerModeEnabled()) return false;
+  return /401|403|auth|unauthori[sz]ed|api key|credential|provider credential/i.test(error instanceof Error ? error.message : String(error));
 }
 
 export function buildLocalAgentDraft(

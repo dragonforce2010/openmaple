@@ -29,6 +29,10 @@ Make OpenMaple runnable with `docker compose up --build` without cloud runtime, 
 - [x] Make local Docker runtime pool members become active during provisioning.
 - [x] Make local Docker sandbox pool create and claim reusable Docker-backed members.
 - [x] Make compose default to local Docker runtime and sandbox, and hide user OAuth providers in local Docker mode.
+- [x] Split Compose into explicit `web`, `api`, and `mysql` services so local users can see the frontend/backend boundary.
+- [x] Default the local web console to port `8080` while keeping direct API access on `27951`.
+- [x] Add `scripts/setup-local-docker.sh` so users can start the local stack without typing Docker Compose commands.
+- [x] Reduce `.env.example` to local Docker settings plus optional model keys; keep online-only OAuth, veFaaS, TOS, E2B, and MCP settings out of the local path.
 - [x] Add local Docker contract/E2E coverage for onboarding, pool initialization, session tools, and auth provider discovery.
 - [x] Run `bun run typecheck`, `bun run lint`, `bun run build`, `bun run ci:contracts`, `bun run test:e2e:local-docker`, `docker compose up --build`, and browser screenshot capture.
 
