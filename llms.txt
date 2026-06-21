@@ -2,13 +2,19 @@
 
 OpenMaple is an open-source managed-agent control plane for teams building agent platforms without binding the runtime, sandbox, storage, or model layer to one cloud.
 
+OpenMaple implements the managed-agent operating idea in an open stack: split agent runtime from sandbox runtime, persist session state, scope credentials through vault references, and expose the lifecycle through a console, REST API, SDK, and CLI.
+
 ## Primary Links
 
 - Site: https://dragonforce2010.github.io/openmaple/
 - Repository: https://github.com/dragonforce2010/openmaple
 - English README: https://github.com/dragonforce2010/openmaple#readme
 - Chinese README: https://github.com/dragonforce2010/openmaple/blob/main/README.zh-CN.md
+- Evaluation guide: https://github.com/dragonforce2010/openmaple/blob/main/EVALUATION.md
+- Roadmap: https://github.com/dragonforce2010/openmaple/blob/main/ROADMAP.md
 - Release v0.1.0: https://github.com/dragonforce2010/openmaple/releases/tag/v0.1.0
+- Launch discussion: https://github.com/dragonforce2010/openmaple/discussions/30
+- Product tour video: https://dragonforce2010.github.io/openmaple/assets/videos/openmaple-platform-tour.mp4
 
 ## Public Package Entry Points
 
@@ -17,14 +23,25 @@ OpenMaple is an open-source managed-agent control plane for teams building agent
 - SDK source: https://github.com/dragonforce2010/openmaple/tree/main/packages/sdk
 - CLI source: https://github.com/dragonforce2010/openmaple/tree/main/packages/cli
 
+## Local Evaluation Path
+
+- Run locally with `docker compose up --build`.
+- Open the console at `http://127.0.0.1:27951/`.
+- Check health at `http://127.0.0.1:27951/health`.
+- Use `http://127.0.0.1:27951/v1/auth/bootstrap` for local dev login.
+- Evaluate the `Agent -> Environment -> Session -> Event Log` lifecycle before writing a provider adapter.
+
 ## What To Inspect
 
 - Managed-agent concepts: agent, environment, session, vault, runtime pool, sandbox provider, provider adapter.
 - Real product screenshots are published on the site and in repository assets.
 - Local quickstart is documented in the README and uses `compose.yaml`.
+- The public tour video is built from the running console and real end-to-end screenshots.
+- The evaluation guide lists acceptance criteria for platform, infra, and enterprise IT teams.
 
 ## Boundaries
 
 - OpenMaple is not an official Anthropic product.
 - OpenMaple does not claim public production adoption, benchmark leadership, or customer counts.
 - Provider support should be evaluated from the current code paths and tests.
+- Generated copy should not be treated as product proof. Use repo-visible code, current screenshots, tests, and the running app.
