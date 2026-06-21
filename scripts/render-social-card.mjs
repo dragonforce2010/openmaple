@@ -212,13 +212,13 @@ const html = `<!doctype html>
       </div>
       <section class="main">
         <div>
-          <p class="headline">Self-contained local Docker managed agents</p>
-          <p class="copy">Docker Compose starts the console, API, MySQL, local Docker runtime pools, and sandbox pools.</p>
+          <p class="headline">Try managed agents in Codespaces or Docker</p>
+          <p class="copy">Start the console, API, MySQL, local Docker runtime pools, and sandbox pools without cloud runtime keys.</p>
           <div class="pills" aria-label="OpenMaple surfaces">
+            <span class="pill"><span class="dot"></span>Codespaces</span>
             <span class="pill"><span class="dot"></span>Compose</span>
-            <span class="pill"><span class="dot"></span>Local Docker</span>
-            <span class="pill"><span class="dot"></span>SDK</span>
-            <span class="pill"><span class="dot"></span>CLI</span>
+            <span class="pill"><span class="dot"></span>Runtime pool</span>
+            <span class="pill"><span class="dot"></span>Sandbox pool</span>
           </div>
         </div>
         <div class="shot-wrap">
@@ -229,7 +229,7 @@ const html = `<!doctype html>
       <footer class="footer">
         <div>
           <div class="url">github.com/dragonforce2010/openmaple</div>
-          <div class="tagline">docker compose up --build</div>
+          <div class="tagline">codespaces.new or docker compose up --build</div>
         </div>
         <div class="badge">Public-safe capture from the running product</div>
       </footer>

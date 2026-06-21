@@ -14,6 +14,8 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 
 欢迎在 [launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30) 里直接挑战资源模型、provider 优先级，以及一个企业工程团队试用前最需要看到的证据。
 
+最快试用路径：打开 [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1)，运行 `docker compose up --build`，再执行 `npm run smoke:local`。你会得到 Console、API、MySQL、本地开发登录、本地 Docker runtime pool 和本地 Docker sandbox pool；默认路径不需要 E2B、veFaaS 或 OAuth 凭证。只有运行真实模型驱动的 loop 时才需要模型 key。
+
 如果你在做内部平台评估，先看 [30-minute evaluation guide](EVALUATION.md)。
 
 想先看视频：
