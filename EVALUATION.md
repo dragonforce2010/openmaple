@@ -70,6 +70,6 @@ If a provider cannot fit one of these boundaries cleanly, open a discussion befo
 
 - Real product screenshots are in [assets/screenshots](assets/screenshots/).
 - The website renders those screenshots directly: [dragonforce2010.github.io/openmaple](https://dragonforce2010.github.io/openmaple/).
-- The public release is [v0.2.0](https://github.com/dragonforce2010/openmaple/releases/latest).
+- The public release is [v0.2.1](https://github.com/dragonforce2010/openmaple/releases/latest).
 - Provider status is tracked in [provider readiness](PROVIDER_READINESS.md).
 - Feedback and provider-priority discussion lives in [Discussion #30](https://github.com/dragonforce2010/openmaple/discussions/30).
