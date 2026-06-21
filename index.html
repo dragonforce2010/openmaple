@@ -4,10 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OpenMaple · Managed Agents without Cloud Lock-in</title>
-    <meta name="description" content="OpenMaple is an open-source managed-agent control plane with self-contained local Docker runtime and sandbox evaluation." />
+    <meta name="description" content="OpenMaple is an open-source managed-agent control plane you can try in Codespaces or Docker Compose with local Docker runtime and sandbox pools." />
     <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
     <meta property="og:title" content="OpenMaple · Managed Agents without Cloud Lock-in" />
-    <meta property="og:description" content="Run the console, API, MySQL, local Docker runtime, and local Docker sandbox pools with Docker Compose." />
+    <meta property="og:description" content="Open Codespaces or run Docker Compose to start the console, API, MySQL, local Docker runtime pools, and sandbox pools." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://dragonforce2010.github.io/openmaple/" />
     <meta property="og:image" content="https://dragonforce2010.github.io/openmaple/assets/openmaple-social-card.png" />
@@ -19,7 +19,7 @@
     <meta property="og:video:type" content="video/mp4" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="OpenMaple · Managed Agents without Cloud Lock-in" />
-    <meta name="twitter:description" content="Self-contained local Docker managed-agent evaluation, then provider adapters for cloud runtime and sandbox paths." />
+    <meta name="twitter:description" content="Try managed agents in Codespaces or Docker Compose, then swap runtime and sandbox providers by policy." />
     <meta name="twitter:image" content="https://dragonforce2010.github.io/openmaple/assets/openmaple-social-card.png" />
     <meta name="twitter:image:alt" content="OpenMaple managed-agent control plane social preview with real console screenshot" />
     <link rel="canonical" href="https://dragonforce2010.github.io/openmaple/" />
@@ -31,7 +31,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "OpenMaple",
-        "description": "OpenMaple is an open-source managed-agent control plane with self-contained local Docker runtime and sandbox evaluation.",
+        "description": "OpenMaple is an open-source managed-agent control plane you can try in Codespaces or Docker Compose with local Docker runtime and sandbox pools.",
         "codeRepository": "https://github.com/dragonforce2010/openmaple",
         "url": "https://dragonforce2010.github.io/openmaple/",
         "license": "https://github.com/dragonforce2010/openmaple/blob/main/LICENSE",
@@ -534,9 +534,10 @@
           <h1>OpenMaple</h1>
           <div class="hero-grid">
             <div>
-              <p class="lead"><strong>An open-source control plane for long-running agents.</strong> OpenMaple turns agent prototypes into sessions, sandboxes, runtime pools, vault-backed tools, event logs, SDK calls, and CLI workflows you can start locally with Docker and later run on your own cloud.</p>
+              <p class="lead"><strong>An open-source control plane for long-running agents.</strong> OpenMaple turns agent prototypes into sessions, sandboxes, runtime pools, vault-backed tools, event logs, SDK calls, and CLI workflows you can try in Codespaces, run locally with Docker, and later move onto your own cloud.</p>
               <div class="actions">
-                <a class="btn primary" href="#quickstart">Run locally</a>
+                <a class="btn primary" href="https://codespaces.new/dragonforce2010/openmaple?quickstart=1">Open Codespaces</a>
+                <a class="btn" href="#quickstart">Run locally</a>
                 <a class="btn" href="#tour">Watch tour</a>
                 <a class="btn maple" href="https://github.com/dragonforce2010/openmaple">Star on GitHub</a>
                 <a class="btn" href="https://github.com/dragonforce2010/openmaple/discussions/30">Launch discussion</a>
@@ -575,8 +576,8 @@
       </section>
       <section id="quickstart" class="wrap quickstart">
         <div class="quickstart-copy">
-          <h2>Run managed agents locally.</h2>
-          <p>OpenMaple ships a self-contained Docker Compose path: app, console, API, local MySQL, dev login, local Docker runtime pools, and local Docker sandbox pools. Use GitHub Codespaces when you want a hosted trial environment. E2B and veFaaS keys are not needed for the default local path; model keys are only needed for real model-backed loops.</p>
+          <h2>Try the platform without cloud runtime keys.</h2>
+          <p>OpenMaple ships a self-contained Docker Compose path: app, console, API, local MySQL, dev login, local Docker runtime pools, and local Docker sandbox pools. Use GitHub Codespaces when you want a hosted trial environment. E2B, veFaaS, and OAuth credentials are not needed for the default local path; model keys are only needed for real model-backed loops.</p>
           <div class="actions">
             <a class="btn primary" href="https://codespaces.new/dragonforce2010/openmaple?quickstart=1">Open Codespaces</a>
             <a class="btn" href="https://github.com/dragonforce2010/openmaple#run-it-locally">Open README</a>
@@ -587,6 +588,8 @@
         </div>
         <div class="quickstart-commands">
           <pre class="code-card"><code>docker compose up --build
+
+npm run smoke:local
 
 BASE=http://127.0.0.1:27951
 curl $BASE/health

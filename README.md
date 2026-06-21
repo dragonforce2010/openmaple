@@ -23,6 +23,8 @@ _Screenshots are public-safe crops from the running OpenMaple console. Workspace
 
 Feedback wanted: join the [launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30) to challenge the resource model, provider priorities, and first proof you would need before trying OpenMaple inside an engineering team.
 
+Fastest trial path: open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1), run `docker compose up --build`, then `npm run smoke:local`. You get the console, API, MySQL, local dev login, local Docker runtime pools, and local Docker sandbox pools without E2B, veFaaS, or OAuth credentials. Model keys are only needed when you run real model-backed loops.
+
 Evaluating for an internal platform spike? Start with the [30-minute evaluation guide](EVALUATION.md).
 
 Prefer video first?
