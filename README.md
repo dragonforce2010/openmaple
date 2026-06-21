@@ -3,6 +3,7 @@
 [![CI](https://github.com/dragonforce2010/openmaple/actions/workflows/ci.yml/badge.svg)](https://github.com/dragonforce2010/openmaple/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/dragonforce2010/openmaple/actions/workflows/pages.yml/badge.svg)](https://github.com/dragonforce2010/openmaple/actions/workflows/pages.yml)
 [![Release](https://img.shields.io/github/v/release/dragonforce2010/openmaple?label=release)](https://github.com/dragonforce2010/openmaple/releases/latest)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/dragonforce2010/openmaple?quickstart=1)
 [![npm SDK](https://img.shields.io/npm/v/maple-agent-sdk?label=maple-agent-sdk)](https://www.npmjs.com/package/maple-agent-sdk)
 [![npm CLI](https://img.shields.io/npm/v/maple-agent-cli?label=maple-agent-cli)](https://www.npmjs.com/package/maple-agent-cli)
 
@@ -35,7 +36,7 @@ The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmap
 | Need to verify | Start here |
 |---|---|
 | It is a real product surface, not only architecture copy | [Watch the 2-minute product tour](https://dragonforce2010.github.io/openmaple/#tour) and inspect [real console screenshots](assets/screenshots/). |
-| A local managed-agent path can start without cloud credentials | `docker compose up --build`, then run `npm run smoke:local` and open `http://127.0.0.1:27951/`. The default Compose path uses `local_docker` for both runtime and sandbox pools. |
+| A local managed-agent path can start without cloud credentials | Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1) or run `docker compose up --build`, then run `npm run smoke:local` and open `http://127.0.0.1:27951/`. The default Compose path uses `local_docker` for both runtime and sandbox pools. |
 | It has a coherent managed-agent model | Follow the [30-minute evaluation guide](EVALUATION.md). |
 | It keeps provider claims honest | Check [provider readiness](PROVIDER_READINESS.md) before assuming an adapter is production-ready. |
 | It exposes UI, API, SDK, and CLI paths | Check the [SDK](packages/sdk/), [CLI](packages/cli/), and API surface below. |
@@ -72,6 +73,8 @@ Login:   http://127.0.0.1:27951/v1/auth/bootstrap
 The Compose path is self-contained for local evaluation: it builds OpenMaple, starts MySQL 8, enables local dev login, and persists data in the `mysql_data` volume. It defaults both the agent runtime provider and sandbox provider to `local_docker`, mounts the host Docker socket, and prewarms runtime/sandbox pools without E2B or veFaaS credentials. OAuth/SSO providers are hidden in local Docker mode; model keys are only needed when you run real model-backed agent loops.
 
 For host-side tests or scripts, Compose also exposes MySQL on `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`.
+
+No local Docker setup? Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1), wait for the devcontainer to finish, then run the same `docker compose up --build` and `npm run smoke:local` commands. Codespaces forwards port `27951` for the console/API.
 
 ## Try the SDK Path
 

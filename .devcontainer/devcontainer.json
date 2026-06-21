@@ -1,0 +1,29 @@
+{
+  "name": "OpenMaple local trial",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": "true"
+    }
+  },
+  "forwardPorts": [27951, 3307],
+  "portsAttributes": {
+    "27951": {
+      "label": "OpenMaple Console and API",
+      "onAutoForward": "notify"
+    },
+    "3307": {
+      "label": "OpenMaple MySQL",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "node --version && docker --version && docker compose version",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}
