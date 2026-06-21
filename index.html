@@ -188,6 +188,34 @@
       }
       .proof-cell b { font-size: 24px; line-height: 1.1; }
       .proof-cell span { color: var(--muted); }
+      .video-proof {
+        display: grid;
+        gap: 18px;
+        padding: 58px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .video-proof-head {
+        display: grid;
+        grid-template-columns: minmax(0, .76fr) minmax(280px, .36fr);
+        gap: 34px;
+        align-items: end;
+      }
+      .video-proof h2 {
+        max-width: 900px;
+      }
+      .video-proof p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 18px;
+      }
+      .product-video {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: #111;
+      }
       .below-fold-hint {
         min-height: 84px;
         display: grid;
@@ -440,7 +468,7 @@
       .zoom-caption { margin: 0 auto; color: #ede4d8; text-align: center; }
       @media (max-width: 980px) {
         .navlinks { display: none; }
-        .hero-grid, .section-head, .quickstart, .feature-grid, .providers, .product-shots, .proof-strip, .cta, .managed-proof { grid-template-columns: 1fr; }
+        .hero-grid, .section-head, .quickstart, .feature-grid, .providers, .product-shots, .proof-strip, .cta, .managed-proof, .video-proof-head { grid-template-columns: 1fr; }
         .managed-shot.primary, .managed-shot.wide { grid-column: auto; }
         .cta-actions { justify-items: start; }
         .cta-actions .actions { justify-content: flex-start; }
@@ -462,6 +490,7 @@
         <a class="brand" href="./"><img src="./assets/openmaple-mascot.svg" alt="" />OpenMaple</a>
         <div class="navlinks">
           <a href="#quickstart">Quickstart</a>
+          <a href="#tour">Tour</a>
           <a href="#managed-agents">Managed Agents</a>
           <a href="#platform">Platform</a>
           <a href="#features">Product</a>
@@ -482,6 +511,7 @@
               <p class="lead"><strong>An open-source control plane for long-running agents.</strong> OpenMaple turns agent prototypes into sessions, sandboxes, runtime pools, vault-backed tools, event logs, SDK calls, and CLI workflows you can run on your own cloud.</p>
               <div class="actions">
                 <a class="btn primary" href="#quickstart">Run locally</a>
+                <a class="btn" href="#tour">Watch tour</a>
                 <a class="btn maple" href="https://github.com/dragonforce2010/openmaple">Star on GitHub</a>
                 <a class="btn" href="https://github.com/dragonforce2010/openmaple/discussions/30">Launch discussion</a>
                 <a class="btn" href="https://github.com/dragonforce2010/openmaple/blob/main/EVALUATION.md">Evaluation guide</a>
@@ -505,6 +535,16 @@
             <div class="proof-cell"><b>Provider adapters</b><span>Runtime, sandbox, storage, and model layers stay replaceable.</span></div>
           </div>
         </div>
+      </section>
+      <section id="tour" class="wrap video-proof" aria-label="OpenMaple product tour video">
+        <div class="video-proof-head">
+          <h2>Watch the real product tour.</h2>
+          <p>A 2-minute walkthrough built from the running console: agent creation, cited sandbox sessions, vaults, CLI, SDK, skills, deployments, and observability.</p>
+        </div>
+        <video class="product-video" controls preload="metadata" poster="./assets/screenshots/openmaple-quickstart.png">
+          <source src="./assets/videos/openmaple-platform-tour.mp4" type="video/mp4" />
+          Download the OpenMaple platform tour from the GitHub repository.
+        </video>
       </section>
       <section id="quickstart" class="wrap quickstart">
         <div class="quickstart-copy">

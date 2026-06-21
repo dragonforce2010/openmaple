@@ -16,6 +16,8 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 
 如果你在做内部平台评估，先看 [30-minute evaluation guide](EVALUATION.md)。
 
+想先看视频，可以直接打开 [2 分钟 OpenMaple 平台总览](assets/videos/openmaple-platform-tour.mp4)。视频素材来自真实运行的控制台和端到端截图。
+
 ## 为什么值得看
 
 - **给平台团队**：不是一个单点 Agent demo，而是一套可自托管的 managed-agent 平台骨架。
