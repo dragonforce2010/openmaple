@@ -34,7 +34,7 @@ The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmap
 | Need to verify | Start here |
 |---|---|
 | It is a real product surface, not only architecture copy | [Watch the 2-minute product tour](https://dragonforce2010.github.io/openmaple/#tour) and inspect [real console screenshots](assets/screenshots/). |
-| It can run without cloud credentials | `docker compose up --build`, then open `http://127.0.0.1:27951/`. |
+| The control plane can start without cloud credentials | `docker compose up --build`, then run `npm run smoke:local` and open `http://127.0.0.1:27951/`. |
 | It has a coherent managed-agent model | Follow the [30-minute evaluation guide](EVALUATION.md). |
 | It keeps provider claims honest | Check [provider readiness](PROVIDER_READINESS.md) before assuming an adapter is production-ready. |
 | It exposes UI, API, SDK, and CLI paths | Check the [SDK](packages/sdk/), [CLI](packages/cli/), and API surface below. |
@@ -49,7 +49,7 @@ The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmap
 
 ## Run It Locally
 
-Start the full control plane and a local MySQL database with one command:
+Start the control plane, web console, local MySQL database, and local dev login with one command:
 
 ```bash
 docker compose up --build
@@ -67,7 +67,7 @@ Health:  http://127.0.0.1:27951/health
 Login:   http://127.0.0.1:27951/v1/auth/bootstrap
 ```
 
-The Compose path is self-contained: it builds OpenMaple, starts MySQL 8, enables local dev login, and persists data in the `mysql_data` volume. Model keys and sandbox provider keys are only needed when you run real agent loops or external tool execution.
+The Compose path is a control-plane trial: it builds OpenMaple, starts MySQL 8, enables local dev login, and persists data in the `mysql_data` volume. Real agent loops, model calls, and external sandbox execution still require the matching provider keys and environment settings.
 
 ## Try the SDK Path
 

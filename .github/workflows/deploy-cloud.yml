@@ -92,7 +92,6 @@ jobs:
         if: steps.deployed.outputs.skip != 'true'
         with:
           node-version: 22
-          cache: npm
 
       - uses: oven-sh/setup-bun@v2
         if: steps.deployed.outputs.skip != 'true'

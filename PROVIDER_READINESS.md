@@ -8,7 +8,7 @@ OpenMaple is early public software. Treat this file as an evidence map, not as a
 
 | Status | Meaning |
 |---|---|
-| Runnable locally | Works in the self-contained local trial path without external cloud credentials. |
+| Runnable locally | Works in local code paths or the control-plane trial path without managed cloud resources. Model calls and external sandbox execution can still require provider keys. |
 | Implemented with credentials | Code path exists, contracts cover the boundary, and real use requires provider credentials or deployed provider resources. |
 | Configuration stub | Config shape exists, but the adapter currently throws a not-implemented error. |
 | Not claimed | No current repo-visible implementation claim. |
@@ -17,7 +17,7 @@ OpenMaple is early public software. Treat this file as an evidence map, not as a
 
 | Provider path | Status | What exists today | Required evidence before production use |
 |---|---|---|---|
-| Local provider loop | Runnable locally | `MAPLE_AGENT_RUNTIME_PROVIDER=local` runs the control-plane/provider loop with OpenAI-compatible model configs. | Your model endpoint, workspace auth policy, and session event retention settings. |
+| Local provider loop | Runnable locally | `MAPLE_AGENT_RUNTIME_PROVIDER=local` runs the control-plane/provider loop with OpenAI-compatible model configs. | Your model endpoint/key, workspace auth policy, and session event retention settings. |
 | veFaaS agent runtime | Implemented with credentials | `ensureVefaasRuntime` and `invokeVefaas` send bootstrap/run actions to a deployed runtime function. Contract tests cover bootstrap, bridge tools, events, and session resources. | A deployed runtime function, invoke URL, API key policy, region limits, and operational runbook. |
 | AWS Lambda agent runtime | Configuration stub | Config normalization accepts `aws_lambda`, but `ensureAwsLambdaRuntime` currently throws `AWS Lambda agent runtime provider is configured but the invoke adapter is not implemented yet.` | Invoke adapter, IAM model, packaging story, timeout behavior, and contract tests. |
 
@@ -25,7 +25,7 @@ OpenMaple is early public software. Treat this file as an evidence map, not as a
 
 | Provider path | Status | What exists today | Required evidence before production use |
 |---|---|---|---|
-| local_docker | Runnable locally | `ensureDockerRuntime` starts a per-session Docker container, mounts the session workspace, and executes shell/file tools. | Host isolation policy, image hardening, network policy, and cleanup strategy. |
+| local_docker | Runnable locally | `ensureDockerRuntime` starts a per-session Docker container, mounts the session workspace, and executes shell/file tools when the environment selects `local_docker`. The default Compose control-plane trial currently leaves `MAPLE_SANDBOX_PROVIDER=e2b`; set the provider explicitly when evaluating Docker sandbox execution. | Host isolation policy, image hardening, network policy, and cleanup strategy. |
 | E2B | Implemented with credentials | `ensureE2BRuntime` creates/connects E2B sandboxes, syncs session files, and runs shell/file tools. | `E2B_API_KEY`, template policy, file-size limits, timeout policy, and cost controls. |
 | veFaaS sandbox | Implemented with credentials | `ensureVefaasSandboxRuntime` creates/resumes sandboxes through OpenAPI, supports gateway shell/file tools, and integrates workspace sandbox pools. | Volcengine credentials, sandbox function ID, gateway URL, network policy, pool sizing, and kill/resume runbooks. |
 | Vercel sandbox | Configuration stub | Config normalization accepts `vercel`, but `ensureVercelSandboxRuntime` currently throws `Vercel sandbox provider is configured but the sandbox adapter is not implemented yet.` | Sandbox API adapter, file/tool contract, auth model, timeout semantics, and contract tests. |
@@ -34,7 +34,7 @@ OpenMaple is early public software. Treat this file as an evidence map, not as a
 
 | Boundary | Status | What exists today | Required evidence before production use |
 |---|---|---|---|
-| Control-plane database | Runnable locally / implemented with MySQL | Docker Compose starts MySQL 8; the API uses a MySQL worker bridge behind the synchronous store API. | Managed MySQL/RDS configuration, backup/restore, migration process, and latency budget. |
+| Control-plane database | Runnable locally / implemented with MySQL | Docker Compose starts MySQL 8 for the control-plane trial; the API uses a MySQL worker bridge behind the synchronous store API. | Managed MySQL/RDS configuration, backup/restore, migration process, and latency budget. |
 | Session files and artifacts | Implemented control-plane boundary | File/artifact endpoints and session resource manifests are represented in the API and runtime bridges. | Object storage backend, retention policy, presigned URL expiry, and artifact access controls. |
 | Model access | Implemented through OpenAI-compatible endpoints | `resolveModelTarget` routes model configs into `/chat/completions`; workspace model configs scope API keys and defaults. | Provider-specific rate limits, data policy, fallback policy, and model approval process. |
 | Local dev login | Runnable locally | Compose enables `MAPLE_DEV_LOGIN=true` for the local trial path. | Production identity provider, OAuth callback configuration, tenant/workspace membership policy. |

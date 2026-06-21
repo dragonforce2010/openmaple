@@ -27,7 +27,7 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 | 需要验证什么 | 从哪里开始 |
 |---|---|
 | 它是真实产品界面，不只是架构文案 | 看 [2 分钟产品视频](https://dragonforce2010.github.io/openmaple/#tour)，再检查 [真实控制台截图](assets/screenshots/)。 |
-| 它不需要云凭证也能本地启动 | 运行 `docker compose up --build`，再打开 `http://127.0.0.1:27951/`。 |
+| 控制面不需要云凭证也能本地启动 | 运行 `docker compose up --build`，再执行 `npm run smoke:local`，打开 `http://127.0.0.1:27951/`。 |
 | 它有一致的 managed-agent 资源模型 | 按 [30-minute evaluation guide](EVALUATION.md) 走一遍。 |
 | 它没有夸大 provider 能力 | 看 [provider readiness](PROVIDER_READINESS.md)，先确认哪些 adapter 已实现、哪些只是配置入口。 |
 | 它同时暴露 UI、API、SDK、CLI 路径 | 看 [SDK](packages/sdk/)、[CLI](packages/cli/) 和下面的 API/架构说明。 |
@@ -42,7 +42,7 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 
 ## 本地跑起来
 
-一个命令启动控制面和本地 MySQL：
+一个命令启动控制面、Web 控制台、本地 MySQL 和本地开发登录：
 
 ```bash
 docker compose up --build
@@ -60,7 +60,7 @@ Health:  http://127.0.0.1:27951/health
 Login:   http://127.0.0.1:27951/v1/auth/bootstrap
 ```
 
-Compose 路径是自包含的：它会构建 OpenMaple，启动 MySQL 8，打开本地开发登录，并把数据保存在 `mysql_data` volume。只有运行真实 agent loop 或外部工具执行时，才需要模型 key 和 sandbox provider key。
+Compose 路径是控制面试用路径：它会构建 OpenMaple，启动 MySQL 8，打开本地开发登录，并把数据保存在 `mysql_data` volume。真实 agent loop、模型调用和外部 sandbox 执行仍需要对应 provider key 和环境配置。
 
 ## 先跑一个 SDK 路径
 
@@ -165,7 +165,7 @@ bun run lint
 bun run build
 ```
 
-Docker Compose 会同时启动 OpenMaple API/Web 控制台和本地 MySQL 8：
+Docker Compose 会同时启动 OpenMaple API/Web 控制台、本地 MySQL 8 和本地开发登录：
 
 ```bash
 docker compose up --build
@@ -174,7 +174,7 @@ curl http://127.0.0.1:27951/health
 curl http://127.0.0.1:27951/v1/auth/bootstrap
 ```
 
-未设置密码时，compose 默认使用 `MAPLE_MYSQL_PASSWORD=maple`，数据库文件保存在 `mysql_data` volume，并为 demo 容器打开本地开发登录。
+未设置密码时，compose 默认使用 `MAPLE_MYSQL_PASSWORD=maple`，数据库文件保存在 `mysql_data` volume。真实 agent loop、模型调用和外部 sandbox 执行仍需要对应 provider key 和环境配置。
 
 ## CLI
 

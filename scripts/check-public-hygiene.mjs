@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const forbidden = [
@@ -18,6 +18,7 @@ if (tracked.status !== 0) {
 
 const failures = [];
 for (const path of tracked.stdout.split("\n").filter(Boolean)) {
+  if (!existsSync(path)) continue;
   if (isBinaryPath(path)) continue;
   const source = readFileSync(path, "utf8");
   for (const rule of forbidden) {
