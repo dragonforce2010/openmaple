@@ -57,6 +57,10 @@ function isAuthBootstrapRequest(request: Request) {
 }
 
 function ensureDatabaseReady(request: Request, response: Response, next: NextFunction) {
+  if (isAuthBootstrapRequest(request) && !databaseInitialized) {
+    anonymousAuthBootstrap(response);
+    return;
+  }
   try {
     ensureDatabaseInitialized();
     next();
