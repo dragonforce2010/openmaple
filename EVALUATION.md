@@ -25,7 +25,7 @@ OpenMaple is the wrong fit when you only need:
 | Timebox | Check | Evidence to collect |
 |---|---|---|
 | 0-5 min | Read the repo boundary | README, license, public screenshots, release, CI status, and this guide. |
-| 5-15 min | Run the local control plane | `docker compose up --build`, `GET /health`, and browser access to `http://127.0.0.1:27951/`. |
+| 5-15 min | Run the local control plane | `docker compose up --build`, `npm run smoke:local`, `GET /health`, and browser access to `http://127.0.0.1:27951/`. |
 | 15-20 min | Inspect managed-agent resources | Create or review agent, environment, session, vault, runtime pool, and event-log resources in the console. |
 | 20-25 min | Check automation paths | Confirm the REST API, `maple-agent-sdk`, and `maple-agent-cli` map to the same resource model. |
 | 25-30 min | Decide the next adapter | Read [provider readiness](PROVIDER_READINESS.md), then pick the runtime, sandbox, storage, or model provider your team would need before a deeper trial. |
@@ -36,7 +36,7 @@ The goal is not to prove production readiness in 30 minutes. The goal is to deci
 
 A successful first evaluation should prove:
 
-- The project starts locally without external cloud credentials.
+- The control plane, web console, local dev login, and MySQL-backed storage start locally without external cloud credentials.
 - Console, API, SDK, and CLI describe the same managed-agent lifecycle.
 - AgentRuntime and SandboxRuntime are separated in the model, not just in copy.
 - Session events preserve durable state for messages, tool calls, status changes, artifacts, failures, and runtime metadata.
@@ -44,7 +44,7 @@ A successful first evaluation should prove:
 - Provider choices are visible enough that your team can identify where a cloud-specific adapter would live.
 - Provider readiness is explicit enough that your team can distinguish runnable paths, credentialed paths, and configuration stubs.
 
-Stop the trial if you cannot prove those points from the current repo, running app, or source code.
+Stop the trial if you cannot prove those points from the current repo, running app, or source code. Treat real model calls and external sandbox execution as a second-stage check that requires the matching provider keys and environment settings.
 
 ## Questions To Ask Before Forking
 
