@@ -54,7 +54,11 @@ Start the full control plane and a local MySQL database with one command:
 docker compose up --build
 ```
 
-Then open:
+Then verify and open:
+
+```bash
+npm run smoke:local
+```
 
 ```text
 Console: http://127.0.0.1:27951/
@@ -230,6 +234,7 @@ Docker Compose:
 
 ```bash
 docker compose up --build
+npm run smoke:local
 curl http://127.0.0.1:27951/health
 curl http://127.0.0.1:27951/v1/auth/bootstrap
 ```
