@@ -19,7 +19,7 @@ OpenMaple is not an Anthropic official product. It implements the same platform 
 
 <img src="assets/screenshots/openmaple-quickstart.png" alt="OpenMaple quickstart builder real console screenshot">
 
-_Screenshots are public-safe crops from the running OpenMaple console. Workspace labels and resource IDs are omitted._
+_Screenshots are public-safe captures from the running OpenMaple console. Local Docker proof shots use demo/local test identities only and do not expose secret keys._
 
 Feedback wanted: join the [launch discussion](https://github.com/dragonforce2010/openmaple/discussions/30) to challenge the resource model, provider priorities, and first proof you would need before trying OpenMaple inside an engineering team.
 
@@ -31,7 +31,7 @@ Prefer video first?
 
 <a href="https://dragonforce2010.github.io/openmaple/#tour"><img src="assets/openmaple-social-card.png" alt="Watch the 2-minute OpenMaple platform tour"></a>
 
-The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmaple/#tour) plays on the project site and is also available on [YouTube](https://www.youtube.com/watch?v=zYhgkFomZ7M). It is built from the running console and real end-to-end screenshots.
+The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmaple/#tour) plays on the project site and is also available on [YouTube](https://www.youtube.com/watch?v=zYhgkFomZ7M). It is built from the running console and real end-to-end screenshots. The [local Docker walkthrough](https://dragonforce2010.github.io/openmaple/#local-docker-tour) focuses on the one-command setup, onboarding forms, runtime/sandbox pools, and session UI.
 
 ## First Proofs
 
@@ -39,6 +39,7 @@ The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmap
 |---|---|
 | It is a real product surface, not only architecture copy | [Watch the 2-minute product tour](https://dragonforce2010.github.io/openmaple/#tour) and inspect [real console screenshots](assets/screenshots/). |
 | A local managed-agent path can start without cloud credentials | `./scripts/setup-local-docker.sh`, then open `http://127.0.0.1:8080/`. The local stack uses `local_docker` for both runtime and sandbox pools. |
+| The local Docker path is visible end to end | Watch the [local Docker walkthrough](https://dragonforce2010.github.io/openmaple/#local-docker-tour) and inspect the proof screenshots below. |
 | It has a coherent managed-agent model | Follow the [30-minute evaluation guide](EVALUATION.md). |
 | It keeps provider claims honest | Check [provider readiness](PROVIDER_READINESS.md) before assuming an adapter is production-ready. |
 | It exposes UI, API, SDK, and CLI paths | Check the [SDK](packages/sdk/), [CLI](packages/cli/), and API surface below. |
@@ -70,6 +71,8 @@ Local login:  http://127.0.0.1:8080/?dev_login=1
 API health:   http://127.0.0.1:27951/health
 ```
 
+<img src="assets/screenshots/openmaple-local-setup-terminal.png" alt="OpenMaple local Docker setup terminal output showing one command, health checks, and local login URL">
+
 The local stack is self-contained for evaluation: it builds OpenMaple, starts separate `web`, `api`, and `mysql` services, enables local dev login, and persists data in the `mysql_data` volume. It defaults both the agent runtime provider and sandbox provider to `local_docker`, mounts the host Docker socket into the API service, and prewarms runtime/sandbox pools without E2B or veFaaS credentials. OAuth/SSO providers are hidden in local Docker mode; model keys are only needed when you run real model-backed agent loops.
 
 Local Docker mode starts with an empty model pool and does not read host provider keys implicitly. To show a default model, copy `config/local-model.example.json` to `config/local-model.json`, set `base_url`, `model_name`, and `api_key_env`, then rerun setup. The bundled VolcoEngine presets are not seeded in local Docker mode unless you explicitly set `MAPLE_SEED_DEFAULT_MODELS=true`.
@@ -79,6 +82,20 @@ Optional demo data lives in `docker/local-demo-data.sql`. Set `MAPLE_SEED_DEMO_D
 For host-side tests or scripts, the stack also exposes the API on `127.0.0.1:27951` and MySQL on `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`.
 
 No local Docker setup? Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1), wait for the devcontainer to finish, then run `./scripts/setup-local-docker.sh` and `npm run smoke:local`. Codespaces forwards the web console and API ports for you.
+
+### Local Docker UI Proof
+
+These screenshots come from the same running local Docker stack used for the current E2E proof: setup script, browser onboarding, workspace settings, local runtime/sandbox pools, and a seeded session timeline.
+
+| Onboarding workspace | Runtime provider |
+|---|---|
+| <img src="assets/screenshots/openmaple-local-onboarding-workspace.png" alt="OpenMaple local Docker onboarding workspace form screenshot"> | <img src="assets/screenshots/openmaple-local-onboarding-runtime.png" alt="OpenMaple local Docker onboarding runtime provider screenshot"> |
+| Sandbox provider | Empty model pool |
+| <img src="assets/screenshots/openmaple-local-onboarding-sandbox.png" alt="OpenMaple local Docker onboarding sandbox provider screenshot"> | <img src="assets/screenshots/openmaple-local-onboarding-models.png" alt="OpenMaple local Docker onboarding model pool screenshot"> |
+| Runtime pool members | Sandbox pool members |
+| <img src="assets/screenshots/openmaple-local-runtime-pool-drawer.png" alt="OpenMaple local Docker runtime pool member drawer screenshot"> | <img src="assets/screenshots/openmaple-local-sandbox-pool-drawer.png" alt="OpenMaple local Docker sandbox pool member drawer screenshot"> |
+| Session timeline | Model settings |
+| <img src="assets/screenshots/openmaple-local-session-dashboard.png" alt="OpenMaple local Docker session transcript and event timeline screenshot"> | <img src="assets/screenshots/openmaple-local-settings-models.png" alt="OpenMaple local Docker model settings screenshot"> |
 
 ## Try the SDK Path
 

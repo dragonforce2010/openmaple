@@ -21,6 +21,7 @@ artifacts/deploy-output/
 artifacts/ui-comparison/
 artifacts/tmp/
 test-results/
+.tmp-local-docker-tour-frames/
 
 .claude/scheduled_tasks.lock
 .claude/launch.json
