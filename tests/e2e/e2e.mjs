@@ -1,11 +1,12 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { chromium } from "playwright";
 
 loadAgentsEnv();
+normalizeLocalDockerE2EEnv();
 
 const execFileAsync = promisify(execFile);
 const isolated = ["1", "true", "yes"].includes(String(process.env.E2E_ISOLATED || "").toLowerCase());
@@ -83,6 +84,20 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function loadAgentsEnv() {
   loadEnvFile(process.env.AGENTS_ENV_PATH || join(homedir(), ".agents", ".env"));
   loadEnvFile(join(process.cwd(), ".env"));
+  loadEnvFile(process.env.MAPLE_LOCAL_ENV_FILE || join(process.cwd(), ".env.local"));
+}
+
+function normalizeLocalDockerE2EEnv() {
+  const localMode = ["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) ||
+    process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" ||
+    process.env.MAPLE_SANDBOX_PROVIDER === "local_docker" ||
+    process.env.E2E_SANDBOX_PROVIDER === "local_docker";
+  if (localMode && !process.env.MAPLE_MYSQL_PORT && !process.env.MYSQL_PORT) {
+    process.env.MAPLE_MYSQL_PORT = process.env.MAPLE_MYSQL_HOST_PORT || "3307";
+  }
+  if (localMode && !process.env.MAPLE_MYSQL_DATABASE && !process.env.MYSQL_DATABASE) process.env.MAPLE_MYSQL_DATABASE = "maple";
+  if (localMode && !process.env.MAPLE_MYSQL_USER && !process.env.MYSQL_USER) process.env.MAPLE_MYSQL_USER = "root";
+  if (localMode && !process.env.MAPLE_MYSQL_PASSWORD && !process.env.MYSQL_PASSWORD) process.env.MAPLE_MYSQL_PASSWORD = "maple";
 }
 
 function writeFakeVefaasRuntimeDeployScript(dir) {
@@ -1414,6 +1429,9 @@ await step("React console customer UI walkthrough", async () => {
     }
   ]);
   const page = await context.newPage();
+  const auditDir = join(process.cwd(), "test-results", "local-docker-ui-audit");
+  mkdirSync(auditDir, { recursive: true });
+  const auditScreenshots = [];
   await page.addInitScript((cookie) => {
     document.cookie = `${cookie}; path=/; SameSite=Lax`;
     window.localStorage.setItem("cc_authed", "1");
@@ -1463,6 +1481,32 @@ await step("React console customer UI walkthrough", async () => {
     await waitForExpectedText(expected);
     buttonAudit.push(auditLabel);
   };
+  const screenshotAudit = async (name) => {
+    const path = join(auditDir, `${name}.png`);
+    await page.screenshot({ path, fullPage: false });
+    auditScreenshots.push(path);
+    return path;
+  };
+  const drawerText = async (selector) => page.locator(selector).innerText({ timeout: 10_000 });
+  const expectTextIncludes = (label, text, required) => {
+    const missing = required.filter((item) => !text.includes(item));
+    if (missing.length) throw new Error(`${label} missing text: ${missing.join(", ")}; body=${text.slice(0, 1600)}`);
+  };
+  const expectTextExcludes = (label, text, forbidden) => {
+    const present = forbidden.filter((item) => text.includes(item));
+    if (present.length) throw new Error(`${label} leaked cloud/local-wrong text: ${present.join(", ")}; body=${text.slice(0, 1600)}`);
+  };
+  const openWorkspaceSettings = async () => {
+    await page.locator(".ws-settings").first().click();
+    await page.locator(".settings-drawer").waitFor({ state: "visible", timeout: 10_000 });
+    await waitForAnyBodyText(["工作区设置", "Workspace settings"]);
+    buttonAudit.push("workspace-settings:open");
+  };
+  const clickSettingsTab = async (label, expected, auditLabel) => {
+    await page.locator(".settings-drawer .settings-seg").getByRole("button", { name: label }).click();
+    await waitForExpectedText(expected);
+    buttonAudit.push(auditLabel);
+  };
   try {
     await page.goto(`${webBase}/?dev_login=1`, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.evaluate((cookie) => {
@@ -1480,6 +1524,77 @@ await step("React console customer UI walkthrough", async () => {
     await waitForBodyText("仪表盘");
     await waitForBodyText(agent.name);
     buttonAudit.push("dashboard:real-data");
+
+    await openWorkspaceSettings();
+    let settingsText = await drawerText(".settings-drawer");
+    expectTextIncludes("settings overview", settingsText, ["Local Docker", workspaceOnboarding.workspaceRecord.name]);
+    if (!useE2BSandbox) expectTextExcludes("settings overview", settingsText, ["VeFaaS Runtime", "E2B_API_KEY"]);
+    await screenshotAudit("settings-overview");
+
+    await clickSettingsTab(/运行时配置|Runtime/, "Local Docker Runtime", "workspace-settings:runtime");
+    await waitForAnyBodyText(["预热 Runtime", "Prewarmed runtimes"]);
+    settingsText = await drawerText(".settings-drawer");
+    if (!useE2BSandbox) {
+      expectTextIncludes("settings runtime", settingsText, ["Local Docker Runtime", "DOCKER_SOCKET", "IMAGE", "PREWARMED_MEMBERS", "Image", "/workspace"]);
+      expectTextExcludes("settings runtime", settingsText, ["VeFaaS Runtime", "cloud_function_id", "CPU Milli", "QPS"]);
+    }
+    await screenshotAudit("settings-runtime");
+
+    await page.locator(".settings-drawer .provider-detail-btn").first().click();
+    await page.locator(".pool-detail-drawer").waitFor({ state: "visible", timeout: 10_000 });
+    await waitForAnyBodyText(["Local Docker runtime member 状态", "Local Docker runtime member status"]);
+    let poolText = await drawerText(".pool-detail-drawer");
+    if (!useE2BSandbox) {
+      expectTextIncludes("runtime pool drawer", poolText, ["local_docker", "image", "/workspace", "活跃会话"]);
+      expectTextExcludes("runtime pool drawer", poolText, ["cloud_function_id", "invoke_url", "VeFaaS function", "managed-agents-platform-vefaas"]);
+    }
+    await screenshotAudit("runtime-pool-drawer");
+    buttonAudit.push("workspace-settings:runtime-pool-drawer");
+    await page.locator(".pool-detail-drawer .x").click();
+    await page.locator(".pool-detail-drawer").waitFor({ state: "detached", timeout: 5_000 });
+
+    await clickSettingsTab(/沙箱配置|Providers/, "Local Docker Sandbox", "workspace-settings:providers");
+    settingsText = await drawerText(".settings-drawer");
+    if (!useE2BSandbox) {
+      expectTextIncludes("settings sandbox", settingsText, ["Local Docker Sandbox", "DOCKER_SOCKET", "IMAGE", "NETWORKING", "Local Docker"]);
+      expectTextExcludes("settings sandbox", settingsText, ["E2B_API_KEY", "VEFAAS_SANDBOX_FUNCTION_ID", "gateway_url"]);
+    }
+    await screenshotAudit("settings-sandbox");
+
+    await page.locator(".settings-drawer .provider-detail-btn").first().click();
+    await page.locator(".pool-detail-drawer").waitFor({ state: "visible", timeout: 10_000 });
+    await waitForAnyBodyText(["Local Docker standby / claimed / failed", "Local Docker standby / claimed / failed member status"]);
+    poolText = await drawerText(".pool-detail-drawer");
+    if (!useE2BSandbox) {
+      expectTextIncludes("sandbox pool drawer", poolText, ["docker_member_id", "image", "container_name"]);
+      expectTextExcludes("sandbox pool drawer", poolText, ["E2B_API_KEY", "function_id", "gateway_url"]);
+    }
+    await screenshotAudit("sandbox-pool-drawer");
+    buttonAudit.push("workspace-settings:sandbox-pool-drawer");
+    await page.locator(".pool-detail-drawer .x").click();
+    await page.locator(".pool-detail-drawer").waitFor({ state: "detached", timeout: 5_000 });
+
+    await clickSettingsTab(/模型管理|Model pool/, modelConfig.name, "workspace-settings:models");
+    settingsText = await drawerText(".settings-drawer");
+    expectTextIncludes("settings models", settingsText, [modelConfig.name, modelConfig.model_name]);
+    if (!useE2BSandbox) expectTextExcludes("settings models", settingsText, ["VolcoEngine", "doubao"]);
+    await screenshotAudit("settings-models");
+
+    await clickSettingsTab(/用户管理|Users/, testSession.user.email, "workspace-settings:members");
+    settingsText = await drawerText(".settings-drawer");
+    expectTextIncludes("settings members", settingsText, [testSession.user.email]);
+    await screenshotAudit("settings-members");
+
+    await clickSettingsTab(/秘钥管理|API keys/, ["工作区 API 秘钥", "Workspace API keys"], "workspace-settings:keys");
+    await page.locator(".settings-drawer .key-create-row input").fill(`E2E Settings Key ${stamp}`);
+    await page.locator(".settings-drawer .key-create-row").getByRole("button", { name: /创建 Key|Create key/ }).click();
+    await page.waitForFunction((expected) => document.body.innerText.includes(expected), `E2E Settings Key ${stamp}`, { timeout: 40_000 });
+    settingsText = await drawerText(".settings-drawer");
+    expectTextIncludes("settings keys", settingsText, [`E2E Settings Key ${stamp}`, "maple_ws_"]);
+    await screenshotAudit("settings-keys");
+    buttonAudit.push("workspace-settings:create-key");
+    await page.locator(".settings-drawer .x").click();
+    await page.locator(".settings-drawer").waitFor({ state: "detached", timeout: 5_000 });
 
     await clickButtonText("构建智能体", "浏览模板", "quickstart:open-from-dashboard");
     for (const templateName of ["Data insights analyst", "Customer knowledge assistant", "Market monitoring brief", "Incident response commander", "Compliance audit investigator", "Developer productivity assistant", "Growth experiment designer", "Finance reconciliation bot"]) {
@@ -1573,7 +1688,7 @@ await step("React console customer UI walkthrough", async () => {
     const mobileScreenshot = `/tmp/managed-agents-e2e-mobile-${stamp}.png`;
     await page.screenshot({ path: mobileScreenshot, fullPage: false });
     if (consoleIssues.length > 0) throw new Error(`console issues: ${consoleIssues.join("; ")}`);
-    return { screenshots: [desktopScreenshot, mobileScreenshot], navChecks: 10, buttonAudit };
+    return { screenshots: [...auditScreenshots, desktopScreenshot, mobileScreenshot], navChecks: 10, buttonAudit };
   } finally {
     await browser.close();
   }
