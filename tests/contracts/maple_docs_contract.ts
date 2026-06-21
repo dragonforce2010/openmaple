@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const docsView = readFileSync("apps/admin-web/src/pages/docs/DocumentationView.tsx", "utf8");
 const docs = readSources([
@@ -30,6 +30,7 @@ const server = readSources([
 ]);
 const sdk = readFileSync("packages/sdk/index.mjs", "utf8");
 const sdkTypes = readFileSync("packages/sdk/index.d.ts", "utf8");
+const providerReadiness = readFileSync("PROVIDER_READINESS.md", "utf8");
 assert.match(docsView, /function DocumentationView\(\)/, "DocumentationView should exist");
 
 for (const forbidden of [
@@ -193,6 +194,22 @@ for (const typeAnchor of [
   "streamSessionEvents(id: string, options?: MapleSessionStreamOptions)"
 ]) {
   assert.match(sdkTypes, new RegExp(escapeRegExp(typeAnchor)), `SDK types missing documented method: ${typeAnchor}`);
+}
+
+for (const readinessAnchor of [
+  "| AWS Lambda agent runtime | Configuration stub |",
+  "AWS Lambda agent runtime provider is configured but the invoke adapter is not implemented yet.",
+  "| Vercel sandbox | Configuration stub |",
+  "Vercel sandbox provider is configured but the sandbox adapter is not implemented yet.",
+  "| local_docker | Runnable locally |",
+  "| E2B | Implemented with credentials |",
+  "| veFaaS sandbox | Implemented with credentials |"
+]) {
+  assert.match(providerReadiness, new RegExp(escapeRegExp(readinessAnchor)), `provider readiness missing honest status anchor: ${readinessAnchor}`);
+}
+
+for (const evidencePath of [...providerReadiness.matchAll(/`(apps\/[^`]+|tests\/[^`]+)`/g)].map((match) => match[1])) {
+  assert.equal(existsSync(evidencePath), true, `provider readiness evidence path missing: ${evidencePath}`);
 }
 
 console.log("maple docs contract passed");
