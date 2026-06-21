@@ -26,6 +26,7 @@
     "assets:social-card": "bun scripts/render-social-card.mjs",
     "typecheck": "bunx tsc --noEmit",
     "lint": "eslint apps/admin-web && eslint apps/control-plane-api agents packages",
+    "test:media-quality": "bun scripts/check-media-quality.mjs",
     "test:public-hygiene": "bun scripts/check-public-hygiene.mjs",
     "test:bun-runtime": "bun tests/contracts/bun_runtime_contract.ts",
     "test:project-env": "bun tests/contracts/project_env_contract.ts",
