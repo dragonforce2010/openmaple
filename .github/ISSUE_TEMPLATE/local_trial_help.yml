@@ -1,0 +1,60 @@
+name: Local Docker trial help
+description: Get help when the one-command local trial or smoke check fails.
+title: "[Local trial]: "
+labels: ["question", "provider:docker", "status:needs-repro"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for `./scripts/setup-local-docker.sh`, `npm run smoke:local`, local Docker runtime pools, or local Docker sandbox pools.
+
+        Please remove secrets, API keys, private hostnames, and customer data before posting logs.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: What did you try?
+      options:
+        - label: I ran `./scripts/setup-local-docker.sh`.
+        - label: I ran `npm run smoke:local -- --base http://127.0.0.1:27951`.
+        - label: I opened `http://127.0.0.1:8080/`.
+        - label: I checked `http://127.0.0.1:27951/health`.
+  - type: dropdown
+    id: failure_point
+    attributes:
+      label: Where did it fail?
+      options:
+        - Setup script
+        - Docker build or container health
+        - API health on 127.0.0.1:27951
+        - Web console on 127.0.0.1:8080
+        - Local dev login
+        - Runtime pool
+        - Sandbox pool
+        - Smoke check
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Terminal output
+      description: Paste the relevant public-safe output from setup or smoke.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: docker
+    attributes:
+      label: Docker state
+      description: Paste relevant `docker ps`, `docker compose ps`, or container health output.
+      render: text
+  - type: input
+    id: os
+    attributes:
+      label: OS and Docker version
+      placeholder: macOS 15 / Docker Desktop 4.x
+  - type: input
+    id: version
+    attributes:
+      label: OpenMaple version or commit
+      placeholder: v0.2.1 or commit SHA
