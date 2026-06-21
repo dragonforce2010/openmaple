@@ -47,7 +47,11 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 docker compose up --build
 ```
 
-然后打开：
+然后验证并打开：
+
+```bash
+npm run smoke:local
+```
 
 ```text
 Console: http://127.0.0.1:27951/
@@ -164,6 +168,7 @@ Docker Compose 会同时启动 OpenMaple API/Web 控制台和本地 MySQL 8：
 
 ```bash
 docker compose up --build
+npm run smoke:local
 curl http://127.0.0.1:27951/health
 curl http://127.0.0.1:27951/v1/auth/bootstrap
 ```

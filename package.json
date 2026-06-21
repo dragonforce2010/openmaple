@@ -19,6 +19,7 @@
     "dev:web": "bunx vite --config apps/admin-web/vite.config.ts --host 127.0.0.1 --port 5173",
     "start": "bun apps/control-plane-api/src/index.ts",
     "maple": "bun packages/cli/maple.mjs",
+    "smoke:local": "node scripts/local-trial-smoke.mjs",
     "build": "bunx tsc --noEmit && bunx vite build --config apps/admin-web/vite.config.ts",
     "preview": "bunx vite preview --config apps/admin-web/vite.config.ts --host 127.0.0.1 --port 5173",
     "typecheck": "bunx tsc --noEmit",
