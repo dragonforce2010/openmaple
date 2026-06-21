@@ -1,8 +1,10 @@
 import { QUICKSTART_BUILDER_PURPOSE, createBuilderAgentConfig, createBuilderEnvironmentConfig, createQuickstartEnvironmentConfig } from "@maple/super-agent";
 import { normalizeAgentLoop } from "../agentLoops";
 import { emitSessionEvent } from "../eventHub";
+import { visibleModelConfigsForCurrentMode } from "../modelGateway";
 import { callProvider, type ChatMessage, type ToolCall } from "../provider";
-import { createAgent, createEnvironment, createSession, createSessionEvent, getDefaultModelConfig, getEnvironment, getSession, getWorkspace, listAgents, listEnvironments, listSessionEvents, listSessions, updateSessionStatus, workspaceIncludesModelConfig } from "../store";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
+import { createAgent, createEnvironment, createSession, createSessionEvent, getEnvironment, getSession, getWorkspace, listAgents, listEnvironments, listModelConfigs, listSessionEvents, listSessions, updateSessionStatus, workspaceIncludesModelConfig } from "../store";
 import type { AgentConfig, AgentLoopType, JsonRecord, SessionEvent } from "../types";
 import { buildAgentDraft, buildLocalAgentDraft } from "./agentBuilder";
 import { builderProviderTools, builderSystemPrompt } from "./builderPrompts";
@@ -44,9 +46,10 @@ export function isHiddenSession(record: unknown) {
 }
 
 function modelFromWorkspace(workspaceId: string) {
-  const config = getDefaultModelConfig(workspaceId) as JsonRecord | null;
+  const configs = visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]);
+  const config = configs.find((modelConfig) => modelConfig.is_default) || configs[0] || null;
   if (!config) {
-    return { provider: "openai", id: process.env.OPENAI_MODEL || process.env.ARK_MODEL || "doubao-seed-1-6-251015", speed: "standard" };
+    return { provider: "openai", id: isLocalDockerMode() ? "local-docker-no-model" : process.env.OPENAI_MODEL || process.env.ARK_MODEL || "doubao-seed-1-6-251015", speed: "standard" };
   }
   return {
     provider: String(config.provider_type || "openai"),
@@ -206,12 +209,8 @@ function builderToolLabel(name: string) {
   return `执行 ${name}`;
 }
 
-function localDockerModeEnabled() {
-  return ["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) || (process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" && process.env.MAPLE_SANDBOX_PROVIDER === "local_docker");
-}
-
 function shouldUseLocalBuilderDraft(errorMessage: string) {
-  return /timeout|timed out|aborted/i.test(errorMessage) || (localDockerModeEnabled() && /401|403|auth|unauthori[sz]ed|api key|credential|provider credential/i.test(errorMessage));
+  return /timeout|timed out|aborted/i.test(errorMessage) || isLocalDockerMode();
 }
 
 function emitAgentDraftCard(sessionId: string, prompt: string, draft: AgentConfig) {

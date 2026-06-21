@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
 import type { AuthenticatedRequest, JsonRecord } from "./routeDeps";
 import {
   agentLoopTypes,
@@ -10,12 +11,14 @@ import {
   enqueueSessionTurn,
   ensureGlobalModelConfigs,
   ensureQuickstartBuilderSession,
+  getWorkspace,
   getModelConfig,
   getSession,
   isQuickstartBuilderSession,
   listModelConfigs,
   runQuickstartBuilderAction,
   runQuickstartBuilderTurn,
+  visibleModelConfigsForCurrentMode,
   WorkspaceRuntimePoolUnavailableError,
   workspaceIncludesModelConfig,
   z
@@ -64,6 +67,12 @@ function resolveDraftWorkspaceId(user: { id: string }, requestedWorkspaceId?: st
   return ownerWorkspaceId && ownerWorkspaceId !== "-1" && canAccessWorkspace(user.id, ownerWorkspaceId) ? ownerWorkspaceId : workspaceId;
 }
 
+function workspaceRequiresModelPool(workspaceId: string) {
+  const workspace = getWorkspace(workspaceId) as JsonRecord | null;
+  if (!workspace) return true;
+  return !(isLocalDockerMode() || (workspace.runtime_provider === "local_docker" && workspace.sandbox_provider === "local_docker"));
+}
+
 app.post("/v1/quickstart/builder_session", (request: AuthenticatedRequest, response) => {
   const schema = z.object({
     workspace_id: z.string().optional(),
@@ -76,7 +85,7 @@ app.post("/v1/quickstart/builder_session", (request: AuthenticatedRequest, respo
   const workspaceId = fallbackWorkspaceId(user, parsed.data.workspace_id ?? null);
   if (!workspaceId) return response.status(400).json({ error: "workspace_required" });
   if (!canAccessWorkspace(user.id, workspaceId)) return response.status(403).json({ error: "workspace_forbidden" });
-  if ((listModelConfigs(workspaceId) as JsonRecord[]).length === 0) {
+  if (workspaceRequiresModelPool(workspaceId) && visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]).length === 0) {
     return response.status(400).json({ error: "model_pool_required", message: "Configure at least one model in the model pool before using Quickstart." });
   }
   if (parsed.data.model_config_id && !workspaceIncludesModelConfig(workspaceId, parsed.data.model_config_id)) {
@@ -118,7 +127,7 @@ app.post("/v1/quickstart/builder_session/:sessionId/message", async (request: Au
   if (metadata.owner_user_id !== user.id) return response.status(403).json({ error: "quickstart_builder_owner_required" });
   const workspaceId = String(session.workspace_id || metadata.workspace_id || "");
   if (!workspaceId || !canAccessWorkspace(user.id, workspaceId)) return response.status(403).json({ error: "workspace_forbidden" });
-  if ((listModelConfigs(workspaceId) as JsonRecord[]).length === 0) {
+  if (workspaceRequiresModelPool(workspaceId) && visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]).length === 0) {
     return response.status(400).json({ error: "model_pool_required", message: "Configure at least one model in the model pool before using Quickstart." });
   }
   if (parsed.data.model_config_id && !workspaceIncludesModelConfig(workspaceId, parsed.data.model_config_id)) {
@@ -162,7 +171,7 @@ app.post("/v1/quickstart/builder_session/:sessionId/action", (request: Authentic
   if (metadata.owner_user_id !== user.id) return response.status(403).json({ error: "quickstart_builder_owner_required" });
   const workspaceId = String(session.workspace_id || metadata.workspace_id || "");
   if (!workspaceId || !canAccessWorkspace(user.id, workspaceId)) return response.status(403).json({ error: "workspace_forbidden" });
-  if ((listModelConfigs(workspaceId) as JsonRecord[]).length === 0) {
+  if (workspaceRequiresModelPool(workspaceId) && visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]).length === 0) {
     return response.status(400).json({ error: "model_pool_required", message: "Configure at least one model in the model pool before using Quickstart." });
   }
   try {

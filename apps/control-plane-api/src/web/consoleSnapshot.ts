@@ -1,4 +1,5 @@
 import type { AuthUser } from "../auth";
+import { visibleModelConfigsForCurrentMode } from "../modelGateway";
 import {
   canAccessWorkspace,
   db,
@@ -24,7 +25,7 @@ export function buildConsoleSnapshot(user: AuthUser) {
   const agents = selectedWorkspaceId ? (listAgents(selectedWorkspaceId) as JsonRecord[]) : [];
   const environments = selectedWorkspaceId ? (listEnvironments(selectedWorkspaceId) as JsonRecord[]) : [];
   const vaults = selectedWorkspaceId ? (listVaults(selectedWorkspaceId) as JsonRecord[]) : [];
-  const models = listModelConfigs(selectedWorkspaceId ?? "-1") as JsonRecord[];
+  const models = visibleModelConfigsForCurrentMode(listModelConfigs(selectedWorkspaceId ?? "-1") as JsonRecord[]);
   const apiKeys = selectedWorkspaceId ? (listWorkspaceApiKeys(selectedWorkspaceId) as JsonRecord[]) : [];
   const sessions = (listSessions() as JsonRecord[]).filter((session) => {
     const workspaceId = typeof session.workspace_id === "string" ? session.workspace_id : null;

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { createHash, randomBytes } from "node:crypto";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
 import { createAuthSession, deleteAuthSession, getAuthSessionByHash, getTenantApiKeyByHash, getUser, getWorkspaceApiKeyByHash, touchTenantApiKey, touchWorkspaceApiKey, upsertUser } from "../store";
 import type { JsonRecord } from "../types";
 import { decodeStatePart, encodeStatePart, safeWebReturnPath } from "./returnPath";
@@ -12,7 +13,7 @@ export const authCookieName = "maple_session"; export const oauthStateCookieName
 const sessionDays = Number(process.env.MAPLE_AUTH_SESSION_DAYS || 7);
 
 export function listAuthProviders() {
-  if (["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) || (process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" && process.env.MAPLE_SANDBOX_PROVIDER === "local_docker")) return [{ id: "local", name: "Local dev login", configured: true }];
+  if (isLocalDockerMode()) return [{ id: "local", name: "Local dev login", configured: true }];
   return [
     { id: "local", name: "Local dev login", configured: true }, { id: "oauth", name: "OAuth 2.0", configured: Boolean(getProviderConfig("oauth")) },
     { id: "oidc", name: "OIDC", configured: Boolean(getProviderConfig("oidc")) }, { id: "lark_sso", name: "Lark SSO", configured: Boolean(getProviderConfig("lark_sso")) },

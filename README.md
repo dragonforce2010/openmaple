@@ -72,6 +72,10 @@ API health:   http://127.0.0.1:27951/health
 
 The local stack is self-contained for evaluation: it builds OpenMaple, starts separate `web`, `api`, and `mysql` services, enables local dev login, and persists data in the `mysql_data` volume. It defaults both the agent runtime provider and sandbox provider to `local_docker`, mounts the host Docker socket into the API service, and prewarms runtime/sandbox pools without E2B or veFaaS credentials. OAuth/SSO providers are hidden in local Docker mode; model keys are only needed when you run real model-backed agent loops.
 
+Local Docker mode starts with an empty model pool and does not read host provider keys implicitly. To show a default model, copy `config/local-model.example.json` to `config/local-model.json`, set `base_url`, `model_name`, and `api_key_env`, then rerun setup. The bundled VolcoEngine presets are not seeded in local Docker mode unless you explicitly set `MAPLE_SEED_DEFAULT_MODELS=true`.
+
+Optional demo data lives in `docker/local-demo-data.sql`. Set `MAPLE_SEED_DEMO_DATA=true` before running the setup script, or set it in `.env.local`, to import two demo tenants, users, agents, runtime/sandbox pool rows, and sessions.
+
 For host-side tests or scripts, the stack also exposes the API on `127.0.0.1:27951` and MySQL on `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`.
 
 No local Docker setup? Open [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1), wait for the devcontainer to finish, then run `./scripts/setup-local-docker.sh` and `npm run smoke:local`. Codespaces forwards the web console and API ports for you.

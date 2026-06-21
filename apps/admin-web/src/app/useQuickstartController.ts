@@ -126,7 +126,6 @@ export function useQuickstartController(input: {
   }
 
   async function ensureQuickBuilderSession() {
-    if (!modelConfigs.length) throw new Error(L("当前工作区没有可用模型池。请先配置模型池。", "No model pool is available in this workspace. Configure the model pool first."));
     if (quickBuilderSessionId && quickBuilderDetail?.session.workspace_id === selectedWorkspaceId) return quickBuilderSessionId;
     const result = await apiPost<QuickstartBuilderResponse>("/v1/quickstart/builder_session", {
       workspace_id: selectedWorkspaceId || undefined,
@@ -141,12 +140,6 @@ export function useQuickstartController(input: {
   async function buildDraft(promptOverride?: string) {
     const prompt = typeof promptOverride === "string" ? promptOverride : draftPrompt;
     if (busy || !prompt.trim()) return;
-    if (!modelConfigs.length) {
-      const message = L("当前工作区没有可用模型池。请先在模型页配置至少一个模型。", "No model pool is available. Configure at least one model first.");
-      input.setError(message);
-      toast(message, "err");
-      return;
-    }
     input.setQuickSubmittedPrompt(prompt.trim());
     input.setDraftPrompt("");
     input.setBusy(true);
@@ -177,12 +170,6 @@ export function useQuickstartController(input: {
 
   async function createDraftAgent() {
     if (busy || !draft) return;
-    if (!modelConfigs.length) {
-      const message = L("当前工作区没有可用模型池。请先在模型页配置至少一个模型。", "No model pool is available. Configure at least one model first.");
-      input.setError(message);
-      toast(message, "err");
-      return;
-    }
     input.setBusy(true);
     input.setBusyAction("create_agent");
     input.setBusyLabel(L("正在创建 Agent…", "Creating agent..."));

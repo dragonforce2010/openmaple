@@ -34,6 +34,7 @@ Optional overrides:
   MAPLE_DOCKER_IMAGE=node:22-bookworm
   MAPLE_SETUP_INSTALL_MISSING=false
   MAPLE_SETUP_IMPORT_MODEL_KEYS=true
+  MAPLE_SEED_DEMO_DATA=true
 EOF
 }
 
@@ -48,6 +49,10 @@ is_macos() {
 env_value() {
   local key="$1"
   local fallback="$2"
+  if [ "${!key+x}" = "x" ] && [ -n "${!key}" ]; then
+    printf '%s' "${!key}"
+    return
+  fi
   if [ ! -f "$env_file" ]; then
     printf '%s' "$fallback"
     return
@@ -163,6 +168,7 @@ pick_port() {
 
 write_env_file() {
   /bin/mkdir -p "$host_sessions_root"
+  /bin/mkdir -p "$repo_root/config"
   if [ -f "$env_file" ]; then
     log "Using existing env file: $env_file"
     return
@@ -171,18 +177,18 @@ write_env_file() {
   web_port="${MAPLE_WEB_PORT:-$(pick_port 8080)}"
   api_port="${MAPLE_API_PORT:-$(pick_port 27951)}"
   mysql_port="${MAPLE_MYSQL_HOST_PORT:-$(pick_port 3307)}"
-  local openai_api_key ark_api_key openai_base_url openai_model ark_model
-  openai_api_key=""
-  ark_api_key=""
-  openai_base_url=""
-  openai_model=""
-  ark_model=""
+  local local_openai_api_key local_ark_api_key local_openai_base_url local_openai_model local_ark_model
+  local_openai_api_key=""
+  local_ark_api_key=""
+  local_openai_base_url=""
+  local_openai_model=""
+  local_ark_model=""
   if [ "${MAPLE_SETUP_IMPORT_MODEL_KEYS:-false}" = "true" ]; then
-    openai_api_key="${OPENAI_API_KEY:-}"
-    ark_api_key="${ARK_API_KEY:-}"
-    openai_base_url="${OPENAI_BASE_URL:-}"
-    openai_model="${OPENAI_MODEL:-}"
-    ark_model="${ARK_MODEL:-}"
+    local_openai_api_key="${OPENAI_API_KEY:-}"
+    local_ark_api_key="${ARK_API_KEY:-}"
+    local_openai_base_url="${OPENAI_BASE_URL:-}"
+    local_openai_model="${OPENAI_MODEL:-}"
+    local_ark_model="${ARK_MODEL:-}"
   fi
   log "Creating minimal local env file: $env_file"
   {
@@ -199,13 +205,31 @@ write_env_file() {
     printf 'MAPLE_DOCKER_IMAGE=%s\n' "${MAPLE_DOCKER_IMAGE:-node:22-bookworm}"
     printf 'MAPLE_DEV_LOGIN=true\n'
     printf 'MAPLE_DEV_API_KEY=%s\n' "${MAPLE_DEV_API_KEY:-maple_dev_key}"
+    printf 'MAPLE_LOCAL_MODEL_CONFIG_FILE=%s\n' "${MAPLE_LOCAL_MODEL_CONFIG_FILE:-config/local-model.json}"
+    printf 'MAPLE_SEED_DEMO_DATA=%s\n' "${MAPLE_SEED_DEMO_DATA:-false}"
     printf 'MAPLE_DOCKER_WORKSPACE_HOST_ROOT=%s\n' "$host_sessions_root"
-    printf 'OPENAI_API_KEY=%s\n' "$openai_api_key"
-    printf 'ARK_API_KEY=%s\n' "$ark_api_key"
-    printf 'OPENAI_BASE_URL=%s\n' "$openai_base_url"
-    printf 'OPENAI_MODEL=%s\n' "$openai_model"
-    printf 'ARK_MODEL=%s\n' "$ark_model"
+    printf 'MAPLE_LOCAL_OPENAI_API_KEY=%s\n' "$local_openai_api_key"
+    printf 'MAPLE_LOCAL_ARK_API_KEY=%s\n' "$local_ark_api_key"
+    printf 'MAPLE_LOCAL_OPENAI_BASE_URL=%s\n' "$local_openai_base_url"
+    printf 'MAPLE_LOCAL_OPENAI_MODEL=%s\n' "$local_openai_model"
+    printf 'MAPLE_LOCAL_ARK_MODEL=%s\n' "$local_ark_model"
   } > "$env_file"
+}
+
+explain_local_model_config() {
+  local configured_path model_config_file
+  configured_path="$(env_value MAPLE_LOCAL_MODEL_CONFIG_FILE config/local-model.json)"
+  if [[ "$configured_path" = /* ]]; then
+    model_config_file="$configured_path"
+  else
+    model_config_file="$repo_root/$configured_path"
+  fi
+  if [ -f "$model_config_file" ]; then
+    log "Using local model config: $model_config_file"
+    return
+  fi
+  log "No local model config found; model pool starts empty."
+  log "To enable a default model: cp config/local-model.example.json config/local-model.json, then fill model/base URL/API key env."
 }
 
 pull_runtime_image() {
@@ -231,11 +255,29 @@ wait_for_url() {
   die "$label did not become ready: $url"
 }
 
+import_demo_data() {
+  local compose="$1"
+  local enabled
+  enabled="$(env_value MAPLE_SEED_DEMO_DATA false)"
+  if [ "$enabled" != "true" ]; then
+    log "Demo data import disabled. Set MAPLE_SEED_DEMO_DATA=true to seed demo tenants, users, agents, and sessions."
+    return
+  fi
+  local sql_file="$repo_root/docker/local-demo-data.sql"
+  if [ ! -f "$sql_file" ]; then
+    die "Demo data SQL file missing: $sql_file"
+  fi
+  log "Importing local demo data from $sql_file"
+  # shellcheck disable=SC2086
+  $compose --env-file "$env_file" exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < "$sql_file"
+}
+
 main() {
   cd "$repo_root"
   ensure_docker_cli
   wait_for_docker
   write_env_file
+  explain_local_model_config
 
   local runtime_image
   runtime_image="$(env_value MAPLE_DOCKER_IMAGE node:22-bookworm)"
@@ -252,12 +294,16 @@ main() {
   api_port="$(env_value MAPLE_API_PORT 27951)"
   wait_for_url "API" "http://127.0.0.1:${api_port}/health"
   wait_for_url "Web console" "http://127.0.0.1:${web_port}/health"
+  import_demo_data "$compose"
 
   printf '\nOpenMaple local Docker is ready.\n'
   printf 'Web console: http://127.0.0.1:%s/\n' "$web_port"
   printf 'Local login:  http://127.0.0.1:%s/?dev_login=1\n' "$web_port"
   printf 'API health:   http://127.0.0.1:%s/health\n' "$api_port"
   printf 'Env file:     %s\n\n' "$env_file"
+  if [ "$(env_value MAPLE_SEED_DEMO_DATA false)" = "true" ]; then
+    printf 'Demo login:   demo-admin@openmaple.local (local dev login, no password)\n\n'
+  fi
   if is_macos; then
     open "http://127.0.0.1:${web_port}/?dev_login=1" >/dev/null 2>&1 || true
   fi

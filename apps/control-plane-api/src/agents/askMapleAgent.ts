@@ -1,15 +1,17 @@
 import { MAPLE_AGENT_PURPOSE, createMapleAgentConfig } from "@maple/super-agent";
 import { emitSessionEvent } from "../eventHub";
+import { visibleModelConfigsForCurrentMode } from "../modelGateway";
 import { callProvider, type ChatMessage } from "../provider";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
 import {
   createAgent,
   createEnvironment,
   createSession,
   createSessionEvent,
-  getDefaultModelConfig,
   getSession,
   listAgents,
   listEnvironments,
+  listModelConfigs,
   listSessionEvents,
   listSessions,
   updateSessionStatus
@@ -43,9 +45,10 @@ export function isAskMapleSession(session: unknown) {
 }
 
 function modelFromWorkspace(workspaceId: string) {
-  const config = getDefaultModelConfig(workspaceId) as JsonRecord | null;
+  const configs = visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId) as JsonRecord[]);
+  const config = configs.find((modelConfig) => modelConfig.is_default) || configs[0] || null;
   if (!config) {
-    return { provider: "openai", id: process.env.OPENAI_MODEL || process.env.ARK_MODEL || "doubao-seed-1-6-251015", speed: "standard" };
+    return { provider: "openai", id: isLocalDockerMode() ? "local-docker-no-model" : process.env.OPENAI_MODEL || process.env.ARK_MODEL || "doubao-seed-1-6-251015", speed: "standard" };
   }
   return {
     provider: String(config.provider_type || "openai"),
@@ -200,12 +203,8 @@ function askMapleMessages(detail: SessionDetailLike, question: string): ChatMess
   ];
 }
 
-function localDockerModeEnabled() {
-  return ["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) || (process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" && process.env.MAPLE_SANDBOX_PROVIDER === "local_docker");
-}
-
 function shouldUseLocalAnswer(error: unknown) {
-  return localDockerModeEnabled() && /timeout|timed out|aborted|401|403|auth|unauthori[sz]ed|api key|credential|provider credential/i.test(error instanceof Error ? error.message : String(error));
+  return isLocalDockerMode();
 }
 
 function localAskMapleAnswer(detail: SessionDetailLike, question: string) {

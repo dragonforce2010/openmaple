@@ -1,6 +1,7 @@
 import { defaultAgentLoop, isAgentLoopType, normalizeAgentLoop } from "../agentLoops";
 import { selectModelForPrompt, type ModelSelection } from "../modelGateway";
 import { callProviderText } from "../provider";
+import { isLocalDockerMode } from "../runtime/localDockerMode";
 import type { AgentConfig, AgentLoopType } from "../types";
 
 // A single draft is one large generation (full agent config). 8s was too tight for
@@ -52,14 +53,10 @@ function isProviderTimeout(error: unknown) {
   return /timeout|timed out|aborted/i.test(error instanceof Error ? error.message : String(error));
 }
 
-function localDockerModeEnabled() {
-  return ["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) || (process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" && process.env.MAPLE_SANDBOX_PROVIDER === "local_docker");
-}
-
 function shouldFallbackAgentDraft(error: unknown, explicitModelConfigId?: string | null) {
   if (isProviderTimeout(error)) return true;
-  if (explicitModelConfigId || !localDockerModeEnabled()) return false;
-  return /401|403|auth|unauthori[sz]ed|api key|credential|provider credential/i.test(error instanceof Error ? error.message : String(error));
+  if (explicitModelConfigId || !isLocalDockerMode()) return false;
+  return true;
 }
 
 export function buildLocalAgentDraft(

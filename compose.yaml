@@ -27,16 +27,18 @@ services:
       MAPLE_LOCAL_DOCKER_MODE: "true"
       MAPLE_DEV_LOGIN: ${MAPLE_DEV_LOGIN:-true}
       MAPLE_WEB_BASE_URL: ${MAPLE_WEB_BASE_URL:-http://127.0.0.1:${MAPLE_WEB_PORT:-8080}}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ARK_API_KEY: ${ARK_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-}
-      ARK_MODEL: ${ARK_MODEL:-}
+      MAPLE_LOCAL_MODEL_CONFIG_FILE: ${MAPLE_LOCAL_MODEL_CONFIG_FILE:-config/local-model.json}
+      OPENAI_API_KEY: ${MAPLE_LOCAL_OPENAI_API_KEY:-}
+      ARK_API_KEY: ${MAPLE_LOCAL_ARK_API_KEY:-}
+      OPENAI_BASE_URL: ${MAPLE_LOCAL_OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${MAPLE_LOCAL_OPENAI_MODEL:-}
+      ARK_MODEL: ${MAPLE_LOCAL_ARK_MODEL:-}
       MAPLE_AGENT_RUNTIME_PROVIDER: ${MAPLE_AGENT_RUNTIME_PROVIDER:-local_docker}
       MAPLE_SANDBOX_PROVIDER: ${MAPLE_SANDBOX_PROVIDER:-local_docker}
       MAPLE_DOCKER_IMAGE: ${MAPLE_DOCKER_IMAGE:-node:22-bookworm}
     volumes:
       - ./.managed-agents:/app/.managed-agents
+      - ./config:/app/config:ro
       - ${HOME}/.agents:/root/.agents
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:

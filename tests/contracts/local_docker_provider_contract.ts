@@ -51,8 +51,7 @@ try {
   createdUserId = login.user.id;
 
   const models = await request("/v1/model_configs");
-  const defaultModel = models.data.find((item: Record<string, unknown>) => item.is_default) ?? models.data[0];
-  assert.ok(defaultModel?.id);
+  assert.equal(models.data.length, 0, "local Docker mode should not expose bundled model configs by default");
 
   const created = await request("/v1/workspace_onboarding", {
     method: "POST",
@@ -71,7 +70,7 @@ try {
       sandbox_provider: "local_docker",
       sandbox_config: { local_docker: { image: "node:22-bookworm", networking: { mode: "limited" } } },
       sandbox_pool: { desired_size: 2, standby_ttl_ms: 30 * 60 * 1000 },
-      model_config_ids: [defaultModel.id],
+      model_config_ids: [],
       api_key: { display_name: "Local Docker workspace key", scopes: ["control_plane", "data_plane"] },
       provider_credentials: {}
     })

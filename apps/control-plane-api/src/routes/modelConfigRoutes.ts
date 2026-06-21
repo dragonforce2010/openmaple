@@ -20,7 +20,8 @@ import {
   presetToTarget,
   testSavedModelConfig,
   testUnsavedModelConfig,
-  updateModelConfig
+  updateModelConfig,
+  visibleModelConfigsForCurrentMode
 } from "./routeDeps";
 import { fallbackWorkspaceId, maskSecretHint, routeParam, tenantIdOf } from "./routeHelpers";
 export function registerModelConfigRoutes(app: Express) {
@@ -29,7 +30,7 @@ app.get("/v1/model_configs", (request: AuthenticatedRequest, response) => {
   const workspaceId = fallbackWorkspaceId(user, typeof request.query.workspace_id === "string" ? request.query.workspace_id : null);
   if (workspaceId && !canAccessWorkspace(user.id, workspaceId)) return response.status(403).json({ error: "workspace_forbidden" });
   ensureGlobalModelConfigs();
-  response.json({ data: listModelConfigs(workspaceId || GLOBAL_SCOPE_ID) });
+  response.json({ data: visibleModelConfigsForCurrentMode(listModelConfigs(workspaceId || GLOBAL_SCOPE_ID) as JsonRecord[]) });
 });
 
 app.post("/v1/model_configs", (request: AuthenticatedRequest, response) => {

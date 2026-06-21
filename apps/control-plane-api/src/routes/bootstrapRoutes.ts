@@ -21,7 +21,8 @@ import {
   listVaults,
   listWorkspaceApiKeys,
   listWorkspacesForUser,
-  removeTenantUserFromTenant
+  removeTenantUserFromTenant,
+  visibleModelConfigsForCurrentMode
 } from "./routeDeps";
 import {
   accessibleTenantBySlug,
@@ -86,8 +87,8 @@ function appBootstrap(request: AuthenticatedRequest, response: Response) {
     deployments: nextWorkspaceId ? listAgentDeploymentsForWorkspace(nextWorkspaceId) : [],
     vaults: nextWorkspaceId ? listVaults(nextWorkspaceId) : [],
     memory_stores: nextWorkspaceId ? listMemoryStores(nextWorkspaceId) : [],
-    models: listModelConfigs(nextWorkspaceId || GLOBAL_SCOPE_ID),
-    onboarding_models: listGlobalModelConfigs(),
+    models: visibleModelConfigsForCurrentMode(listModelConfigs(nextWorkspaceId || GLOBAL_SCOPE_ID) as JsonRecord[]),
+    onboarding_models: visibleModelConfigsForCurrentMode(listGlobalModelConfigs() as JsonRecord[]),
     api_keys: nextWorkspaceId && canManageSelectedWorkspace ? listWorkspaceApiKeys(nextWorkspaceId) : []
   });
 }

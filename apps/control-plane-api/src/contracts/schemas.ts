@@ -137,10 +137,10 @@ const workspaceOnboardingBaseSchema = z.object({
   provider_credentials: z.record(z.string(), z.unknown()).default({})
 });
 
-const requiresModelPool = (value: { model_config_ids?: string[]; custom_model_configs?: unknown[] }) =>
-  (value.model_config_ids?.length ?? 0) > 0 || (value.custom_model_configs?.length ?? 0) > 0;
+const allowsEmptyModelPool = (value: { runtime_provider?: string; model_config_ids?: string[]; custom_model_configs?: unknown[] }) =>
+  value.runtime_provider === "local_docker" || (value.model_config_ids?.length ?? 0) > 0 || (value.custom_model_configs?.length ?? 0) > 0;
 
-export const workspaceOnboardingSchema = workspaceOnboardingBaseSchema.refine(requiresModelPool, {
+export const workspaceOnboardingSchema = workspaceOnboardingBaseSchema.refine(allowsEmptyModelPool, {
   message: "at least one model config is required",
   path: ["model_config_ids"]
 });
@@ -158,7 +158,7 @@ export const tenantApiKeySchema = z.object({
 export const workspaceCreateSchema = workspaceOnboardingBaseSchema.omit({ tenant: true }).extend({
   tenant_id: z.string().min(1).optional(),
   model_config_ids: z.array(z.string().min(1)).default([])
-}).refine(requiresModelPool, {
+}).refine(allowsEmptyModelPool, {
   message: "at least one model config is required",
   path: ["model_config_ids"]
 });

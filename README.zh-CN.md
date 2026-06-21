@@ -61,6 +61,10 @@ API health:   http://127.0.0.1:27951/health
 
 本地栈对评估是自包含的：它会构建 OpenMaple，启动独立的 `web`、`api`、`mysql` 服务，打开本地开发登录，并把数据保存在 `mysql_data` volume。默认 runtime provider 和 sandbox provider 都是 `local_docker`，API 服务会挂载宿主机 Docker socket，并初始化 runtime/sandbox 池，不需要 E2B 或 veFaaS 凭证。本地 Docker 模式隐藏 OAuth/SSO 登录；只有运行真实模型驱动的 agent loop 时才需要模型 key。
 
+Local Docker 模式默认模型池为空，也不会隐式读取宿主机 provider key。需要显示默认模型时，复制 `config/local-model.example.json` 到 `config/local-model.json`，填写 `base_url`、`model_name` 和 `api_key_env` 后重新运行 setup。除非显式设置 `MAPLE_SEED_DEFAULT_MODELS=true`，本地 Docker 模式不会自动写入 VolcoEngine 预置模型。
+
+可选测试数据在 `docker/local-demo-data.sql`。运行 setup 前设置 `MAPLE_SEED_DEMO_DATA=true`，或写入 `.env.local`，即可导入 2 个测试租户、测试用户、测试 Agent、runtime/sandbox pool 记录和测试 session。
+
 需要从宿主机跑测试或脚本时，本地栈也会把 API 暴露到 `127.0.0.1:27951`，把 MySQL 暴露到 `127.0.0.1:${MAPLE_MYSQL_HOST_PORT:-3307}`。
 
 本机没有 Docker 环境时，可以直接打开 [GitHub Codespaces](https://codespaces.new/dragonforce2010/openmaple?quickstart=1)，等待 devcontainer 初始化完成后运行 `./scripts/setup-local-docker.sh` 和 `npm run smoke:local`。Codespaces 会转发 Web Console 和 API 端口。
