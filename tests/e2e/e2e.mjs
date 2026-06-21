@@ -50,7 +50,7 @@ const clientSkillDirs = [
 ];
 
 const expectedButtonAudit = [
-  "template:客服知识库助手",
+  "template:Customer knowledge assistant",
   "quickstart:send-feedback",
   "quickstart:create-agent-feedback",
   "agents:update-model",
@@ -1421,13 +1421,13 @@ await step("React console customer UI walkthrough", async () => {
     buttonAudit.push("dashboard:real-data");
 
     await clickButtonText("构建智能体", "浏览模板", "quickstart:open-from-dashboard");
-    for (const templateName of ["数据洞察分析师", "客服知识库助手", "舆情监控周报", "事故响应指挥官", "合规审计取证员", "研发提效助手", "增长实验设计师", "财务对账机器人"]) {
+    for (const templateName of ["Data insights analyst", "Customer knowledge assistant", "Market monitoring brief", "Incident response commander", "Compliance audit investigator", "Developer productivity assistant", "Growth experiment designer", "Finance reconciliation bot"]) {
       await waitForBodyText(templateName);
       buttonAudit.push(`template-visible:${templateName}`);
     }
-    await page.getByText("客服知识库助手").first().click();
+    await page.getByText("Customer knowledge assistant").first().click();
     await page.waitForTimeout(120);
-    buttonAudit.push("template:客服知识库助手");
+    buttonAudit.push("template:Customer knowledge assistant");
 
     const uiDeployment = await request("/v1/deployments", {
       method: "POST",

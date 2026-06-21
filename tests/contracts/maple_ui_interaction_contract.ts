@@ -59,10 +59,10 @@ assert.match(userFacingSamples, new RegExp(escapeRegExp(stableBase)), "samples s
 assert.match(sources.codeSamples, /process\.env\.MAPLE_API_BASE_URL(?!\s*\|\|)/, "SDK snippets should require MAPLE_API_BASE_URL instead of hiding a localhost fallback");
 
 for (const forbidden of ["Blank agent config", "Deep researcher", "Structured extractor", "Field monitor"]) {
-  assert.equal(sources.templates.includes(forbidden), false, `template copy should be Chinese-first and product-ready: ${forbidden}`);
+  assert.equal(sources.templates.includes(forbidden), false, `template copy should be product-ready: ${forbidden}`);
 }
-for (const required of ["数据洞察", "客服知识库", "舆情监控", "事故响应", "合规审计", "研发提效", "增长实验", "财务对账"]) {
-  assert.match(sources.templates, new RegExp(escapeRegExp(required)), `missing deep Chinese template: ${required}`);
+for (const required of ["Data insights", "Customer knowledge", "Market monitoring", "Incident response", "Compliance audit", "Developer productivity", "Growth experiment", "Finance reconciliation"]) {
+  assert.match(sources.templates, new RegExp(escapeRegExp(required)), `missing product-ready English template: ${required}`);
 }
 for (const packageAnchor of ["packages", "pandas", "playwright", "openpyxl"]) {
   assert.match(sources.templates, new RegExp(escapeRegExp(packageAnchor)), `templates should include package-heavy scenarios: ${packageAnchor}`);

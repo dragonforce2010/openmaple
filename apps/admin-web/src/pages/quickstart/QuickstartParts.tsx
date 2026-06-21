@@ -23,7 +23,7 @@ export function templatePrompt(index: number) {
   const card = templateCards[index];
   if (!card) throw new Error(`templatePrompt: no template card at index ${index}`);
   const [name, description] = card;
-  return `创建一个${name}：${description}。`;
+  return `Create a ${name}: ${description}.`;
 }
 
 export function templateConfigText(index: number, format: QuickstartFormat) {
