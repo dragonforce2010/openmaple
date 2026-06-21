@@ -14,7 +14,11 @@ assert.equal(existsSync("apps/admin-web/vite.config.ts"), true, "admin-web must 
 
 for (const [name, command] of Object.entries(scripts)) {
   assert.doesNotMatch(command, /\bnpm\s+run\b/, `${name} must use bun run instead of npm run`);
-  assert.doesNotMatch(command, /\bnode\s+scripts\//, `${name} must use bun for project scripts`);
+  if (name === "smoke:local") {
+    assert.match(command, /^node scripts\/local-trial-smoke\.mjs$/, "smoke:local must stay Node-only for Docker Compose and Codespaces trials");
+  } else {
+    assert.doesNotMatch(command, /\bnode\s+scripts\//, `${name} must use bun for project scripts`);
+  }
   assert.doesNotMatch(command, /\btsx\b/, `${name} must use bun for TypeScript entrypoints`);
 }
 
