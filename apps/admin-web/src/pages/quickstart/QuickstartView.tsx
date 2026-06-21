@@ -31,7 +31,7 @@ export function QuickstartView(props: {
   vault: Vault | null;
   quickSessionId: string;
   environments: Environment[];
-  sandboxProvider: "e2b" | "vefaas";
+  sandboxProvider: "local_docker" | "e2b" | "vefaas";
   modelConfigs: ModelConfig[];
   selectedModelId: string;
   setSelectedModelId: (value: string) => void;
@@ -52,7 +52,7 @@ export function QuickstartView(props: {
   const toast = useToast();
   // Mirror the workspace's configured sandbox provider in the copy (the actual env created
   // by the backend already honors it); never hardcode E2B.
-  const sandboxLabel = props.sandboxProvider === "vefaas" ? "VeFaaS" : "E2B";
+  const sandboxLabel = props.sandboxProvider === "local_docker" ? "Local Docker" : props.sandboxProvider === "vefaas" ? "VeFaaS" : "E2B";
   const [query, setQuery] = useState("");
   const [rtab, setRtab] = useState<"config" | "preview">("config");
   const [fmt, setFmt] = useState<"yaml" | "json">("yaml");

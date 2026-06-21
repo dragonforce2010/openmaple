@@ -60,6 +60,17 @@ function pendingWorkspaceMemberUsers(input: { user_id: string; member_emails?: s
     .filter(Boolean) as JsonRecord[];
 }
 
+function runtimePoolProvisioner(provider: string) {
+  return provider === "local_docker"
+    ? { strategy: "least_active_sessions", provisioner: "local_docker" }
+    : { strategy: "least_active_sessions", provisioner: "vefaas_direct" };
+}
+
+function runtimePoolMemberRegion(provider: string, providerCredentials?: JsonRecord) {
+  if (provider === "local_docker") return "local";
+  return String((providerCredentials?.vefaas as Record<string, unknown> | undefined)?.VEFAAS_REGION || "cn-beijing");
+}
+
 export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
   const stamp = now();
   const tenantId = `tenant_${nanoid(10)}`;
@@ -186,7 +197,7 @@ export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
       poolConfig.max_concurrency_per_instance,
       poolConfig.cpu_milli,
       poolConfig.memory_mb,
-      toJson({ strategy: "least_active_sessions", provisioner: "vefaas_direct" }),
+      toJson(runtimePoolProvisioner(input.runtime_provider)),
       stamp,
       stamp
     );
@@ -200,7 +211,7 @@ export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
         poolId,
         workspaceId,
         input.runtime_provider,
-        String((input.provider_credentials?.vefaas as Record<string, unknown> | undefined)?.VEFAAS_REGION || "cn-beijing"),
+        runtimePoolMemberRegion(input.runtime_provider, input.provider_credentials),
         toJson({ provisioning: true }),
         stamp,
         stamp
@@ -328,7 +339,7 @@ export function createWorkspaceForUser(input: Omit<WorkspaceOnboardingInput, "te
       poolConfig.max_concurrency_per_instance,
       poolConfig.cpu_milli,
       poolConfig.memory_mb,
-      toJson({ strategy: "least_active_sessions", provisioner: "vefaas_direct" }),
+      toJson(runtimePoolProvisioner(input.runtime_provider)),
       stamp,
       stamp
     );
@@ -342,7 +353,7 @@ export function createWorkspaceForUser(input: Omit<WorkspaceOnboardingInput, "te
         poolId,
         workspaceId,
         input.runtime_provider,
-        String((input.provider_credentials?.vefaas as Record<string, unknown> | undefined)?.VEFAAS_REGION || "cn-beijing"),
+        runtimePoolMemberRegion(input.runtime_provider, input.provider_credentials),
         toJson({ provisioning: true }),
         stamp,
         stamp

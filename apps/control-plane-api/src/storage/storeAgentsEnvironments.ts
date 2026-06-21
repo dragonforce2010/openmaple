@@ -204,6 +204,23 @@ export function ensureDefaultEnvironments(workspaceId: string) {
     });
     return;
   }
+  if (sandboxProvider === "local_docker") {
+    createEnvironment({
+      name: "Local Docker Sandbox",
+      config: {
+        type: "local_docker",
+        sandbox: {
+          provider: "local_docker",
+          local_docker: {
+            image: process.env.MAPLE_DOCKER_IMAGE || "node:22-bookworm"
+          }
+        },
+        networking: { mode: "limited", allow_mcp_servers: true, allow_package_managers: true }
+      },
+      workspace_id: workspaceId
+    });
+    return;
+  }
   createEnvironment({
     name: "E2B Cloud Sandbox",
     config: {
@@ -266,6 +283,18 @@ export function selectRuntimePoolMember(workspaceId: string) {
 
 export function runtimePoolMemberAgentRuntime(member: JsonRecord) {
   const config = fromJson<JsonRecord>(String(member.config_json), {});
+  if (String(member.provider) === "local_docker" || String(config.provider) === "local_docker") {
+    return {
+      type: "local_docker",
+      provider: "local_docker",
+      runtime_pool_id: member.runtime_pool_id,
+      runtime_pool_member_id: member.id,
+      image: String(config.image || process.env.MAPLE_DOCKER_IMAGE || "node:22-bookworm"),
+      workspace_path: String(config.workspace_path || "/workspace"),
+      timeout_ms: Number(config.timeout_ms || 120_000),
+      envs: fromJson<Record<string, string>>(toJson(config.envs), {})
+    };
+  }
   return {
     type: "vefaas",
     provider: "vefaas",

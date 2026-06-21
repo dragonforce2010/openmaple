@@ -89,10 +89,11 @@ export function useWorkspaceActions(input: {
     modelConfigIds: string[];
     customModelConfigs: OnboardingCustomModelConfig[];
     apiKeyName: string;
+    runtimeProvider: "local_docker" | "vefaas";
     vefaasAccessKey: string;
     vefaasSecretKey: string;
     vefaasRegion: string;
-    sandboxProvider: "e2b" | "vefaas";
+    sandboxProvider: "local_docker" | "e2b" | "vefaas";
     e2bApiKey: string;
     vefaasSandboxFunctionId: string;
     vefaasSandboxGatewayUrl: string;
@@ -102,7 +103,7 @@ export function useWorkspaceActions(input: {
     const result = await apiPost<{ workspace: Workspace; api_key: WorkspaceApiKey }>("/v1/workspace_onboarding", {
       tenant: { name: onboarding.tenantName, description: onboarding.tenantDescription },
       workspace: { name: onboarding.workspaceName, description: onboarding.workspaceDescription, slug: onboarding.workspaceSlug || undefined },
-      runtime_provider: "vefaas",
+      runtime_provider: onboarding.runtimeProvider,
       runtime_pool: {
         desired_size: onboarding.desiredSize,
         min_instances_per_function: onboarding.minInstances,
@@ -114,6 +115,8 @@ export function useWorkspaceActions(input: {
       sandbox_provider: onboarding.sandboxProvider,
       sandbox_config: onboarding.sandboxProvider === "vefaas"
         ? { vefaas: { function_id: onboarding.vefaasSandboxFunctionId, gateway_url: onboarding.vefaasSandboxGatewayUrl, timeout_ms: onboarding.vefaasSandboxTimeoutMs, workspace_path: "/home/tiger/workspace" } }
+        : onboarding.sandboxProvider === "local_docker"
+          ? { local_docker: { image: "node:22-bookworm", networking: { mode: "limited", allow_mcp_servers: true, allow_package_managers: true } } }
         : {},
       sandbox_pool: { desired_size: onboarding.sandboxPoolSize, standby_ttl_ms: 30 * 60 * 1000 },
       model_config_ids: onboarding.modelConfigIds,
@@ -121,7 +124,7 @@ export function useWorkspaceActions(input: {
       api_key: { display_name: onboarding.apiKeyName, scopes: ["control_plane", "data_plane"] },
       admin: { email: input.currentUser?.email, name: input.currentUser?.name },
       provider_credentials: {
-        vefaas: { VOLCENGINE_ACCESS_KEY: onboarding.vefaasAccessKey, VOLCENGINE_SECRET_KEY: onboarding.vefaasSecretKey, VEFAAS_REGION: onboarding.vefaasRegion },
+        vefaas: onboarding.runtimeProvider === "vefaas" ? { VOLCENGINE_ACCESS_KEY: onboarding.vefaasAccessKey, VOLCENGINE_SECRET_KEY: onboarding.vefaasSecretKey, VEFAAS_REGION: onboarding.vefaasRegion } : {},
         e2b: onboarding.sandboxProvider === "e2b" ? { E2B_API_KEY: onboarding.e2bApiKey } : {}
       }
     });

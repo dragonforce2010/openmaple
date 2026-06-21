@@ -35,6 +35,13 @@ export function getSandboxDefaults(): SandboxDefaults {
       ...merged.local_docker,
       image: process.env.MAPLE_DOCKER_IMAGE || merged.local_docker.image
     },
+    daytona: {
+      ...merged.daytona,
+      api_key: process.env.DAYTONA_API_KEY || process.env.MAPLE_DAYTONA_API_KEY || merged.daytona.api_key,
+      server_url: process.env.DAYTONA_SERVER_URL || process.env.MAPLE_DAYTONA_SERVER_URL || merged.daytona.server_url,
+      workspace_class: process.env.DAYTONA_WORKSPACE_CLASS || process.env.MAPLE_DAYTONA_WORKSPACE_CLASS || merged.daytona.workspace_class,
+      timeout_ms: Number(process.env.DAYTONA_TIMEOUT_MS || process.env.MAPLE_DAYTONA_TIMEOUT_MS || merged.daytona.timeout_ms)
+    },
     vercel: {
       ...merged.vercel,
       api_key: process.env.VERCEL_SANDBOX_API_KEY || process.env.MAPLE_VERCEL_SANDBOX_API_KEY || merged.vercel.api_key,
@@ -155,6 +162,16 @@ function normalizeAgentRuntime(
       envs: stringifyRecord({ ...defaults.aws_lambda.envs, ...asRecord(awsLambda.envs ?? agentRuntime.envs ?? config.envs) })
     };
   }
+  if (provider === "local_docker") {
+    const localDocker = asRecord(agentRuntime.local_docker ?? config.local_docker ?? config.docker);
+    return {
+      provider: "local_docker",
+      image: String(localDocker.image || config.image || defaults.local_docker.image),
+      networking: asRecord(localDocker.networking ?? config.networking ?? defaults.local_docker.networking),
+      timeout_ms: Number(localDocker.timeout_ms || agentRuntime.timeout_ms || config.timeout_ms || 120_000),
+      envs: stringifyRecord(asRecord(localDocker.envs ?? agentRuntime.envs ?? config.envs))
+    };
+  }
   return { provider: "local" };
 }
 
@@ -185,6 +202,17 @@ function normalizeSandboxRuntime(
       runtime: String(vercel.runtime || config.runtime || defaults.vercel.runtime),
       timeout_ms: Number(vercel.timeout_ms || config.timeout_ms || defaults.vercel.timeout_ms),
       envs: stringifyRecord({ ...defaults.vercel.envs, ...asRecord(vercel.envs ?? config.envs) })
+    };
+  }
+  if (provider === "daytona") {
+    const daytona = asRecord(sandbox.daytona ?? config.daytona);
+    return {
+      provider: "daytona",
+      api_key: String(daytona.api_key || config.api_key || defaults.daytona.api_key),
+      server_url: String(daytona.server_url || config.server_url || defaults.daytona.server_url),
+      workspace_class: String(daytona.workspace_class || config.workspace_class || defaults.daytona.workspace_class),
+      timeout_ms: Number(daytona.timeout_ms || config.timeout_ms || defaults.daytona.timeout_ms),
+      envs: stringifyRecord({ ...defaults.daytona.envs, ...asRecord(daytona.envs ?? config.envs) })
     };
   }
   if (provider === "vefaas") {
@@ -230,6 +258,7 @@ function mergeDefaults(config: JsonRecord): SandboxDefaults {
   const e2b = asRecord(config.e2b);
   const localDocker = asRecord(config.local_docker ?? config.docker);
   const vercel = asRecord(config.vercel ?? config.vercel_sandbox);
+  const daytona = asRecord(config.daytona ?? config.daytona_sandbox);
   const sandbox = asRecord(config.sandbox);
   const vefaasSandbox = asRecord(sandbox.vefaas ?? sandbox.vefaas_sandbox ?? config.vefaas_sandbox ?? config.cloud_sandbox);
   const vefaas = asRecord(agentRuntime.vefaas ?? config.vefaas ?? config.volcengine_faas);
@@ -253,6 +282,11 @@ function mergeDefaults(config: JsonRecord): SandboxDefaults {
       sandbox_options: Array.isArray(localDocker.sandbox_options)
         ? localDocker.sandbox_options.map(String)
         : builtInDefaults.local_docker.sandbox_options
+    },
+    daytona: {
+      ...builtInDefaults.daytona,
+      ...daytona,
+      envs: stringifyRecord({ ...builtInDefaults.daytona.envs, ...asRecord(daytona.envs) })
     },
     vercel: {
       ...builtInDefaults.vercel,
@@ -281,6 +315,7 @@ function mergeDefaults(config: JsonRecord): SandboxDefaults {
 function normalizeSandboxProvider(value: string): SandboxProvider | null {
   const normalized = value.trim().toLowerCase();
   if (["docker", "local_docker", "local-sandbox"].includes(normalized)) return "local_docker";
+  if (["daytona", "daytona_sandbox", "daytona-sandbox"].includes(normalized)) return "daytona";
   if (normalized === "e2b") return "e2b";
   if (["vercel", "vercel_sandbox", "vercel-sandbox"].includes(normalized)) return "vercel";
   if (["vefaas", "vefaas_sandbox", "vefaas-sandbox", "volcengine_sandbox", "volcengine-sandbox"].includes(normalized)) return "vefaas";
@@ -290,6 +325,7 @@ function normalizeSandboxProvider(value: string): SandboxProvider | null {
 function normalizeAgentRuntimeProvider(value: string): AgentRuntimeProvider | null {
   const normalized = value.trim().toLowerCase();
   if (["local", "local_agent", "local-agent", "in_process", "in-process"].includes(normalized)) return "local";
+  if (["docker", "local_docker", "local-runtime", "local_runtime"].includes(normalized)) return "local_docker";
   if (["vefaas", "volcengine_faas", "volcengine-faas", "faas"].includes(normalized)) return "vefaas";
   if (["aws_lambda", "aws-lambda", "lambda"].includes(normalized)) return "aws_lambda";
   return null;

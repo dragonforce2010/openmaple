@@ -32,7 +32,7 @@ import type { ToastType } from "../ui";
 
 type Toast = (message: string, kind?: ToastType) => void;
 const FIRST_PAINT_TIMEOUT_MS = 60_000;
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 5_000;
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 30_000;
 const SESSION_COOKIE_CLEAR_TIMEOUT_MS = 3_000;
 
 export function useBootstrapController(input: {
@@ -138,9 +138,9 @@ export function useBootstrapController(input: {
     }
   }
 
-  async function routeAfterAuth(resetStaleSession = true) {
+  async function routeAfterAuth(resetStaleSession = true, forceVerifySession = false) {
     try {
-      await routeAfterAuthOnce(shouldVerifySessionFromLocation());
+      await routeAfterAuthOnce(forceVerifySession || shouldVerifySessionFromLocation());
     } catch (reason) {
       if (!resetStaleSession || !shouldResetSessionCookie(reason)) throw reason;
       await clearSessionCookie();
@@ -230,6 +230,10 @@ export function useBootstrapController(input: {
     window.history.replaceState({}, "", `${url.pathname}${url.search}`);
   }
 
+  function isLocalOnlyAuth(providers: AuthProvider[]) {
+    return providers.length === 1 && providers[0]?.id === "local";
+  }
+
   async function enterTenant(tenant: AccessibleTenant) {
     if (input.currentUser) rememberTenantSelection(input.currentUser.id, tenant.id);
     input.setUserMenuOpen(false);
@@ -288,7 +292,7 @@ export function useBootstrapController(input: {
         input.setError("");
         const providers = await apiGet<ApiList<AuthProvider>>("/v1/auth/providers", { timeoutMs: FIRST_PAINT_TIMEOUT_MS });
         input.setAuthProviders(providers.data);
-        await routeAfterAuth();
+        await routeAfterAuth(true, isLocalOnlyAuth(providers.data));
       } catch (reason) {
         input.setError(errorMessage(reason));
         input.setCurrentUser((current) => current ?? null);

@@ -9,6 +9,7 @@ import type { DockerRuntimeInfo, RuntimeInfo } from "./runtimeTypes";
 import type { NormalizedSandboxRuntimeConfig } from "./sandboxConfig";
 
 const execFileAsync = promisify(execFile);
+const runtimeLocks = new Map<string, Promise<DockerRuntimeInfo>>();
 
 const dockerBinCandidates = [
   process.env.MAPLE_DOCKER_BIN,
@@ -22,7 +23,24 @@ function dockerBin() {
   return dockerBinCandidates.find((candidate) => existsSync(candidate)) ?? "docker";
 }
 
-export async function ensureDockerRuntime(session: JsonRecord & { id: string; workspace_path: string; environment_id: string }, config: Extract<NormalizedSandboxRuntimeConfig, { provider: "local_docker" }>) {
+export async function ensureDockerRuntime(
+  session: JsonRecord & { id: string; workspace_path: string; environment_id: string },
+  config: Extract<NormalizedSandboxRuntimeConfig, { provider: "local_docker" }>,
+  options?: { acquireRuntime?: () => Promise<DockerRuntimeInfo | null> }
+) {
+  const lockKey = String(session.id);
+  const existingLock = runtimeLocks.get(lockKey);
+  if (existingLock) return existingLock;
+  const lock = ensureDockerRuntimeOnce(session, config, options).finally(() => runtimeLocks.delete(lockKey));
+  runtimeLocks.set(lockKey, lock);
+  return lock;
+}
+
+async function ensureDockerRuntimeOnce(
+  session: JsonRecord & { id: string; workspace_path: string; environment_id: string },
+  config: Extract<NormalizedSandboxRuntimeConfig, { provider: "local_docker" }>,
+  options?: { acquireRuntime?: () => Promise<DockerRuntimeInfo | null> }
+) {
   const metadata = session.metadata as JsonRecord;
   const existing = metadata.runtime as RuntimeInfo | undefined;
   if (existing?.type === "docker" && existing.container_id) {
@@ -38,10 +56,15 @@ export async function ensureDockerRuntime(session: JsonRecord & { id: string; wo
     }
   }
 
+  const pooledRuntime = await options?.acquireRuntime?.();
+  if (pooledRuntime) {
+    updateSessionMetadata(String(session.id), { runtime: pooledRuntime, sandbox_runtime: pooledRuntime });
+    await syncSessionMountsToDocker(pooledRuntime);
+    return pooledRuntime;
+  }
+
   const image = config.image;
   const workspacePath = String(session.workspace_path);
-  await mkdir(workspacePath, { recursive: true });
-
   const name = `maple_${String(session.id).replace(/[^a-zA-Z0-9_.-]/g, "_")}`;
   const namedContainerId = await getContainerIdByName(name);
   if (namedContainerId) {
@@ -58,32 +81,38 @@ export async function ensureDockerRuntime(session: JsonRecord & { id: string; wo
     return runtime;
   }
 
-  const networkPolicy = (config.networking as JsonRecord | undefined)?.mode;
+  const runtime = await createDockerRuntimeContainer({ name, image, workspacePath, networking: config.networking });
+  updateSessionMetadata(String(session.id), { runtime, sandbox_runtime: runtime });
+  await syncSessionMountsToDocker(runtime);
+  return runtime;
+}
+
+export async function createDockerRuntimeContainer(input: { name: string; image: string; workspacePath: string; networking?: JsonRecord }) {
+  await mkdir(input.workspacePath, { recursive: true });
+  const networkPolicy = input.networking?.mode;
   const network = networkPolicy === "none" ? "none" : "bridge";
   const { stdout } = await execFileAsync(dockerBin(), [
     "run",
     "-d",
     "--name",
-    name,
+    input.name,
     "--network",
     network,
     "-v",
-    `${dockerWorkspaceMountSource(workspacePath)}:/workspace`,
+    `${dockerWorkspaceMountSource(input.workspacePath)}:/workspace`,
     "-w",
     "/workspace",
-    image,
+    input.image,
     "sleep",
     "infinity"
   ]);
   const runtime: DockerRuntimeInfo = {
     type: "docker",
     container_id: stdout.trim(),
-    container_name: name,
-    image,
-    workspace_path: workspacePath
+    container_name: input.name,
+    image: input.image,
+    workspace_path: input.workspacePath
   };
-  updateSessionMetadata(String(session.id), { runtime, sandbox_runtime: runtime });
-  await syncSessionMountsToDocker(runtime);
   return runtime;
 }
 

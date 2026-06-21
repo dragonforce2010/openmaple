@@ -155,6 +155,17 @@ export function markSandboxPoolMemberFailed(id: string, error: unknown) {
   `).run(error instanceof Error ? error.message : String(error), now(), now(), id);
 }
 
+export function updateSandboxPoolMemberRuntime(id: string, input: { sandbox_id: string; config?: JsonRecord }) {
+  const current = getSandboxPoolMember(id);
+  const config = { ...recordValue(current?.config), ...recordValue(input.config) };
+  db.prepare(`
+    UPDATE workspace_sandbox_pool_members
+    SET sandbox_id = ?, config_json = ?, last_checked_at = ?, updated_at = ?
+    WHERE id = ?
+  `).run(input.sandbox_id, toJson(config), now(), now(), id);
+  return getSandboxPoolMember(id);
+}
+
 export function markSandboxPoolMemberExpired(id: string) {
   db.prepare(`
     UPDATE workspace_sandbox_pool_members

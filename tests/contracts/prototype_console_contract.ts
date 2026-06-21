@@ -70,6 +70,7 @@ try {
   });
   await assertStatus(loginResponse, 201);
   const cookie = readCookie(loginResponse);
+  const authToken = cookie.split("=").slice(1).join("=");
   const login = await loginResponse.json();
   userId = String(login.user.id);
 
@@ -103,12 +104,15 @@ try {
       localStorage.removeItem("cc_provision");
     });
     const page = await context.newPage();
+    await page.route("**/v1/**", (route) => {
+      route.continue({ headers: { ...route.request().headers(), cookie, authorization: `Bearer ${authToken}` } });
+    });
     const browserErrors: string[] = [];
     page.on("console", (message) => {
       if (message.type() === "error") browserErrors.push(message.text());
     });
     page.on("pageerror", (error) => browserErrors.push(error.message));
-    await page.goto(webBase, { waitUntil: "domcontentloaded" });
+    await page.goto(`${webBase}?auth_return=1`, { waitUntil: "domcontentloaded" });
     await waitForConsoleReady(page);
 
     const initial = await page.evaluate(() => {
@@ -264,7 +268,7 @@ async function exercisePersistedPrototypeControls(page: import("playwright").Pag
   const workspaceId = await createWorkspaceThroughAuthenticatedApi(page);
   await renameWorkspaceThroughAuthenticatedApi(page, workspaceId);
   await createPersistedRecordsThroughAuthenticatedApi(page, workspaceId);
-  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.goto(`${webBase}?auth_return=1`, { waitUntil: "domcontentloaded" });
   await waitForConsoleReady(page);
   await assertVisibleText(page, workspaceRename);
   for (const label of expectedAdminNav) await assertVisibleText(page, label);
@@ -461,7 +465,16 @@ async function createAgentThroughAuthenticatedApi(page: import("playwright").Pag
 }
 
 async function assertVisibleText(page: import("playwright").Page, text: string) {
-  await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout: 10_000 });
+  try {
+    await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout: 10_000 });
+  } catch (error) {
+    const body = await page.evaluate(() => document.body.innerText.slice(0, 2000));
+    const auth = await page.evaluate(async () => {
+      const response = await fetch("/v1/auth/bootstrap?verify_session=1", { credentials: "include" });
+      return { status: response.status, text: await response.text() };
+    });
+    throw new Error(`Expected visible text "${text}". Auth bootstrap: ${auth.status} ${auth.text}. Body snapshot:\n${body}`, { cause: error });
+  }
 }
 
 async function waitForConsoleReady(page: import("playwright").Page) {

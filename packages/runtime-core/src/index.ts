@@ -1,4 +1,4 @@
-export type RuntimeProviderName = "vefaas" | "vercel";
+export type RuntimeProviderName = "local_docker" | "vefaas" | "vercel";
 
 export type RuntimeContext = {
   session_id: string;

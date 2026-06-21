@@ -1,4 +1,4 @@
-export type SandboxProviderName = "e2b" | "vercel" | "vefaas";
+export type SandboxProviderName = "e2b" | "local_docker" | "daytona" | "vercel" | "vefaas";
 
 export type SandboxContext = {
   session_id: string;

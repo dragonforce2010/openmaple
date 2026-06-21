@@ -8,11 +8,11 @@ export type AuthUser = { id: string; email: string; name: string; auth_provider:
 
 export type AuthenticatedRequest = Request & { user?: AuthUser };
 
-export const authCookieName = "maple_session";
-export const oauthStateCookieName = "maple_oauth_state";
+export const authCookieName = "maple_session"; export const oauthStateCookieName = "maple_oauth_state";
 const sessionDays = Number(process.env.MAPLE_AUTH_SESSION_DAYS || 7);
 
 export function listAuthProviders() {
+  if (["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) || (process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" && process.env.MAPLE_SANDBOX_PROVIDER === "local_docker")) return [{ id: "local", name: "Local dev login", configured: true }];
   return [
     { id: "local", name: "Local dev login", configured: true }, { id: "oauth", name: "OAuth 2.0", configured: Boolean(getProviderConfig("oauth")) },
     { id: "oidc", name: "OIDC", configured: Boolean(getProviderConfig("oidc")) }, { id: "lark_sso", name: "Lark SSO", configured: Boolean(getProviderConfig("lark_sso")) },

@@ -1,5 +1,5 @@
-import { execFile, spawn } from "node:child_process";
-import { appendFileSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync, spawn } from "node:child_process";
+import { appendFileSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -21,7 +21,10 @@ const cloudTarget = !isLocalhost(new URL(apiBase));
 const e2eSandboxProvider = String(process.env.E2E_SANDBOX_PROVIDER || process.env.MAPLE_SANDBOX_PROVIDER || "e2b").toLowerCase();
 const useE2BSandbox = e2eSandboxProvider === "e2b";
 const expectedRuntimeType = useE2BSandbox ? "e2b" : "docker";
-const sessionAgentRuntimeMetadata = cloudTarget ? {} : { agent_runtime: { provider: "local", type: "local" } };
+const onboardingRuntimeProvider = useE2BSandbox ? "vefaas" : "local_docker";
+const onboardingSandboxProvider = useE2BSandbox ? "e2b" : "local_docker";
+const askMapleTimeoutMs = Number(process.env.E2E_ASK_TIMEOUT_MS || 90_000);
+const sessionAgentRuntimeMetadata = cloudTarget || !useE2BSandbox ? {} : { agent_runtime: { provider: "local", type: "local" } };
 const stamp = Date.now();
 const testStart = Date.now();
 const prompt = `E2E ${stamp}: Create an agent that uses local tools to write files, remembers findings, and can use a Notion MCP server when credentials are provided.`;
@@ -346,6 +349,7 @@ const dbAll = (sql, params = []) => {
 };
 
 function cleanupSessionRecord(sessionId) {
+  cleanupDockerRuntimeForSession(sessionId);
   dbRun("DELETE FROM deployment_runs WHERE session_id = ?", [sessionId]);
   dbRun("DELETE FROM session_artifacts WHERE session_id = ?", [sessionId]);
   dbRun("DELETE FROM tool_calls WHERE session_id = ?", [sessionId]);
@@ -381,6 +385,7 @@ function cleanupWorkspaceRecord(workspaceId) {
   dbRun("DELETE FROM environments WHERE workspace_id = ?", [workspaceId]);
   dbRun("DELETE FROM mcp_servers WHERE workspace_id = ?", [workspaceId]);
   dbRun("DELETE FROM workspace_api_keys WHERE workspace_id = ?", [workspaceId]);
+  dbRun("DELETE FROM workspace_sandbox_pool_members WHERE workspace_id = ?", [workspaceId]);
   dbRun("DELETE FROM workspace_runtime_pool_members WHERE workspace_id = ?", [workspaceId]);
   dbRun("DELETE FROM workspace_runtime_pools WHERE workspace_id = ?", [workspaceId]);
   dbRun("DELETE FROM workspace_members WHERE workspace_id = ?", [workspaceId]);
@@ -392,10 +397,29 @@ function cleanupLocalSkill(name) {
     const skillDir = join(homedir(), ".agents", "skills", name);
     for (const relativeDir of clientSkillDirs) {
       const link = join(homedir(), relativeDir, name);
-      try { if (lstatSync(link)) rmSync(link, { force: true }); } catch {}
+      try { if (lstatSync(link).isSymbolicLink()) unlinkSync(link); } catch {}
     }
-    rmSync(skillDir, { recursive: true, force: true });
+    try { unlinkSync(join(skillDir, "SKILL.md")); } catch {}
+    try { rmdirSync(skillDir); } catch {}
   } catch {}
+}
+
+function cleanupDockerRuntimeForSession(sessionId) {
+  const row = dbAll("SELECT metadata_json FROM sessions WHERE id = ?", [sessionId])[0];
+  const metadata = parseJsonObject(row?.metadata_json);
+  const containerIds = new Set([metadata.runtime?.container_id, metadata.sandbox_runtime?.container_id].filter(Boolean).map(String));
+  for (const containerId of containerIds) {
+    try { execFileSync("docker", ["rm", "-f", containerId], { stdio: "ignore", timeout: 30_000 }); } catch {}
+  }
+}
+
+function parseJsonObject(value) {
+  try {
+    const parsed = value ? JSON.parse(String(value)) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 // Tear down every record this run created. Resources are deleted child -> parent so
@@ -520,7 +544,7 @@ const workspaceOnboarding = await step("Workspace onboarding enforces tenant slu
         description: "E2E workspace onboarding contract",
         slug
       },
-      runtime_provider: "vefaas",
+      runtime_provider: onboardingRuntimeProvider,
       runtime_pool: {
         desired_size: 3,
         max_instances_per_function: 10,
@@ -528,21 +552,22 @@ const workspaceOnboarding = await step("Workspace onboarding enforces tenant slu
         cpu_milli: 1000,
         memory_mb: 2048
       },
-      sandbox_provider: "e2b",
+      sandbox_provider: onboardingSandboxProvider,
+      sandbox_config: useE2BSandbox ? {} : { local_docker: { image: "node:22-bookworm", networking: { mode: "limited", allow_mcp_servers: true, allow_package_managers: true } } },
       model_config_ids: defaultModelConfigs.map((config) => config.id),
       api_key: {
         display_name: `E2E Workspace Key ${stamp}`,
         scopes: ["control_plane", "data_plane"]
       },
       provider_credentials: {
-        vefaas: {
+        vefaas: useE2BSandbox ? {
           VOLCENGINE_ACCESS_KEY: process.env.VOLCENGINE_ACCESS_KEY || process.env.VOLC_ACCESSKEY || "e2e-access-key",
           VOLCENGINE_SECRET_KEY: process.env.VOLCENGINE_SECRET_KEY || process.env.VOLC_SECRETKEY || "e2e-secret-key",
           VEFAAS_REGION: process.env.MAPLE_VEFAAS_REGION || process.env.VEFAAS_REGION || "cn-beijing"
-        },
-        e2b: {
+        } : {},
+        e2b: useE2BSandbox ? {
           E2B_API_KEY: process.env.E2B_API_KEY || "e2e-e2b-key"
-        }
+        } : {}
       }
     })
   });
@@ -562,6 +587,7 @@ const workspaceOnboarding = await step("Workspace onboarding enforces tenant slu
     tenant: created.tenant.id,
     workspace: created.workspace.id,
     workspaceRecord: created.workspace,
+    workspaceKey: created.api_key.key,
     slug,
     key_prefix: created.api_key.key_prefix,
     runtime_pool_size: created.runtime_pool.desired_size,
@@ -734,10 +760,14 @@ if (useE2BSandbox) {
   });
 }
 
-const e2bEnvironment = await step("Sandbox infrastructure defaults to E2B and can persist E2B environments", async () => {
+const e2bEnvironment = await step(useE2BSandbox ? "Sandbox infrastructure defaults to E2B and can persist E2B environments" : "Sandbox infrastructure defaults to Local Docker", async () => {
   const listed = await request("/v1/environments");
   const defaultE2B = listed.data?.find((item) => item.config?.sandbox?.provider === "e2b" || item.config?.type === "e2b");
   const defaultDocker = listed.data?.find((item) => item.config?.sandbox?.provider === "local_docker" || item.config?.type === "local_docker");
+  if (!useE2BSandbox) {
+    if (!defaultDocker) throw new Error(`default Local Docker environment missing: ${JSON.stringify(listed.data?.map((item) => item.name))}`);
+    return { id: defaultDocker.id, default: defaultDocker.name, fallback: defaultE2B?.name ?? null };
+  }
   if (!defaultE2B) throw new Error(`default E2B environment missing: ${JSON.stringify(listed.data?.map((item) => item.name))}`);
   const created = await request("/v1/environments", {
     method: "POST",
@@ -1315,7 +1345,7 @@ await step("AskMaple streams a real LLM answer over the ask session", async () =
     const value = await request(`/v1/sessions/${askSessionId}/detail`);
     const settled = ["idle", "failed"].includes(String(value.session?.status ?? ""));
     return settled ? value : null;
-  }, 90_000, "ask maple turn settles");
+  }, askMapleTimeoutMs, "ask maple turn settles");
   if (String(askDetail.session?.status) === "failed") {
     throw new Error(`AskMaple turn failed: ${JSON.stringify(askDetail.events?.find((event) => event.type === "session.status_failed")?.payload)}`);
   }
@@ -1378,11 +1408,17 @@ await step("React console customer UI walkthrough", async () => {
     }
   ]);
   const page = await context.newPage();
-  await page.addInitScript(() => {
+  await page.addInitScript((cookie) => {
+    document.cookie = `${cookie}; path=/; SameSite=Lax`;
     window.localStorage.setItem("cc_authed", "1");
-  });
+    window.localStorage.setItem("maple.dev_login", "1");
+  }, authCookie);
   const consoleIssues = [];
   const buttonAudit = [];
+  await page.route("**/v1/**", (route) => {
+    const headers = { ...route.request().headers(), authorization: `Bearer ${workspaceOnboarding.workspaceKey}` };
+    route.continue({ headers });
+  });
   page.on("console", (msg) => {
     if (["error", "warning"].includes(msg.type())) consoleIssues.push(`${msg.type()}: ${msg.text()}`);
   });
@@ -1403,6 +1439,14 @@ await step("React console customer UI walkthrough", async () => {
     }
   };
   const waitForExpectedText = (expected) => Array.isArray(expected) ? waitForAnyBodyText(expected) : waitForBodyText(expected);
+  const waitForConsoleShell = async () => {
+    try {
+      await page.waitForSelector(".console-shell", { timeout: 60_000 });
+    } catch (error) {
+      const body = await page.locator("body").innerText().catch(() => "");
+      throw new Error(`Console shell did not render: ${error instanceof Error ? error.message : String(error)}; body=${body.slice(0, 1400)}; console=${consoleIssues.join("; ")}`);
+    }
+  };
   const clickButtonText = async (label, expected, auditLabel = label) => {
     await page.getByRole("button", { name: new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first().click();
     await waitForExpectedText(expected);
@@ -1415,7 +1459,18 @@ await step("React console customer UI walkthrough", async () => {
   };
   try {
     await page.goto(`${webBase}/?dev_login=1`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-    await page.waitForSelector(".console-shell", { timeout: 60_000 });
+    await page.evaluate((cookie) => {
+      document.cookie = `${cookie}; path=/; SameSite=Lax`;
+    }, authCookie);
+    const bootstrapProbe = await page.evaluate(async () => {
+      const response = await fetch("/v1/auth/bootstrap", { credentials: "include" });
+      return { status: response.status, text: await response.text() };
+    });
+    if (bootstrapProbe.status !== 200 || bootstrapProbe.text.includes("\"user\":null")) {
+      throw new Error(`browser bootstrap probe failed: ${JSON.stringify(bootstrapProbe)}`);
+    }
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForConsoleShell();
     await waitForBodyText("仪表盘");
     await waitForBodyText(agent.name);
     buttonAudit.push("dashboard:real-data");
@@ -1460,7 +1515,7 @@ await step("React console customer UI walkthrough", async () => {
       // The answer is a real LLM stream now (no fixed string); assert the conversation renders —
       // the question lands as a user bubble and Maple replies in the transcript.
       await page.locator(".ask-transcript .ask-user").waitFor({ state: "visible", timeout: 20_000 });
-      await page.locator(".ask-transcript .ask-agent").waitFor({ state: "visible", timeout: 90_000 });
+      await page.locator(".ask-transcript .ask-agent").waitFor({ state: "visible", timeout: askMapleTimeoutMs });
       buttonAudit.push("sessions:ask-maple");
       await page.keyboard.press("Escape");
       await page.locator(".ask-drawer").waitFor({ state: "detached", timeout: 5_000 });
@@ -1468,7 +1523,7 @@ await step("React console customer UI walkthrough", async () => {
       buttonAudit.push("sessions:list-visible");
     }
 
-    await clickSidebarButtonText("环境", e2bEnvironment.created, "nav:environments");
+    await clickSidebarButtonText("环境", e2bEnvironment.created ?? e2bEnvironment.default, "nav:environments");
     await clickSidebarButtonText("凭证库", vault.display_name, "nav:vaults");
     await clickSidebarButtonText("租户", testSession.user.email, "nav:tenant");
     await clickSidebarButtonText("模型", modelConfig.name, "nav:models");
@@ -1502,7 +1557,7 @@ await step("React console customer UI walkthrough", async () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.waitForSelector(".console-shell", { timeout: 60_000 });
+    await waitForConsoleShell();
     if ((await page.getByText("你想构建什么？").count()) === 0) {
       await page.getByRole("button", { name: /快速开始/ }).first().click();
     }

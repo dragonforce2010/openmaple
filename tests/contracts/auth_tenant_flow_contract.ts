@@ -165,7 +165,7 @@ async function login(email: string) {
 
 async function bootstrap(cookie: string, tenantSlug = "") {
   const route = tenantSlug ? `/t/${encodeURIComponent(tenantSlug)}` : "";
-  const response = await fetch(`${apiBase}/v1/auth/bootstrap${route}`, { headers: { cookie } });
+  const response = await fetch(`${apiBase}/v1/auth/bootstrap${route}?verify_session=1`, { headers: { cookie } });
   if (!response.ok) throw new Error(`bootstrap failed ${response.status}: ${await response.text()}`);
   return response.json() as Promise<{ recommended_view: string; owned_count: number; member_only_count: number; selected_tenant_id?: string; selected_workspace_id?: string }>;
 }
