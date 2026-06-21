@@ -23,6 +23,8 @@ Feedback wanted: join the [launch discussion](https://github.com/dragonforce2010
 
 Evaluating for an internal platform spike? Start with the [30-minute evaluation guide](EVALUATION.md).
 
+Prefer video first? Watch the [2-minute OpenMaple platform tour](assets/videos/openmaple-platform-tour.mp4), built from the running console and real end-to-end screenshots.
+
 ## 60-Second Read
 
 - **For platform teams**: build a self-hostable managed-agent platform instead of wiring one-off agent demos.
