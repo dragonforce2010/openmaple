@@ -242,6 +242,7 @@
         border-radius: 8px;
         background: #111;
       }
+      .product-video + .managed-proof { margin-top: 18px; }
       .below-fold-hint {
         min-height: 84px;
         display: grid;
@@ -517,6 +518,7 @@
         <div class="navlinks">
           <a href="#quickstart">Quickstart</a>
           <a href="#tour">Tour</a>
+          <a href="#local-docker-tour">Local Docker</a>
           <a href="#managed-agents">Managed Agents</a>
           <a href="#platform">Platform</a>
           <a href="#features">Product</a>
@@ -581,6 +583,7 @@
           <div class="actions">
             <a class="btn primary" href="https://codespaces.new/dragonforce2010/openmaple?quickstart=1">Open Codespaces</a>
             <a class="btn" href="https://github.com/dragonforce2010/openmaple#run-it-locally">Open README</a>
+            <a class="btn" href="#local-docker-tour">Watch local Docker tour</a>
             <a class="btn" href="https://github.com/dragonforce2010/openmaple/blob/main/EVALUATION.md">Evaluation guide</a>
             <a class="btn" href="https://github.com/dragonforce2010/openmaple/releases/latest">Latest release</a>
             <a class="btn" href="https://github.com/dragonforce2010/openmaple/discussions/30">Feedback thread</a>
@@ -595,6 +598,42 @@ BASE=http://127.0.0.1:27951
 curl $BASE/health
 curl http://127.0.0.1:8080/health</code></pre>
           <p class="quickstart-meta">Console: http://127.0.0.1:8080/ · API: http://127.0.0.1:27951/</p>
+        </div>
+      </section>
+      <section id="local-docker-tour" class="wrap section" aria-label="OpenMaple local Docker walkthrough video and screenshots">
+        <div class="section-head">
+          <h2>From one command to local Docker pools.</h2>
+          <p>The local Docker proof path is captured from the running product: setup command, browser onboarding, runtime pool, sandbox pool, empty model pool, and a session timeline with local Docker metadata.</p>
+        </div>
+        <video class="product-video" controls preload="metadata" poster="./assets/screenshots/openmaple-local-setup-terminal.png">
+          <source src="./assets/videos/openmaple-local-docker-tour.mp4" type="video/mp4" />
+          Download the OpenMaple local Docker walkthrough from the GitHub repository.
+        </video>
+        <div class="managed-proof" aria-label="OpenMaple local Docker proof screenshots">
+          <figure class="managed-shot primary">
+            <img src="./assets/screenshots/openmaple-local-setup-terminal.png" alt="OpenMaple local Docker setup terminal output with health checks and local login URL" />
+            <p><b>One setup command</b>The script starts web, API, MySQL, local dev login, and prints health URLs.</p>
+          </figure>
+          <figure class="managed-shot">
+            <img src="./assets/screenshots/openmaple-local-onboarding-runtime.png" alt="OpenMaple onboarding runtime provider set to Local Docker" />
+            <p><b>Local Docker runtime</b>Runtime onboarding defaults to `local_docker` and prewarms local members.</p>
+          </figure>
+          <figure class="managed-shot">
+            <img src="./assets/screenshots/openmaple-local-onboarding-sandbox.png" alt="OpenMaple onboarding sandbox provider set to Local Docker" />
+            <p><b>Local Docker sandbox</b>Sandbox onboarding uses local containers and a standby pool without E2B or veFaaS keys.</p>
+          </figure>
+          <figure class="managed-shot">
+            <img src="./assets/screenshots/openmaple-local-runtime-pool-drawer.png" alt="OpenMaple local Docker runtime pool members drawer" />
+            <p><b>Runtime pool members</b>Workspace settings show active local Docker runtime members and session counts.</p>
+          </figure>
+          <figure class="managed-shot">
+            <img src="./assets/screenshots/openmaple-local-sandbox-pool-drawer.png" alt="OpenMaple local Docker sandbox pool members drawer" />
+            <p><b>Sandbox pool members</b>Standby sandbox members expose image, status, claim fields, and TTL.</p>
+          </figure>
+          <figure class="managed-shot wide">
+            <img src="./assets/screenshots/openmaple-local-session-dashboard.png" alt="OpenMaple local Docker session timeline with transcript and tool events" />
+            <p><b>Session timeline</b>The local session view keeps transcript, tool events, sandbox metadata, and debug context together.</p>
+          </figure>
         </div>
       </section>
       <div class="wrap below-fold-hint">Session, sandbox, runtime, vault, tool calls, and audit log stay separate so managed agents can run longer than a local demo.</div>
