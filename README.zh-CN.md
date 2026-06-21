@@ -20,14 +20,14 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 
 <a href="https://dragonforce2010.github.io/openmaple/#tour"><img src="assets/openmaple-social-card.png" alt="观看 2 分钟 OpenMaple 平台总览"></a>
 
-[2 分钟 OpenMaple 平台总览](https://dragonforce2010.github.io/openmaple/#tour) 可以在项目官网直接播放，素材来自真实运行的控制台和端到端截图。
+[2 分钟 OpenMaple 平台总览](https://dragonforce2010.github.io/openmaple/#tour) 可以在项目官网直接播放，也可以在 [YouTube](https://www.youtube.com/watch?v=zYhgkFomZ7M) 观看，素材来自真实运行的控制台和端到端截图。
 
 ## 第一批证据
 
 | 需要验证什么 | 从哪里开始 |
 |---|---|
 | 它是真实产品界面，不只是架构文案 | 看 [2 分钟产品视频](https://dragonforce2010.github.io/openmaple/#tour)，再检查 [真实控制台截图](assets/screenshots/)。 |
-| 控制面不需要云凭证也能本地启动 | 运行 `docker compose up --build`，再执行 `npm run smoke:local`，打开 `http://127.0.0.1:27951/`。 |
+| 本地 managed-agent 路径不需要云凭证也能启动 | 运行 `docker compose up --build`，再执行 `npm run smoke:local`，打开 `http://127.0.0.1:27951/`。默认 Compose 路径的 runtime pool 和 sandbox pool 都使用 `local_docker`。 |
 | 它有一致的 managed-agent 资源模型 | 按 [30-minute evaluation guide](EVALUATION.md) 走一遍。 |
 | 它没有夸大 provider 能力 | 看 [provider readiness](PROVIDER_READINESS.md)，先确认哪些 adapter 已实现、哪些只是配置入口。 |
 | 它同时暴露 UI、API、SDK、CLI 路径 | 看 [SDK](packages/sdk/)、[CLI](packages/cli/) 和下面的 API/架构说明。 |
@@ -37,6 +37,7 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 - **给平台团队**：不是一个单点 Agent demo，而是一套可自托管的 managed-agent 平台骨架。
 - **给企业 IT / 工程部门**：运行时、沙箱、存储、模型和云身份都通过 provider 适配，不把平台锁死在单一云厂商。
 - **给 Agent 工程团队**：可以先用控制台跑通，再用 REST API、`maple-agent-sdk`、`maple-agent-cli` 自动化重复流程。
+- **给本地评估**：先用 Docker Compose 拉起 Console、API、MySQL、本地 Docker runtime pool 和本地 Docker sandbox pool，再接云凭证。
 - **给长任务 Agent**：Session 状态、事件流、工具调用、文件和产物都沉淀在控制面，而不是散落在终端输出里。
 - **给二开团队**：公共仓库包含 Console、API、SDK、CLI、provider contract 和可部署 runtime adapter。
 
@@ -176,7 +177,7 @@ curl http://127.0.0.1:27951/health
 curl http://127.0.0.1:27951/v1/auth/bootstrap
 ```
 
-未设置密码时，compose 默认使用 `MAPLE_MYSQL_PASSWORD=maple`，数据库文件保存在 `mysql_data` volume。真实 agent loop、模型调用和外部 sandbox 执行仍需要对应 provider key 和环境配置。
+未设置密码时，compose 默认使用 `MAPLE_MYSQL_PASSWORD=maple`，数据库文件保存在 `mysql_data` volume。默认 runtime provider 和 sandbox provider 都是 `local_docker`，本地 Docker 模式会隐藏 OAuth/SSO provider；只有运行真实模型驱动的 agent loop 时才需要模型 key。
 
 ## CLI
 
