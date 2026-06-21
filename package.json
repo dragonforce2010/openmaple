@@ -22,6 +22,7 @@
     "smoke:local": "node scripts/local-trial-smoke.mjs",
     "build": "bunx tsc --noEmit && bunx vite build --config apps/admin-web/vite.config.ts",
     "preview": "bunx vite preview --config apps/admin-web/vite.config.ts --host 127.0.0.1 --port 5173",
+    "assets:social-card": "node scripts/render-social-card.mjs",
     "typecheck": "bunx tsc --noEmit",
     "lint": "eslint apps/admin-web && eslint apps/control-plane-api agents packages",
     "test:public-hygiene": "node scripts/check-public-hygiene.mjs",

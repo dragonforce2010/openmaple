@@ -25,15 +25,15 @@ Evaluating for an internal platform spike? Start with the [30-minute evaluation 
 
 Prefer video first?
 
-<a href="assets/videos/openmaple-platform-tour.mp4"><img src="assets/openmaple-social-card.png" alt="Watch the 2-minute OpenMaple platform tour"></a>
+<a href="https://dragonforce2010.github.io/openmaple/#tour"><img src="assets/openmaple-social-card.png" alt="Watch the 2-minute OpenMaple platform tour"></a>
 
-The [2-minute OpenMaple platform tour](assets/videos/openmaple-platform-tour.mp4) is built from the running console and real end-to-end screenshots.
+The [2-minute OpenMaple platform tour](https://dragonforce2010.github.io/openmaple/#tour) plays on the project site and is built from the running console and real end-to-end screenshots.
 
 ## First Proofs
 
 | Need to verify | Start here |
 |---|---|
-| It is a real product surface, not only architecture copy | [Watch the 2-minute product tour](assets/videos/openmaple-platform-tour.mp4) and inspect [real console screenshots](assets/screenshots/). |
+| It is a real product surface, not only architecture copy | [Watch the 2-minute product tour](https://dragonforce2010.github.io/openmaple/#tour) and inspect [real console screenshots](assets/screenshots/). |
 | It can run without cloud credentials | `docker compose up --build`, then open `http://127.0.0.1:27951/`. |
 | It has a coherent managed-agent model | Follow the [30-minute evaluation guide](EVALUATION.md). |
 | It keeps provider claims honest | Check [provider readiness](PROVIDER_READINESS.md) before assuming an adapter is production-ready. |

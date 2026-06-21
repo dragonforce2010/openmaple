@@ -18,15 +18,15 @@ _截图来自正在运行的 OpenMaple 控制台。公开版本已裁掉 workspa
 
 想先看视频：
 
-<a href="assets/videos/openmaple-platform-tour.mp4"><img src="assets/openmaple-social-card.png" alt="观看 2 分钟 OpenMaple 平台总览"></a>
+<a href="https://dragonforce2010.github.io/openmaple/#tour"><img src="assets/openmaple-social-card.png" alt="观看 2 分钟 OpenMaple 平台总览"></a>
 
-[2 分钟 OpenMaple 平台总览](assets/videos/openmaple-platform-tour.mp4) 的素材来自真实运行的控制台和端到端截图。
+[2 分钟 OpenMaple 平台总览](https://dragonforce2010.github.io/openmaple/#tour) 可以在项目官网直接播放，素材来自真实运行的控制台和端到端截图。
 
 ## 第一批证据
 
 | 需要验证什么 | 从哪里开始 |
 |---|---|
-| 它是真实产品界面，不只是架构文案 | 看 [2 分钟产品视频](assets/videos/openmaple-platform-tour.mp4)，再检查 [真实控制台截图](assets/screenshots/)。 |
+| 它是真实产品界面，不只是架构文案 | 看 [2 分钟产品视频](https://dragonforce2010.github.io/openmaple/#tour)，再检查 [真实控制台截图](assets/screenshots/)。 |
 | 它不需要云凭证也能本地启动 | 运行 `docker compose up --build`，再打开 `http://127.0.0.1:27951/`。 |
 | 它有一致的 managed-agent 资源模型 | 按 [30-minute evaluation guide](EVALUATION.md) 走一遍。 |
 | 它没有夸大 provider 能力 | 看 [provider readiness](PROVIDER_READINESS.md)，先确认哪些 adapter 已实现、哪些只是配置入口。 |
