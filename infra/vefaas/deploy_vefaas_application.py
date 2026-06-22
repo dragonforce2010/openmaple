@@ -40,6 +40,7 @@ BUN_URL = f"https://github.com/oven-sh/bun/releases/download/bun-v{BUN_VERSION}/
 BUN = shutil.which("bun") or "bun"
 METHODS = ["POST", "GET", "PUT", "DELETE", "HEAD", "OPTIONS", "CONNECT"]
 WEB_RUNTIME = os.environ.get("MAPLE_VEFAAS_WEB_RUNTIME") or os.environ.get("MAPLE_VEFAAS_RUNTIME") or "node20/v1"
+BACKEND_ENV_SKIP_KEYS = {"MAPLE_MYSQL_HOST", "MYSQL_HOST"}
 
 
 @dataclass(frozen=True)
@@ -419,6 +420,8 @@ def backend_envs() -> dict[str, str]:
     prefixes = ("MAPLE_", "VOLCENGINE_", "VOLC_", "E2B_", "VEFAAS_", "MYSQL_")
     keys = {"ARK_API_KEY", "OPENAI_API_KEY"}
     for key, value in os.environ.items():
+        if key in BACKEND_ENV_SKIP_KEYS:
+            continue
         if key.startswith(prefixes) or key in keys:
             envs[key] = str(value)
     if os.environ.get("MAPLE_VEFAAS_BACKEND_MYSQL_HOST"):
