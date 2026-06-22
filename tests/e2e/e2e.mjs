@@ -88,6 +88,9 @@ function loadAgentsEnv() {
 }
 
 function normalizeLocalDockerE2EEnv() {
+  const mysqlTimeoutMs = Number(process.env.MAPLE_MYSQL_HELPER_TIMEOUT_MS || "0");
+  const e2eMysqlTimeoutMs = Number(process.env.E2E_MYSQL_HELPER_TIMEOUT_MS || "180000");
+  if (!Number.isFinite(mysqlTimeoutMs) || mysqlTimeoutMs < e2eMysqlTimeoutMs) process.env.MAPLE_MYSQL_HELPER_TIMEOUT_MS = String(e2eMysqlTimeoutMs);
   const localMode = ["1", "true", "yes"].includes(String(process.env.MAPLE_LOCAL_DOCKER_MODE || "").toLowerCase()) ||
     process.env.MAPLE_AGENT_RUNTIME_PROVIDER === "local_docker" ||
     process.env.MAPLE_SANDBOX_PROVIDER === "local_docker" ||

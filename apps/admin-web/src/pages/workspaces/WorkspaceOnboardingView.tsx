@@ -14,7 +14,6 @@ import {
 } from "./WorkspaceOnboardingConfig";
 import { WorkspaceOnboardingSteps } from "./WorkspaceOnboardingSteps";
 import { ProvisioningLogPanel, provisioningLog, type ProvisioningLog } from "./ProvisioningLogPanel";
-
 export function WorkspaceOnboardingView(props: {
   currentUser: User;
   modelConfigs: ModelConfig[];
@@ -48,12 +47,12 @@ export function WorkspaceOnboardingView(props: {
   const [modelConfigIds, setModelConfigIds] = useState<string[]>(Array.isArray(draft0.modelConfigIds) ? (draft0.modelConfigIds as string[]) : []);
   const [customModelConfigs, setCustomModelConfigs] = useState<OnboardingCustomModelConfig[]>([]);
   const [connectedCloudProviders, setConnectedCloudProviders] = useState<string[]>(Array.isArray(draft0.connectedCloudProviders) ? draft0.connectedCloudProviders as string[] : []);
-  const [runtimeProvider, setRuntimeProvider] = useState<OnboardingRuntimeProvider>("vefaas");
+  const [runtimeProvider, setRuntimeProvider] = useState<OnboardingRuntimeProvider>(draft0.runtimeProvider === "vefaas" ? "vefaas" : "local_docker");
   const [vefaasAccessKey, setVefaasAccessKey] = useState("");
   const [vefaasSecretKey, setVefaasSecretKey] = useState("");
   const [vefaasRegion, setVefaasRegion] = useState(typeof draft0.vefaasRegion === "string" ? draft0.vefaasRegion : "cn-beijing");
   const [sandboxProvider, setSandboxProvider] = useState<OnboardingSandboxProvider>(
-    draft0.sandboxProvider === "vefaas" ? "vefaas" : draft0.sandboxProvider === "daytona" ? "daytona" : "e2b"
+    draft0.sandboxProvider === "vefaas" ? "vefaas" : draft0.sandboxProvider === "daytona" ? "daytona" : draft0.sandboxProvider === "e2b" ? "e2b" : "local_docker"
   );
   const [e2bApiKey, setE2bApiKey] = useState("");
   const [daytonaServerUrl, setDaytonaServerUrl] = useState("");
@@ -79,23 +78,25 @@ export function WorkspaceOnboardingView(props: {
   const validModelConfigIds = useMemo(() => modelConfigIds.filter((id) => props.modelConfigs.some((config) => config.id === id)), [modelConfigIds, props.modelConfigs]);
   const warmQps = desiredSize * minInstances * maxConcurrency;
   const peakQps = desiredSize * maxInstances * maxConcurrency;
-  const cloudProviderFilled = connectedCloudProviders.includes("volcengine") && Boolean(vefaasAccessKey.trim() && vefaasSecretKey.trim() && vefaasRegion.trim());
-  const runtimeCredsFilled = cloudProviderFilled;
-  const sandboxFilled = sandboxProvider === "e2b"
+  const localDockerSelected = connectedCloudProviders.includes("local_docker") || runtimeProvider === "local_docker";
+  const volcengineReady = connectedCloudProviders.includes("volcengine") && Boolean(vefaasAccessKey.trim() && vefaasSecretKey.trim() && vefaasRegion.trim());
+  const cloudProviderFilled = localDockerSelected || volcengineReady;
+  const runtimeCredsFilled = runtimeProvider === "local_docker" || volcengineReady;
+  const sandboxFilled = sandboxProvider === "local_docker"
+    ? true
+    : sandboxProvider === "e2b"
     ? Boolean(e2bApiKey.trim())
     : sandboxProvider === "daytona"
     ? Boolean(daytonaServerUrl.trim() && daytonaApiKey.trim())
-    : Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim());
+    : volcengineReady && Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim());
   const workspaceSlugReady = Boolean(derivedWorkspaceSlug.trim() && slugStatus?.available === true);
-
   // Persist non-sensitive runtime choices only; text fields stay placeholder-only on reload.
   // secrets (AK/SK, e2b key) are intentionally NOT persisted and must be re-entered
   useEffect(() => {
     try {
       localStorage.setItem(draftKey, JSON.stringify({ desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, modelConfigIds: validModelConfigIds, connectedCloudProviders, runtimeProvider, vefaasRegion, sandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize }));
     } catch { /* ignore storage quota */ }
-  }, [desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, validModelConfigIds, runtimeProvider, vefaasRegion, sandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize, draftKey]);
-
+  }, [desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, validModelConfigIds, connectedCloudProviders, runtimeProvider, vefaasRegion, sandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize, draftKey]);
   useEffect(() => {
     if (!props.modelConfigs.length) return;
     const validIds = new Set(props.modelConfigs.map((config) => config.id));
@@ -104,7 +105,6 @@ export function WorkspaceOnboardingView(props: {
       setModelConfigIds(kept);
     }
   }, [props.modelConfigs, modelConfigIds]);
-
   useEffect(() => {
     let cancelled = false;
     if (!derivedWorkspaceSlug.trim()) {
@@ -122,11 +122,9 @@ export function WorkspaceOnboardingView(props: {
       cancelled = true;
     };
   }, [derivedWorkspaceSlug]);
-
   function toggleModel(id: string) {
     setModelConfigIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
-
   function isStepComplete(index: number) {
     if (index === 0) return Boolean(tenantName.trim());
     if (index === 1) return cloudProviderFilled;
@@ -135,26 +133,27 @@ export function WorkspaceOnboardingView(props: {
     if (index === 4) return sandboxFilled;
     return true;
   }
-
   function stepError(index: number) {
     if (index === 0) return L("请先填写租户名称。", "Enter the tenant name first.");
-    if (index === 1) return L("请至少接入火山引擎，并填写 Access Key / SecretKey。", "Connect Volcengine and enter Access Key / SecretKey first.");
+    if (index === 1) return L("请接入火山引擎，或选择 Local Docker 开发模式。", "Connect Volcengine or choose Local Docker development mode.");
     if (index === 2) return L("请先填写工作区名称，并等待 slug 校验通过。", "Enter the workspace name and wait for slug validation to pass.");
-    if (index === 3) return L("请选择运行时 Provider；VeFaaS 需要填写 VOLCENGINE_ACCESS_KEY、VOLCENGINE_SECRET_KEY 与 VEFAAS_REGION。", "Choose a runtime provider; VeFaaS requires VOLCENGINE_ACCESS_KEY, VOLCENGINE_SECRET_KEY, and VEFAAS_REGION.");
-    if (index === 4) return sandboxProvider === "e2b"
+    if (index === 3) return runtimeProvider === "local_docker"
+      ? L("Local Docker 运行时无需云凭据。", "Local Docker runtime does not need cloud credentials.")
+      : L("请选择运行时 Provider；VeFaaS 使用租户级火山引擎 AK/SK。", "Choose a runtime provider; VeFaaS uses tenant-level Volcengine AK/SK.");
+    if (index === 4) return sandboxProvider === "local_docker"
+      ? L("Local Docker 沙箱无需 API Key。", "Local Docker sandbox does not need an API key.")
+      : sandboxProvider === "e2b"
       ? L("请先填写 E2B_API_KEY。", "Enter E2B_API_KEY first.")
       : sandboxProvider === "daytona"
       ? L("请先填写 DAYTONA_SERVER_URL 与 DAYTONA_API_KEY。", "Enter DAYTONA_SERVER_URL and DAYTONA_API_KEY first.")
       : L("请填写 VEFAAS_SANDBOX_FUNCTION_ID 与 VEFAAS_SANDBOX_GATEWAY_URL。", "Enter VEFAAS_SANDBOX_FUNCTION_ID and VEFAAS_SANDBOX_GATEWAY_URL.");
     return L("请按顺序完成前面的步骤。", "Complete previous steps in order.");
   }
-
   function canSelectStep(index: number) {
     if (index <= step) return true;
     if (index !== step + 1) return false;
     return isStepComplete(step);
   }
-
   function goToStep(index: number) {
     if (saving || index === step) return;
     if (index <= step) {
@@ -169,7 +168,6 @@ export function WorkspaceOnboardingView(props: {
     }
     setError(stepError(step));
   }
-
   function nextStep() {
     if (!isStepComplete(step)) {
       setError(stepError(step));
@@ -178,11 +176,10 @@ export function WorkspaceOnboardingView(props: {
     setError("");
     setStep(Math.min(5, step + 1));
   }
-
   async function submit() {
     if (!runtimeCredsFilled) {
-      setError("请先在「运行时」步骤填写 VOLCENGINE_ACCESS_KEY、VOLCENGINE_SECRET_KEY 与 VEFAAS_REGION。");
-      setStep(1);
+      setError("请选择 Local Docker，或先在「接入云厂商」步骤填写 VOLCENGINE_ACCESS_KEY、VOLCENGINE_SECRET_KEY 与 VEFAAS_REGION。");
+      setStep(runtimeProvider === "vefaas" ? 1 : 3);
       return;
     }
     if (sandboxProvider === "e2b" && !sandboxFilled) {
@@ -191,15 +188,15 @@ export function WorkspaceOnboardingView(props: {
       return;
     }
     if (sandboxProvider === "vefaas" && !sandboxFilled) {
-      setError("请确认「运行时」步骤 AK/SK/Region 已填写，并在「沙箱」步骤填写 VEFAAS_SANDBOX_FUNCTION_ID 与 VEFAAS_SANDBOX_GATEWAY_URL。");
-      setStep(4);
+      setError("请确认「接入云厂商」步骤 AK/SK/Region 已填写，并在「沙箱」步骤填写 VEFAAS_SANDBOX_FUNCTION_ID 与 VEFAAS_SANDBOX_GATEWAY_URL。");
+      setStep(volcengineReady ? 4 : 1);
       return;
     }
     setSaving(true);
     setError("");
     setProvisionLogs(provisioningPlan());
     const heartbeat = window.setInterval(() => {
-      setProvisionLogs((current) => [...current, provisioningLog("info", L("仍在提交云端初始化请求。", "Still submitting cloud provisioning request."))]);
+      setProvisionLogs((current) => [...current, provisioningLog("info", runtimeProvider === "local_docker" ? L("仍在初始化本地 Docker 资源。", "Still initializing local Docker resources.") : L("仍在提交云端初始化请求。", "Still submitting cloud provisioning request."))]);
     }, 8000);
     try {
       await props.onSubmit({
@@ -240,18 +237,20 @@ export function WorkspaceOnboardingView(props: {
       setSaving(false);
     }
   }
-
   function provisioningPlan() {
     return [
       provisioningLog("info", L("创建 tenant、workspace、workspace members 和 Workspace API key。", "Creating tenant, workspace, workspace members, and workspace API key.")),
-      provisioningLog("info", L(`初始化 Runtime Pool：${desiredSize} 个 VeFaaS 函数，min=${minInstances}，max=${maxInstances}，concurrency=${maxConcurrency}。`, `Initializing Runtime Pool: ${desiredSize} VeFaaS functions, min=${minInstances}, max=${maxInstances}, concurrency=${maxConcurrency}.`)),
-      provisioningLog("info", sandboxProvider === "vefaas"
+      provisioningLog("info", runtimeProvider === "local_docker"
+        ? L(`初始化 Runtime Pool：${desiredSize} 个本机 Docker runtime member。`, `Initializing Runtime Pool: ${desiredSize} local Docker runtime members.`)
+        : L(`初始化 Runtime Pool：${desiredSize} 个 VeFaaS 函数，min=${minInstances}，max=${maxInstances}，concurrency=${maxConcurrency}。`, `Initializing Runtime Pool: ${desiredSize} VeFaaS functions, min=${minInstances}, max=${maxInstances}, concurrency=${maxConcurrency}.`)),
+      provisioningLog("info", sandboxProvider === "local_docker"
+        ? L(`初始化 Sandbox Pool：${sandboxPoolSize} 个本机 Docker 沙箱。`, `Initializing Sandbox Pool: ${sandboxPoolSize} local Docker sandboxes.`)
+        : sandboxProvider === "vefaas"
         ? L(`初始化 Sandbox Pool：${sandboxPoolSize} 个 standby veFaaS 沙箱，TTL 30m。`, `Initializing Sandbox Pool: ${sandboxPoolSize} standby veFaaS sandboxes, TTL 30m.`)
         : L(`Sandbox Provider 为 ${sandboxProvider}：记录独立沙箱配置。`, `Sandbox Provider is ${sandboxProvider}: storing independent sandbox config.`)),
       provisioningLog("info", L("创建成功后 runtime pool 和 sandbox pool 会在后台继续初始化。", "After creation, the runtime pool and sandbox pool continue provisioning in the background."))
     ];
   }
-
   function copyIssuedWorkspaceKey() {
     if (!props.issuedWorkspaceKey) return;
     try {
@@ -261,9 +260,7 @@ export function WorkspaceOnboardingView(props: {
     }
     toast(L("已复制到剪贴板", "Copied to clipboard"), "ok");
   }
-
   const slugStatusClass = slugStatus ? (slugStatus.available ? "ok" : slugStatus.reason ?? "invalid") : "";
-
   return (
     <div className="page-frame">
       <div className="provision wizard">
@@ -301,7 +298,6 @@ export function WorkspaceOnboardingView(props: {
             </div>
           ) : null}
           <ProvisioningLogPanel logs={provisionLogs} active={saving} L={L} />
-
           <WorkspaceOnboardingSteps
             L={L}
             step={step}

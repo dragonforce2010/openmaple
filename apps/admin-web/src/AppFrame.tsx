@@ -202,7 +202,7 @@ export function AppFrame(props: Record<string, any>) {
             vault={quickVault}
             quickSessionId={quickSessionId}
             environments={environments}
-            sandboxProvider={selectedWorkspace?.sandbox_provider === "local_docker" ? "local_docker" : selectedWorkspace?.sandbox_provider === "vefaas" ? "vefaas" : "e2b"}
+            sandboxProvider={selectedWorkspace?.sandbox_provider === "local_docker" ? "local_docker" : selectedWorkspace?.sandbox_provider === "vefaas" ? "vefaas" : selectedWorkspace?.sandbox_provider === "daytona" ? "daytona" : "e2b"}
             modelConfigs={modelConfigs}
             selectedModelId={selectedDraftModelId}
             setSelectedModelId={selectDraftModel}

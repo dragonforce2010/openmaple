@@ -107,19 +107,31 @@ export function WorkspaceOnboardingSteps(props: {
         <div className="cfg-cards">
           {CLOUD_PROVIDERS.map((provider) => {
             const connected = props.connectedCloudProviders.includes(provider.id);
-            return <button key={provider.id} type="button" className={`prov-card ${connected ? "on" : ""} ${provider.enabled ? "" : "disabled"}`} disabled={!provider.enabled} onClick={() => provider.enabled && props.setConnectedCloudProviders(connected ? props.connectedCloudProviders.filter((id) => id !== provider.id) : [...props.connectedCloudProviders, provider.id])}>
+            return <button key={provider.id} type="button" className={`prov-card ${connected ? "on" : ""} ${provider.enabled ? "" : "disabled"}`} disabled={!provider.enabled} onClick={() => {
+              if (!provider.enabled) return;
+              props.setRuntimeProvider("vefaas");
+              if (props.sandboxProvider === "local_docker") props.setSandboxProvider("e2b");
+              props.setConnectedCloudProviders(connected ? props.connectedCloudProviders.filter((id) => id !== provider.id) : [...props.connectedCloudProviders.filter((id) => id !== "local_docker"), provider.id]);
+            }}>
               <div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>{provider.name}</b>
               <span>{provider.enabled ? provider.capabilities.map((item) => item.toUpperCase()).join(" / ") : L("敬请期待", "Coming soon")}</span>
               {connected ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}
             </button>;
           })}
+          <button type="button" className={`prov-card ${props.connectedCloudProviders.includes("local_docker") || props.runtimeProvider === "local_docker" ? "on" : ""}`} onClick={() => { props.setConnectedCloudProviders(["local_docker"]); props.setRuntimeProvider("local_docker"); props.setSandboxProvider("local_docker"); }}>
+            <div className="pc-ic"><Icon name="i-server" size={18} /></div><b>Local Docker</b>
+            <span>{L("本地开发模式", "Local development mode")}</span>
+            {props.connectedCloudProviders.includes("local_docker") || props.runtimeProvider === "local_docker" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}
+          </button>
         </div>
-        {props.connectedCloudProviders.includes("volcengine") ? <div className="cred-box">
+        {props.connectedCloudProviders.includes("local_docker") || props.runtimeProvider === "local_docker" ? (
+          <div className="cred-box"><div className="cred-head"><Icon name="i-server" size={14} /> Local Docker</div><div className="panel-empty">{L("无需云账号。Docker Compose 会挂载本机 Docker daemon，并用 node:22-bookworm 启动运行时容器。", "No cloud account required. Docker Compose mounts the local Docker daemon and starts runtime containers from node:22-bookworm.")}</div></div>
+        ) : props.connectedCloudProviders.includes("volcengine") ? <div className="cred-box">
           <div className="cred-head"><Icon name="i-key" size={14} /> {L("火山引擎 AK/SK", "Volcengine AK/SK")}</div>
           <label className="form">Access Key<input className="fld" value={props.vefaasAccessKey} autoComplete="off" placeholder="VOLCENGINE_ACCESS_KEY" onChange={(event) => props.setVefaasAccessKey(event.target.value)} /></label>
           <label className="form">SecretKey<input className="fld" type="password" value={props.vefaasSecretKey} autoComplete="off" placeholder="VOLCENGINE_SECRET_KEY" onChange={(event) => props.setVefaasSecretKey(event.target.value)} /></label>
           <label className="form">Region<Select value={props.vefaasRegion} options={[{ value: "cn-beijing", label: "cn-beijing" }, { value: "cn-shanghai", label: "cn-shanghai" }, { value: "cn-guangzhou", label: "cn-guangzhou" }, { value: "ap-southeast-1", label: "ap-southeast-1" }]} onChange={props.setVefaasRegion} /></label>
-        </div> : <div className="panel-empty">{L("请选择至少一个可接入云厂商。Runtime Provider 必须由云厂商提供。", "Choose at least one connectable cloud provider. Runtime provider must come from a cloud provider.")}</div>}
+        </div> : <div className="panel-empty">{L("请选择至少一个可接入云厂商。本地开发可选择 Local Docker。", "Choose at least one connectable cloud provider. For local development, choose Local Docker.")}</div>}
       </>
     );
   }
@@ -149,11 +161,18 @@ export function WorkspaceOnboardingSteps(props: {
       <>
         <div className="cfg-head"><Icon name="i-cloud" size={16} /> <b>{L("运行时 Provider", "Runtime provider")}</b></div>
         <div className="cfg-cards">
-          <button type="button" className={`prov-card ${props.runtimeProvider === "vefaas" ? "on" : ""}`} onClick={() => props.setRuntimeProvider("vefaas")}><div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("来自火山引擎云厂商元数据", "From Volcengine cloud metadata")}</span>{props.runtimeProvider === "vefaas" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
+          {props.connectedCloudProviders.includes("local_docker") || props.runtimeProvider === "local_docker" ? (
+            <button type="button" className={`prov-card ${props.runtimeProvider === "local_docker" ? "on" : ""}`} onClick={() => { props.setRuntimeProvider("local_docker"); props.setSandboxProvider("local_docker"); }}><div className="pc-ic"><Icon name="i-server" size={18} /></div><b>Local Docker</b><span>{L("本机 Docker runtime", "Local Docker runtime")}</span>{props.runtimeProvider === "local_docker" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
+          ) : null}
+          {props.connectedCloudProviders.includes("volcengine") ? (
+            <button type="button" className={`prov-card ${props.runtimeProvider === "vefaas" ? "on" : ""}`} onClick={() => props.setRuntimeProvider("vefaas")}><div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("来自火山引擎云厂商元数据", "From Volcengine cloud metadata")}</span>{props.runtimeProvider === "vefaas" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
+          ) : null}
         </div>
-        <div className="cred-box"><div className="cred-head"><Icon name="i-key" size={14} /> {L("使用租户级云凭据", "Uses tenant-level cloud credentials")}</div><div className="panel-empty">{L("已在接入云厂商步骤保存 AK/SK，空间配置无需重复输入。", "AK/SK is saved at tenant level in the cloud-access step; workspace setup does not ask again.")}</div></div>
+        {props.runtimeProvider === "local_docker" ? (
+          <div className="cred-box"><div className="cred-head"><Icon name="i-server" size={14} /> Local Docker</div><div className="panel-empty">{L("无需云账号。Runtime member 会在本机 Docker 中按需绑定 Session。", "No cloud account required. Runtime members are bound to sessions in local Docker.")}</div></div>
+        ) : <div className="cred-box"><div className="cred-head"><Icon name="i-key" size={14} /> {L("使用租户级云凭据", "Uses tenant-level cloud credentials")}</div><div className="panel-empty">{L("已在接入云厂商步骤保存 AK/SK，空间配置无需重复输入。", "AK/SK is saved at tenant level in the cloud-access step; workspace setup does not ask again.")}</div></div>}
         <div className="cfg-head"><Icon name="i-gauge" size={16} /> <b>{L("运行时池配置", "Runtime pool")}</b></div>
-        {false ? (
+        {props.runtimeProvider === "local_docker" ? (
           <>
             <label className="form">{L("预热 Runtime 数", "Prewarmed runtimes")}<input className="fld" type="number" min={1} step={1} value={props.desiredSizeInput} onChange={(event) => props.setDesiredSizeInput(event.target.value)} /></label>
             <div className="qps-estimate"><div><span>{L("池化目标", "Pool target")}</span><b>{props.desiredSize}</b><small>{L("本机 Docker runtime member，按需绑定 Session。", "Local Docker runtime members are bound to sessions on demand.")}</small></div></div>
@@ -182,10 +201,15 @@ export function WorkspaceOnboardingSteps(props: {
       <>
         <div className="cfg-head"><Icon name="i-server" size={16} /> <b>{L("沙箱 Provider", "Sandbox provider")}</b></div>
         <div className="cfg-cards">
+          <button type="button" className={`prov-card ${props.sandboxProvider === "local_docker" ? "on" : ""}`} onClick={() => props.setSandboxProvider("local_docker")}><div className="pc-ic"><Icon name="i-server" size={18} /></div><b>Local Docker</b><span>{L("本地容器沙箱", "Local container sandbox")}</span>{props.sandboxProvider === "local_docker" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
           {INDEPENDENT_SANDBOX_PROVIDERS.map((provider) => <button key={provider.id} type="button" className={`prov-card ${props.sandboxProvider === provider.id ? "on" : ""}`} onClick={() => props.setSandboxProvider(provider.id)}><div className="pc-ic"><Icon name="i-server" size={18} /></div><b>{provider.label}</b><span>{L(provider.descriptionZh, provider.descriptionEn)}</span>{props.sandboxProvider === provider.id ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>)}
-          <button type="button" className={`prov-card ${props.sandboxProvider === "vefaas" ? "on" : ""}`} onClick={() => props.setSandboxProvider("vefaas")}><div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("火山引擎云沙箱", "Volcengine cloud sandbox")}</span>{props.sandboxProvider === "vefaas" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
+          {props.connectedCloudProviders.includes("volcengine") ? (
+            <button type="button" className={`prov-card ${props.sandboxProvider === "vefaas" ? "on" : ""}`} onClick={() => props.setSandboxProvider("vefaas")}><div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("火山引擎云沙箱", "Volcengine cloud sandbox")}</span>{props.sandboxProvider === "vefaas" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}</button>
+          ) : null}
         </div>
-        {props.sandboxProvider === "e2b" ? (
+        {props.sandboxProvider === "local_docker" ? (
+          <div className="cred-box"><div className="cred-head"><Icon name="i-server" size={14} /> Local Docker Sandbox</div><div className="panel-empty">{L("无需 API Key。沙箱池会在本机 Docker 上按需领取容器，并挂载每个 Session 的工作目录。", "No API key required. The sandbox pool claims local Docker containers on demand and mounts each session workspace.")}</div></div>
+        ) : props.sandboxProvider === "e2b" ? (
           <div className="cred-box"><div className="cred-head"><Icon name="i-key" size={14} /> E2B {L("凭据", "credentials")}</div><label className="form">E2B_API_KEY<input className="fld" type="password" value={props.e2bApiKey} autoComplete="off" placeholder="E2B_API_KEY" onChange={(event) => props.setE2bApiKey(event.target.value)} /></label></div>
         ) : props.sandboxProvider === "daytona" ? (
           <div className="cred-box"><div className="cred-head"><Icon name="i-key" size={14} /> Daytona</div><label className="form">DAYTONA_SERVER_URL<input className="fld" value={props.daytonaServerUrl} autoComplete="off" placeholder="https://daytona.example.com" onChange={(event) => props.setDaytonaServerUrl(event.target.value)} /></label><label className="form">DAYTONA_API_KEY<input className="fld" type="password" value={props.daytonaApiKey} autoComplete="off" placeholder="DAYTONA_API_KEY" onChange={(event) => props.setDaytonaApiKey(event.target.value)} /></label></div>

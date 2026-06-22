@@ -258,6 +258,8 @@ export const storeSchemaSql = `
     CREATE INDEX IF NOT EXISTS idx_deployment_runs_deployment ON deployment_runs(deployment_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_deployment_runs_session ON deployment_runs(session_id);
     CREATE INDEX IF NOT EXISTS idx_managed_files_created ON managed_files(created_at);
+    CREATE TABLE IF NOT EXISTS tenant_cloud_provider_credentials (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, provider TEXT NOT NULL, secret_cipher TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(tenant_id, provider));
+    CREATE INDEX IF NOT EXISTS idx_tenant_cloud_provider_credentials_tenant ON tenant_cloud_provider_credentials(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_session_artifacts_session ON session_artifacts(session_id, updated_at);
     CREATE TABLE IF NOT EXISTS tenants (
       id TEXT PRIMARY KEY,

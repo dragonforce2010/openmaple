@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import mysql from "mysql2/promise";
 
+const tableInfoCache = new Map();
+
 export function mysqlConnectionConfig() {
   return {
     host: env("MAPLE_MYSQL_HOST", "MYSQL_HOST", "127.0.0.1"),
@@ -17,6 +19,13 @@ export function mysqlConnectionConfig() {
 // executor is a mysql2 connection OR pool — both expose .execute(); transactions must pass a dedicated connection
 export async function runOp(executor, input) {
   if (input.op === "query") return execute(executor, input.mode, input.sql, input.params || []);
+  if (input.op === "script") {
+    const results = [];
+    for (const query of input.queries || []) {
+      results.push(await execute(executor, query.mode || "run", query.sql, query.params || []));
+    }
+    return results.at(-1) ?? { changes: 0 };
+  }
   if (input.op === "transaction") {
     await executor.beginTransaction();
     try {
@@ -52,15 +61,20 @@ if (process.argv[1] && process.argv[1].endsWith("mysql_child.mjs")) {
 async function execute(connection, mode, sql, params) {
   const translated = translateSql(sql);
   if (translated.kind === "table_info") {
-    const [rows] = await connection.execute(
-      "SELECT COLUMN_NAME AS name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
-      [translated.table]
-    );
+    let rows = tableInfoCache.get(translated.table);
+    if (!rows) {
+      [rows] = await connection.execute(
+        "SELECT COLUMN_NAME AS name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
+        [translated.table]
+      );
+      tableInfoCache.set(translated.table, rows);
+    }
     return mode === "get" ? rows[0] ?? null : rows;
   }
 
   try {
     const [rows] = await connection.execute(translated.sql, normalizeParams(params));
+    invalidateTableInfoCache(translated.sql);
     if (mode === "get") return Array.isArray(rows) ? rows[0] ?? null : null;
     if (mode === "all") return Array.isArray(rows) ? rows : [];
     return {
@@ -68,9 +82,19 @@ async function execute(connection, mode, sql, params) {
       insertId: rows?.insertId ?? undefined
     };
   } catch (error) {
-    if (isIgnorableDdlError(translated.sql, error)) return { changes: 0 };
+    if (isIgnorableDdlError(translated.sql, error)) {
+      invalidateTableInfoCache(translated.sql);
+      return { changes: 0 };
+    }
     throw error;
   }
+}
+
+function invalidateTableInfoCache(sql) {
+  const table =
+    /^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z_][A-Za-z0-9_]*)`?/i.exec(sql)?.[1] ||
+    /^ALTER\s+TABLE\s+`?([A-Za-z_][A-Za-z0-9_]*)`?/i.exec(sql)?.[1];
+  if (table) tableInfoCache.delete(table);
 }
 
 function translateSql(sql) {

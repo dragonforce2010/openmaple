@@ -99,6 +99,15 @@ function sandboxProviderCard(props: {
       snapshot: compactRecord(vefaasSandboxSnapshot(props.sandboxConfig, props.providerCredentials))
     };
   }
+  if (props.sandboxProvider === "daytona") {
+    return {
+      icon: "i-server",
+      title: "Daytona",
+      active: true,
+      fields: ["DAYTONA_SERVER_URL", "DAYTONA_API_KEY"],
+      snapshot: props.providerCredentials?.daytona
+    };
+  }
   return {
     icon: "i-server",
     title: "E2B",

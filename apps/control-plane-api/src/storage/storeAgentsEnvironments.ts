@@ -221,6 +221,27 @@ export function ensureDefaultEnvironments(workspaceId: string) {
     });
     return;
   }
+  if (sandboxProvider === "daytona") {
+    const daytona = recordValue(sandboxConfig.daytona ?? sandboxConfig.daytona_sandbox ?? sandboxConfig);
+    createEnvironment({
+      name: "Daytona Sandbox",
+      config: {
+        type: "daytona",
+        sandbox: {
+          provider: "daytona",
+          daytona: {
+            server_url: String(daytona.server_url || daytona.serverUrl || process.env.DAYTONA_SERVER_URL || process.env.MAPLE_DAYTONA_SERVER_URL || ""),
+            workspace_class: String(daytona.workspace_class || process.env.DAYTONA_WORKSPACE_CLASS || process.env.MAPLE_DAYTONA_WORKSPACE_CLASS || ""),
+            workspace_path: String(daytona.workspace_path || process.env.DAYTONA_WORKSPACE_PATH || process.env.MAPLE_DAYTONA_WORKSPACE_PATH || "/workspace"),
+            timeout_ms: Number(daytona.timeout_ms || process.env.DAYTONA_TIMEOUT_MS || process.env.MAPLE_DAYTONA_TIMEOUT_MS || 3_600_000)
+          }
+        },
+        networking: { mode: "cloud_limited", allow_internet_access: true }
+      },
+      workspace_id: workspaceId
+    });
+    return;
+  }
   createEnvironment({
     name: "E2B Cloud Sandbox",
     config: {

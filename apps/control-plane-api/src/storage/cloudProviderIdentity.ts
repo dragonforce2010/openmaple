@@ -39,6 +39,18 @@ export function cloudProviderIdentities(input: IdentityInput) {
       configured: Boolean(stringValue(volcengineCreds.VOLCENGINE_ACCESS_KEY) && stringValue(volcengineCreds.VOLCENGINE_SECRET_KEY))
     };
   }
+  const daytonaCreds = recordValue(credentials.daytona);
+  if (Object.keys(daytonaCreds).length || input.sandboxProvider === "daytona") {
+    identities.daytona = {
+      provider: "daytona",
+      label: "Daytona",
+      identity_type: "api_key",
+      credential_source: "provider_credentials.daytona",
+      region: "global",
+      services: ["sandbox:daytona"],
+      configured: Boolean(stringValue(daytonaCreds.DAYTONA_SERVER_URL) && stringValue(daytonaCreds.DAYTONA_API_KEY))
+    };
+  }
   addFutureProvider(identities, "alibaba_cloud", credentials, ["alibaba_cloud", "aliyun"], "Alibaba Cloud", "storage:oss", "runtime:fc");
   addFutureProvider(identities, "aws", credentials, ["aws"], "AWS", "storage:s3", "runtime:lambda");
   addFutureProvider(identities, "gcp", credentials, ["gcp"], "Google Cloud", "storage:gcs", "runtime:cloud_functions");

@@ -29,7 +29,7 @@ import {
   listCreatedTenantsForUser,
   listLoginTenantsForUser,
   listTenantAdminTenants,
-  tenantCloudProviders,
+  tenantCloudProviderCredentials,
   upsertTenantCloudProvider,
   listWorkspaceApiKeys,
   listWorkspaceMembers,
@@ -142,6 +142,8 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
   // brand-new users (no tenant yet) onboard their first tenant+workspace here; only enforce
   // tenant-admin when targeting an existing tenant
   if (tenantId && !canAdminTenant(user.id, tenantId)) return response.status(403).json({ error: "tenant_admin_required" });
+  const missingCloudAccess = missingTenantCloudProviderAccess(tenantId, parsed.data.runtime_provider, parsed.data.sandbox_provider);
+  if (missingCloudAccess.length) return response.status(400).json({ error: "cloud_provider_not_connected", missing: missingCloudAccess });
   const createCreds = withTenantCloudCredentials(tenantId, parsed.data.provider_credentials as Record<string, Record<string, unknown> | undefined>);
   const missingCreateCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, createCreds, parsed.data.sandbox_config);
   if (missingCreateCreds.length) return response.status(400).json({ error: "provider_credentials_required", missing: missingCreateCreds });
@@ -150,7 +152,11 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
   if (missingWorkspaceModelConfigId) return response.status(404).json({ error: "model_config_not_found", model_config_id: missingWorkspaceModelConfigId });
   try {
     const { custom_model_configs: _customModelConfigs, ...workspaceInput } = parsed.data;
-    const created = createWorkspaceForUser({ user_id: user.id, provisioning_mode: "manual", ...workspaceInput, tenant_id: tenantId });
+    const created = createWorkspaceForUser({ user_id: user.id, provisioning_mode: "manual", ...workspaceInput, tenant_id: tenantId, provider_credentials: createCreds as JsonRecord });
+    const createdTenantId = String(((created as JsonRecord).tenant as JsonRecord | undefined)?.id || ((created as JsonRecord).workspace as JsonRecord | undefined)?.tenant_id || "");
+    if (!tenantId && createdTenantId && createCreds.vefaas?.VOLCENGINE_ACCESS_KEY) {
+      upsertTenantCloudProvider(createdTenantId, "volcengine", createCreds.vefaas as JsonRecord);
+    }
     const provisioning = await finishWorkspaceProvisioning(created as JsonRecord, createCreds as JsonRecord);
     response.status(201).json({ ...created, ...provisioning, workspace: workspaceResponse((created as JsonRecord).workspace, user.id) });
   } catch (error) {
@@ -160,11 +166,17 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
 
 function withTenantCloudCredentials(tenantId: string, providerCredentials: Record<string, Record<string, unknown> | undefined>) {
   if (!tenantId) return providerCredentials;
-  const providers = tenantCloudProviders(tenantId);
-  const volcengine = asRecord(providers.volcengine);
-  const credentials = asRecord(volcengine.credentials);
+  const credentials = tenantCloudProviderCredentials(tenantId, "volcengine");
   if (!Object.keys(credentials).length) return providerCredentials;
   return { ...providerCredentials, vefaas: { ...credentials, ...(providerCredentials.vefaas ?? {}) } };
+}
+
+function missingTenantCloudProviderAccess(tenantId: string, runtimeProvider: "vefaas" | "local_docker", sandboxProvider: "e2b" | "vefaas" | "local_docker" | "daytona") {
+  if (!tenantId) return [];
+  const missing: string[] = [];
+  const needsVolcengine = runtimeProvider === "vefaas" || sandboxProvider === "vefaas";
+  if (needsVolcengine && !Object.keys(tenantCloudProviderCredentials(tenantId, "volcengine")).length) missing.push("volcengine");
+  return missing;
 }
 
 function missingWorkspaceProvisioningCredentials(

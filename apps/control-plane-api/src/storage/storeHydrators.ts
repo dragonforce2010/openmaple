@@ -1,5 +1,6 @@
 import type { JsonRecord } from "../types";
 import { db, fromJson } from "./storeCore";
+import { safeTenantMetadata } from "./tenantMetadata";
 
 export function hydrateConfigRow(row: JsonRecord) {
   return { ...row, config: fromJson(String(row.config_json), {}) };
@@ -8,7 +9,7 @@ export function hydrateConfigRow(row: JsonRecord) {
 export function hydrateTenantRow(row: JsonRecord) {
   return {
     ...row,
-    metadata: fromJson(String(row.metadata_json), {})
+    metadata: safeTenantMetadata(fromJson<JsonRecord>(String(row.metadata_json), {}))
   };
 }
 
