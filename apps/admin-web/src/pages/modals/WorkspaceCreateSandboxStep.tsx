@@ -1,12 +1,8 @@
+import { useState } from "react";
 import { Icon } from "../../ui";
 import { MAX_SANDBOX_POOL_SIZE } from "../workspaces/WorkspaceOnboardingConfig";
 
 type LFn = (zh: string, en: string) => string;
-
-function clampNumber(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) return min;
-  return Math.min(max, Math.max(min, Math.floor(value)));
-}
 
 export function WorkspaceCreateSandboxStep(props: {
   L: LFn;
@@ -25,13 +21,15 @@ export function WorkspaceCreateSandboxStep(props: {
   setVefaasSandboxFunctionId: (value: string) => void;
   vefaasSandboxGatewayUrl: string;
   setVefaasSandboxGatewayUrl: (value: string) => void;
-  vefaasSandboxTimeoutMs: number;
-  setVefaasSandboxTimeoutMs: (value: number) => void;
-  sandboxPoolSize: number;
-  setSandboxPoolSize: (value: number) => void;
+  vefaasSandboxTimeoutInput: string;
+  setVefaasSandboxTimeoutInput: (value: string) => void;
+  sandboxPoolSizeInput: string;
+  setSandboxPoolSizeInput: (value: string) => void;
 }) {
   const L = props.L;
+  const [timeoutHelpOpen, setTimeoutHelpOpen] = useState(false);
   const clearError = () => { if (props.error) props.setError(""); };
+  const timeoutHelp = L("VeFaaS 沙箱的保活/请求超时时间，单位毫秒。通常建议 3600000（一小时）；短任务可设 600000 到 1800000，长任务不建议低于一小时。", "VeFaaS sandbox keep-alive/request timeout in milliseconds. 3600000 (one hour) is a good default; short jobs can use 600000-1800000, while long jobs should usually stay at one hour or more.");
   return (
     <div className="provision-step">
       <div className="cfg-cards">
@@ -63,11 +61,11 @@ export function WorkspaceCreateSandboxStep(props: {
           <div className="cred-head"><Icon name="i-key" size={14} /> VeFaaS Sandbox</div>
           <label className="form">VEFAAS_SANDBOX_FUNCTION_ID<input className="fld" value={props.vefaasSandboxFunctionId} autoComplete="off" placeholder="vefaas sandbox function id" onChange={(event) => { props.setVefaasSandboxFunctionId(event.target.value); clearError(); }} /></label>
           <label className="form">VEFAAS_SANDBOX_GATEWAY_URL<input className="fld" value={props.vefaasSandboxGatewayUrl} autoComplete="off" placeholder="https://your-sandbox-app.example.com" onChange={(event) => { props.setVefaasSandboxGatewayUrl(event.target.value); clearError(); }} /></label>
-          <label className="form">VEFAAS_SANDBOX_TIMEOUT_MS<input className="fld" type="number" min={60000} step={60000} value={props.vefaasSandboxTimeoutMs} onChange={(event) => props.setVefaasSandboxTimeoutMs(Number(event.target.value))} /></label>
+          <label className="form"><span className="field-label-inline">VEFAAS_SANDBOX_TIMEOUT_MS <button type="button" className="field-help" title={timeoutHelp} aria-label={timeoutHelp} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setTimeoutHelpOpen((open) => !open); }}><Icon name="i-info" size={13} /></button>{timeoutHelpOpen ? <span className="field-help-popover" role="tooltip">{timeoutHelp}</span> : null}</span><input className="fld" type="number" min={60000} step={60000} value={props.vefaasSandboxTimeoutInput} onChange={(event) => props.setVefaasSandboxTimeoutInput(event.target.value)} /></label>
         </div>
       )}
       <label className="form">{L("备用沙箱数", "Standby sandboxes")}
-        <input className="fld" type="number" min={1} max={MAX_SANDBOX_POOL_SIZE} value={props.sandboxPoolSize} onChange={(event) => props.setSandboxPoolSize(clampNumber(Number(event.target.value), 1, MAX_SANDBOX_POOL_SIZE))} />
+        <input className="fld" type="number" min={1} max={MAX_SANDBOX_POOL_SIZE} value={props.sandboxPoolSizeInput} onChange={(event) => props.setSandboxPoolSizeInput(event.target.value)} />
       </label>
     </div>
   );

@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { validateVolcengineCredentials } from "../cloud/volcengineOpenApi";
 import {
   countRuntimePoolMembersByStatus,
   countSandboxPoolMembersByStatus,
@@ -91,6 +92,8 @@ app.post("/v1/workspace_onboarding", async (request: AuthenticatedRequest, respo
   const onboardingCreds = withTenantCloudCredentials("", parsed.data.provider_credentials as Record<string, Record<string, unknown> | undefined>);
   const missingCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, onboardingCreds, parsed.data.sandbox_config);
   if (missingCreds.length) return response.status(400).json({ error: "provider_credentials_required", missing: missingCreds });
+  const onboardingCloudValidation = await validateWorkspaceVolcengineCredentials(onboardingCreds);
+  if (!onboardingCloudValidation.ok) return response.status(400).json(onboardingCloudValidation);
   ensureGlobalModelConfigs();
   const missingModelConfigId = parsed.data.model_config_ids.find((modelConfigId) => !modelConfigAvailableForProvisioning(modelConfigId, user.id));
   if (missingModelConfigId) return response.status(404).json({ error: "model_config_not_found", model_config_id: missingModelConfigId });
@@ -147,6 +150,10 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
   const createCreds = withTenantCloudCredentials(tenantId, parsed.data.provider_credentials as Record<string, Record<string, unknown> | undefined>);
   const missingCreateCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, createCreds, parsed.data.sandbox_config);
   if (missingCreateCreds.length) return response.status(400).json({ error: "provider_credentials_required", missing: missingCreateCreds });
+  if (!tenantId) {
+    const createCloudValidation = await validateWorkspaceVolcengineCredentials(createCreds);
+    if (!createCloudValidation.ok) return response.status(400).json(createCloudValidation);
+  }
   ensureGlobalModelConfigs();
   const missingWorkspaceModelConfigId = parsed.data.model_config_ids.find((modelConfigId) => !modelConfigAvailableForProvisioning(modelConfigId, user.id));
   if (missingWorkspaceModelConfigId) return response.status(404).json({ error: "model_config_not_found", model_config_id: missingWorkspaceModelConfigId });
@@ -169,6 +176,18 @@ function withTenantCloudCredentials(tenantId: string, providerCredentials: Recor
   const credentials = tenantCloudProviderCredentials(tenantId, "volcengine");
   if (!Object.keys(credentials).length) return providerCredentials;
   return { ...providerCredentials, vefaas: { ...credentials, ...(providerCredentials.vefaas ?? {}) } };
+}
+
+async function validateWorkspaceVolcengineCredentials(providerCredentials: Record<string, Record<string, unknown> | undefined>) {
+  const vefaas = providerCredentials.vefaas ?? {};
+  const accessKey = String(vefaas.VOLCENGINE_ACCESS_KEY || vefaas.access_key || "");
+  const secretKey = String(vefaas.VOLCENGINE_SECRET_KEY || vefaas.secret_key || "");
+  if (!accessKey && !secretKey) return { ok: true as const };
+  return validateVolcengineCredentials({
+    accessKey,
+    secretKey,
+    region: String(vefaas.VEFAAS_REGION || vefaas.region || "cn-beijing")
+  });
 }
 
 function missingTenantCloudProviderAccess(tenantId: string, runtimeProvider: "vefaas" | "local_docker", sandboxProvider: "e2b" | "vefaas" | "local_docker" | "daytona") {

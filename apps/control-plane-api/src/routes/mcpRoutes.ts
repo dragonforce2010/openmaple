@@ -10,6 +10,7 @@ import {
   currentUser,
   encryptSecret,
   getMcpServer,
+  getRawVaultCredential,
   getVault,
   getVaultCredential,
   listConnectedOauthCredentials,
@@ -102,7 +103,8 @@ app.delete("/v1/mcp_servers/:mcpId", (request: AuthenticatedRequest, response) =
 });
 
 // ── MCP OAuth authorization flow (authorization code + PKCE) ──
-const mcpOauthStates = new Map<string, { kind: "mcp_server" | "credential"; mcpServerId?: string; credentialId?: string; vaultId?: string; verifier: string; provider: string; userId: string; returnTo: string; createdAt: number }>();
+type McpOAuthClient = { client_id: string; client_secret: string };
+const mcpOauthStates = new Map<string, { kind: "mcp_server" | "credential"; mcpServerId?: string; credentialId?: string; vaultId?: string; verifier: string; provider: string; userId: string; returnTo: string; createdAt: number; client?: McpOAuthClient; customClient?: boolean }>();
 
 function mcpPkce() {
   const verifier = randomBytes(32).toString("base64url");
@@ -124,6 +126,23 @@ function mcpRedirect(returnTo: string, params: Record<string, string>) {
   const url = new URL(target, "https://maple.local");
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return /^https?:\/\//i.test(target) ? url.toString() : `${url.pathname}${url.search}${url.hash}`;
+}
+
+function credentialOAuthClient(credentialId: string, provider: string): { client: McpOAuthClient; custom: boolean } | null {
+  const raw = getRawVaultCredential(credentialId);
+  const secret = raw ? readCredentialSecret(raw) : null;
+  if (secret) {
+    try {
+      const parsed = JSON.parse(secret) as { oauth_client?: { client_id?: unknown; client_secret?: unknown } };
+      const clientId = String(parsed.oauth_client?.client_id || "");
+      const clientSecret = String(parsed.oauth_client?.client_secret || "");
+      if (clientId && clientSecret) return { client: { client_id: clientId, client_secret: clientSecret }, custom: true };
+    } catch {
+      // Existing access-token bundles and placeholders are not custom OAuth clients.
+    }
+  }
+  const client = mcpProviderClient(provider);
+  return client ? { client, custom: false } : null;
 }
 
 app.post("/v1/mcp_servers/:mcpId/oauth/start", (request: AuthenticatedRequest, response) => {
@@ -163,11 +182,12 @@ app.post("/v1/vaults/:vaultId/credentials/:credId/oauth/start", (request: Authen
   const provider = String(credential.metadata?.provider || "");
   const entry = mcpCatalogEntry(provider);
   if (!entry?.oauth) return response.status(400).json({ error: "provider_has_no_oauth" });
-  const client = mcpProviderClient(provider);
-  if (!client) return response.status(400).json({ error: "oauth_client_not_configured", hint: `set ${entry.oauth.client_env_prefix}_CLIENT_ID / _CLIENT_SECRET` });
+  const clientResult = credentialOAuthClient(String(credential.id), provider);
+  if (!clientResult) return response.status(400).json({ error: "oauth_client_not_configured", hint: `set ${entry.oauth.client_env_prefix}_CLIENT_ID / _CLIENT_SECRET` });
+  const client = clientResult.client;
   const { verifier, challenge } = mcpPkce();
   const state = randomBytes(16).toString("base64url");
-  mcpOauthStates.set(state, { kind: "credential", credentialId: String(credential.id), vaultId, verifier, provider, userId, returnTo: mcpOauthReturnTo(request), createdAt: Date.now() });
+  mcpOauthStates.set(state, { kind: "credential", credentialId: String(credential.id), vaultId, verifier, provider, userId, returnTo: mcpOauthReturnTo(request), createdAt: Date.now(), client, customClient: clientResult.custom });
   const url = new URL(entry.oauth.authorize_url);
   url.searchParams.set("client_id", client.client_id);
   url.searchParams.set("redirect_uri", mcpCallbackUrl(request));
@@ -186,7 +206,7 @@ app.get("/v1/mcp/oauth/callback", async (request: AuthenticatedRequest, response
   if (!session || !code) return response.redirect(mcpRedirect("/", { mcp_error: "invalid_state" }));
   mcpOauthStates.delete(state);
   const entry = mcpCatalogEntry(session.provider);
-  const client = mcpProviderClient(session.provider);
+  const client = session.client || mcpProviderClient(session.provider);
   if (!entry?.oauth || !client) return response.redirect(mcpRedirect(session.returnTo, { mcp_error: "oauth_not_configured" }));
   try {
     const tokenResponse = await fetch(entry.oauth.token_url, {
@@ -197,7 +217,7 @@ app.get("/v1/mcp/oauth/callback", async (request: AuthenticatedRequest, response
     const token = (await tokenResponse.json()) as Record<string, unknown>;
     if (!tokenResponse.ok) throw new Error(`token exchange failed: ${JSON.stringify(token)}`);
     const expiresAt = typeof token.expires_in === "number" ? new Date(Date.now() + token.expires_in * 1000).toISOString() : null;
-    const bundle = { access_token: token.access_token, refresh_token: token.refresh_token ?? null, token_type: token.token_type ?? "Bearer", expires_at: expiresAt, scope: token.scope ?? null };
+    const bundle = { access_token: token.access_token, refresh_token: token.refresh_token ?? null, token_type: token.token_type ?? "Bearer", expires_at: expiresAt, scope: token.scope ?? null, ...(session.customClient && session.client ? { oauth_client: session.client } : {}) };
     const bundleJson = JSON.stringify(bundle);
     if (session.kind === "credential" && session.credentialId) {
       const secretRef = writeSecret(`cred_oauth_${session.credentialId}_${Date.now()}`, bundleJson);
@@ -226,7 +246,8 @@ async function refreshMcpOauthTokens() {
       const expiresAt = bundle.expires_at ? new Date(String(bundle.expires_at)).getTime() : 0;
       if (!bundle.refresh_token || !expiresAt || expiresAt - Date.now() > 5 * 60_000) continue; // only refresh within 5min of expiry
       const entry = mcpCatalogEntry(provider);
-      const client = mcpProviderClient(provider);
+      const bundleClient = (bundle.oauth_client ?? null) as { client_id?: unknown; client_secret?: unknown } | null;
+      const client = bundleClient?.client_id && bundleClient?.client_secret ? { client_id: String(bundleClient.client_id), client_secret: String(bundleClient.client_secret) } : mcpProviderClient(provider);
       if (!entry?.oauth || !client) continue;
       const tokenResponse = await fetch(entry.oauth.token_url, {
         method: "POST",
@@ -236,7 +257,7 @@ async function refreshMcpOauthTokens() {
       const token = (await tokenResponse.json()) as Record<string, unknown>;
       if (!tokenResponse.ok) continue;
       const newExpiresAt = typeof token.expires_in === "number" ? new Date(Date.now() + token.expires_in * 1000).toISOString() : null;
-      const newBundle = { access_token: token.access_token, refresh_token: token.refresh_token ?? bundle.refresh_token, token_type: token.token_type ?? "Bearer", expires_at: newExpiresAt, scope: token.scope ?? bundle.scope };
+      const newBundle = { access_token: token.access_token, refresh_token: token.refresh_token ?? bundle.refresh_token, token_type: token.token_type ?? "Bearer", expires_at: newExpiresAt, scope: token.scope ?? bundle.scope, ...(bundleClient ? { oauth_client: bundleClient } : {}) };
       const newRef = writeSecret(`mcp_oauth_${(server as { id?: string }).id}_${Date.now()}`, JSON.stringify(newBundle));
       updateMcpServer(String((server as { id?: string }).id), { config: { ...config, oauth_secret_ref: newRef, oauth_refreshed_at: new Date().toISOString() } });
     } catch { /* skip on error; next tick retries */ }
@@ -252,7 +273,8 @@ async function refreshMcpOauthTokens() {
       const expiresAt = bundle.expires_at ? new Date(String(bundle.expires_at)).getTime() : 0;
       if (!bundle.refresh_token || !expiresAt || expiresAt - Date.now() > 5 * 60_000) continue; // only refresh within 5min of expiry
       const entry = mcpCatalogEntry(provider);
-      const client = mcpProviderClient(provider);
+      const bundleClient = (bundle.oauth_client ?? null) as { client_id?: unknown; client_secret?: unknown } | null;
+      const client = bundleClient?.client_id && bundleClient?.client_secret ? { client_id: String(bundleClient.client_id), client_secret: String(bundleClient.client_secret) } : mcpProviderClient(provider);
       if (!entry?.oauth || !client) continue;
       const tokenResponse = await fetch(entry.oauth.token_url, {
         method: "POST",
@@ -262,7 +284,7 @@ async function refreshMcpOauthTokens() {
       const token = (await tokenResponse.json()) as Record<string, unknown>;
       if (!tokenResponse.ok) continue;
       const newExpiresAt = typeof token.expires_in === "number" ? new Date(Date.now() + token.expires_in * 1000).toISOString() : null;
-      const newBundle = { access_token: token.access_token, refresh_token: token.refresh_token ?? bundle.refresh_token, token_type: token.token_type ?? "Bearer", expires_at: newExpiresAt, scope: token.scope ?? bundle.scope };
+      const newBundle = { access_token: token.access_token, refresh_token: token.refresh_token ?? bundle.refresh_token, token_type: token.token_type ?? "Bearer", expires_at: newExpiresAt, scope: token.scope ?? bundle.scope, ...(bundleClient ? { oauth_client: bundleClient } : {}) };
       const newBundleJson = JSON.stringify(newBundle);
       const newRef = writeSecret(`cred_oauth_${String(row.id)}_${Date.now()}`, newBundleJson);
       updateVaultCredential(String(row.id), { secret_ref: newRef, secret_cipher: encryptSecret(newBundleJson), metadata: { ...metadata, oauth_refreshed_at: new Date().toISOString() } });

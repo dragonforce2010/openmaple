@@ -91,7 +91,8 @@ export function SessionsView(props: {
   const visibleEvents = timelineEvents.filter((event) => {
     const role = eventRole(event.type, event);
     if (props.eventMode === "transcript") {
-      if (!(role === "User" || role === "Agent" || role === "Tool")) return false;
+      const isFailure = event.type.includes("failed") || event.type.includes("error");
+      if (!(role === "User" || role === "Agent" || role === "Tool" || isFailure)) return false;
       if (externalLoopView(event)?.debugOnly) return false;
       // drop the loop's assistant echo; the terminal agent.message (with usage) already shows it
       if (isExternalLoopAgentEcho(event, timelineEvents)) return false;

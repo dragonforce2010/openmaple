@@ -70,12 +70,13 @@ app.post("/v1/vaults/:vaultId/credentials", (request: AuthenticatedRequest, resp
     provider: z.string().optional(),
     auth_type: z.enum(["oauth", "bearer_token", "api_key"]).default("oauth"),
     secret: z.string().default(""),
+    oauth_client: z.object({ client_id: z.string().min(1), client_secret: z.string().min(1) }).optional(),
     metadata: z.record(z.string(), z.unknown()).default({})
   });
   const parsed = schema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json(parsed.error.flatten());
   const credentialId = `vcred_secret_${nanoid(10)}`;
-  const secretValue = parsed.data.secret || JSON.stringify({ auth_type: parsed.data.auth_type, created_at: new Date().toISOString() });
+  const secretValue = parsed.data.secret || JSON.stringify({ auth_type: parsed.data.auth_type, created_at: new Date().toISOString(), ...(parsed.data.oauth_client ? { oauth_client: parsed.data.oauth_client } : {}) });
   const secretRef = writeSecret(credentialId, secretValue);
   const credential = createVaultCredential({
     vault_id: routeParam(request.params.vaultId),

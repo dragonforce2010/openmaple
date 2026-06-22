@@ -6,14 +6,19 @@ import { useI18n } from "../../appConfig";
 import { WS_COLORS } from "../../components/shared/labels";
 import { ModalShell } from "../../components/shared/layout";
 import { slugify } from "../../components/shared/misc";
-import { MAX_RUNTIME_CONCURRENCY, MAX_RUNTIME_INSTANCES, clampNumber } from "./modalConfig";
+import { MAX_RUNTIME_CONCURRENCY, MAX_RUNTIME_INSTANCES } from "./modalConfig";
 import { WorkspaceCreateSandboxStep } from "./WorkspaceCreateSandboxStep";
+import { MAX_SANDBOX_POOL_SIZE } from "../workspaces/WorkspaceOnboardingConfig";
 import { ProvisioningLogPanel, provisioningLog, type ProvisioningLog } from "../workspaces/ProvisioningLogPanel";
 
-export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (workspaceId: string, apiKey: string) => void; modelConfigs: ModelConfig[]; tenantId?: string }) {
+export function WorkspaceCreateModal(props: { onClose: () => void; onOpenTenantCloudAccess?: () => void; onCreated: (workspaceId: string, apiKey: string) => void; modelConfigs: ModelConfig[]; tenantId?: string }) {
   const { language } = useI18n();
   const toast = useToast();
   const L = (zh: string, en: string) => (language === "zh" ? zh : en);
+  const readInt = (value: string, fallback: number, min: number, max = Number.MAX_SAFE_INTEGER) => {
+    const next = Number.parseInt(value, 10);
+    return Number.isFinite(next) ? Math.min(max, Math.max(min, next)) : fallback;
+  };
 
   const steps = [
     [L("基本信息", "Basic")],
@@ -35,14 +40,14 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
   const [daytonaApiKey, setDaytonaApiKey] = useState("");
   const [vefaasSandboxFunctionId, setVefaasSandboxFunctionId] = useState("");
   const [vefaasSandboxGatewayUrl, setVefaasSandboxGatewayUrl] = useState("");
-  const [vefaasSandboxTimeoutMs, setVefaasSandboxTimeoutMs] = useState(3_600_000);
-  const [sandboxPoolSize, setSandboxPoolSize] = useState(1);
-  const [desiredSize, setDesiredSize] = useState(3);
-  const [minInstances, setMinInstances] = useState(1);
-  const [maxInstances, setMaxInstances] = useState(100);
-  const [maxConcurrency, setMaxConcurrency] = useState(MAX_RUNTIME_CONCURRENCY);
-  const [cpuMilli, setCpuMilli] = useState(2000);
-  const [memoryMb, setMemoryMb] = useState(4096);
+  const [vefaasSandboxTimeoutInput, setVefaasSandboxTimeoutInput] = useState("3600000");
+  const [sandboxPoolSizeInput, setSandboxPoolSizeInput] = useState("1");
+  const [desiredSizeInput, setDesiredSizeInput] = useState("3");
+  const [minInstancesInput, setMinInstancesInput] = useState("1");
+  const [maxInstancesInput, setMaxInstancesInput] = useState("100");
+  const [maxConcurrencyInput, setMaxConcurrencyInput] = useState(String(MAX_RUNTIME_CONCURRENCY));
+  const [cpuMilliInput, setCpuMilliInput] = useState("2000");
+  const [memoryMbInput, setMemoryMbInput] = useState("4096");
   const [apiKeyName, setApiKeyName] = useState("");
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>(() => {
     const defaults = props.modelConfigs.filter((config) => config.is_default).map((config) => config.id);
@@ -56,6 +61,14 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
 
   const normalizedSlug = slug.trim() || (name.trim() ? slugify(name.trim()) : "");
   const apiKeyPlaceholder = `${name.trim() || L("workspace 名称", "workspace-name")}-apikey`;
+  const desiredSize = readInt(desiredSizeInput, 3, 0);
+  const minInstances = readInt(minInstancesInput, 1, 0, MAX_RUNTIME_INSTANCES);
+  const maxInstances = Math.max(minInstances || 1, readInt(maxInstancesInput, 100, 1, MAX_RUNTIME_INSTANCES));
+  const maxConcurrency = readInt(maxConcurrencyInput, MAX_RUNTIME_CONCURRENCY, 1, MAX_RUNTIME_CONCURRENCY);
+  const cpuMilli = readInt(cpuMilliInput, 2000, 250);
+  const memoryMb = readInt(memoryMbInput, 4096, 512);
+  const vefaasSandboxTimeoutMs = readInt(vefaasSandboxTimeoutInput, 3_600_000, 60_000);
+  const sandboxPoolSize = readInt(sandboxPoolSizeInput, 1, 1, MAX_SANDBOX_POOL_SIZE);
 
   const volcengineConnected = Boolean(cloudProviders.volcengine?.connected);
   const runtimeCredsFilled = volcengineConnected;
@@ -157,6 +170,16 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
     setError("");
   }
 
+  function normalizeProvisioningLogs(logs: ProvisioningLog[] | undefined) {
+    return (logs ?? []).map((log) => {
+      const date = new Date(log.at);
+      return {
+        ...log,
+        at: Number.isNaN(date.getTime()) ? log.at : date.toLocaleTimeString([], { hour12: false })
+      };
+    });
+  }
+
   async function submit() {
     const trimmed = name.trim();
     if (!trimmed) {
@@ -181,7 +204,7 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
       setProvisionLogs((current) => [...current, provisioningLog("info", L("仍在提交云端初始化请求。", "Still submitting cloud provisioning request."))]);
     }, 8000);
     try {
-      const result = await apiPost<{ workspace: Workspace; api_key: WorkspaceApiKey }>("/v1/workspaces", {
+      const result = await apiPost<{ workspace: Workspace; api_key: WorkspaceApiKey; provisioning_logs?: ProvisioningLog[] }>("/v1/workspaces", {
         tenant_id: props.tenantId || undefined,
         workspace: { name: trimmed, description: description.trim(), slug: slug.trim() ? normalizedSlug : undefined },
         runtime_provider: "vefaas",
@@ -216,6 +239,8 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
           daytona: sandboxProvider === "daytona" ? { DAYTONA_SERVER_URL: daytonaServerUrl.trim(), DAYTONA_API_KEY: daytonaApiKey.trim() } : {}
         }
       });
+      const backendLogs = normalizeProvisioningLogs(result.provisioning_logs);
+      if (backendLogs.length) setProvisionLogs((current) => [...current, ...backendLogs]);
       toast(L("工作区已创建", "Workspace created"), "ok");
       props.onCreated(result.workspace.id, result.api_key.key ?? "");
     } catch (err) {
@@ -259,16 +284,7 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
 
       {step === 0 ? (
         <div className="provision-step">
-          <label className="form">
-            {L("名称", "Name")}
-            <input
-              className="fld"
-              value={name}
-              onChange={(event) => { setName(event.target.value); if (error) setError(""); }}
-              placeholder={L("例如 Dev Shared Workspace", "e.g. Dev Shared Workspace")}
-              autoFocus
-            />
-          </label>
+          <label className="form">{L("名称", "Name")}<input className="fld" value={name} onChange={(event) => { setName(event.target.value); if (error) setError(""); }} placeholder={L("例如 Dev Shared Workspace", "e.g. Dev Shared Workspace")} autoFocus /></label>
           <label className="form">{L("描述", "Description")}<textarea className="fld" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={L("可选", "Optional")} /></label>
           <label className="form">{L("标识", "Slug")}<input className="fld mono" value={slug} onChange={(event) => setSlug(event.target.value.trim() ? slugify(event.target.value) : "")} placeholder={normalizedSlug || "workspace-slug"} /></label>
           <div className="form">
@@ -296,42 +312,39 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
             {cloudProviderLoading ? <div className="panel-empty">{L("正在读取租户云厂商接入状态…", "Loading tenant cloud provider access…")}</div> : volcengineConnected ? (
               <div className="panel-empty">{L(`已接入火山引擎 · ${String(cloudProviders.volcengine?.access_key_hint || "")}`, `Volcengine connected · ${String(cloudProviders.volcengine?.access_key_hint || "")}`)}</div>
             ) : (
-              <div className="modal-note"><Icon name="i-alert" size={16} /> {L("租户尚未接入火山引擎，因此不能创建云端 Runtime。请先到租户页接入火山引擎。", "Volcengine is not connected for this tenant, so cloud Runtime cannot be created. Connect Volcengine from the tenant page first.")}</div>
+              <div className="modal-note cloud-action-note">
+                <Icon name="i-alert" size={16} />
+                <span>
+                  {L("租户尚未接入火山引擎，因此不能创建云端 Runtime。", "Volcengine is not connected for this tenant, so cloud Runtime cannot be created.")}
+                  {props.onOpenTenantCloudAccess ? (
+                    <button type="button" className="inline-action" onClick={props.onOpenTenantCloudAccess}>
+                      {L("前往租户页接入火山引擎", "Open tenant cloud access")}
+                      <Icon name="i-chevron-right" size={13} />
+                    </button>
+                  ) : null}
+                </span>
+              </div>
             )}
           </div>
           <div className="pool-grid two">
-            <label className="form">{L("预热函数数", "Prewarm")}<input className="fld" type="number" min={0} value={desiredSize} onChange={(event) => setDesiredSize(Number(event.target.value))} /></label>
-            <label className="form">{L("单函数最小实例", "Min instances")}<input className="fld" type="number" min={0} max={MAX_RUNTIME_INSTANCES} value={minInstances} onChange={(event) => setMinInstances(clampNumber(Number(event.target.value), 0, MAX_RUNTIME_INSTANCES))} /></label>
-            <label className="form">{L("单函数最大实例", "Max instances")}<input className="fld" type="number" min={1} max={MAX_RUNTIME_INSTANCES} value={maxInstances} onChange={(event) => setMaxInstances(clampNumber(Number(event.target.value), 1, MAX_RUNTIME_INSTANCES))} /></label>
-            <label className="form">{L("单实例并发", "Concurrency")}<input className="fld" type="number" min={1} max={MAX_RUNTIME_CONCURRENCY} value={maxConcurrency} onChange={(event) => setMaxConcurrency(clampNumber(Number(event.target.value), 1, MAX_RUNTIME_CONCURRENCY))} /></label>
-            <label className="form">{L("CPU 毫核", "CPU milli")}<input className="fld" type="number" min={250} value={cpuMilli} onChange={(event) => setCpuMilli(Number(event.target.value))} /></label>
-            <label className="form">{L("内存 (MB)", "Memory MB")}<input className="fld" type="number" min={512} value={memoryMb} onChange={(event) => setMemoryMb(Number(event.target.value))} /></label>
+            <label className="form">{L("预热函数数", "Prewarm")}<input className="fld" type="number" min={0} value={desiredSizeInput} onChange={(event) => setDesiredSizeInput(event.target.value)} /></label>
+            <label className="form">{L("单函数最小实例", "Min instances")}<input className="fld" type="number" min={0} max={MAX_RUNTIME_INSTANCES} value={minInstancesInput} onChange={(event) => setMinInstancesInput(event.target.value)} /></label>
+            <label className="form">{L("单函数最大实例", "Max instances")}<input className="fld" type="number" min={1} max={MAX_RUNTIME_INSTANCES} value={maxInstancesInput} onChange={(event) => setMaxInstancesInput(event.target.value)} /></label>
+            <label className="form">{L("单实例并发", "Concurrency")}<input className="fld" type="number" min={1} max={MAX_RUNTIME_CONCURRENCY} value={maxConcurrencyInput} onChange={(event) => setMaxConcurrencyInput(event.target.value)} /></label>
+            <label className="form">{L("CPU 毫核", "CPU milli")}<input className="fld" type="number" min={250} value={cpuMilliInput} onChange={(event) => setCpuMilliInput(event.target.value)} /></label>
+            <label className="form">{L("内存 (MB)", "Memory MB")}<input className="fld" type="number" min={512} value={memoryMbInput} onChange={(event) => setMemoryMbInput(event.target.value)} /></label>
           </div>
         </div>
       ) : null}
 
       {step === 2 ? (
         <WorkspaceCreateSandboxStep
-          L={L}
-          error={error}
-          setError={setError}
-          sandboxProvider={sandboxProvider}
-          setSandboxProvider={setSandboxProvider}
-          volcengineConnected={volcengineConnected}
-          e2bApiKey={e2bApiKey}
-          setE2bApiKey={setE2bApiKey}
-          daytonaServerUrl={daytonaServerUrl}
-          setDaytonaServerUrl={setDaytonaServerUrl}
-          daytonaApiKey={daytonaApiKey}
-          setDaytonaApiKey={setDaytonaApiKey}
-          vefaasSandboxFunctionId={vefaasSandboxFunctionId}
-          setVefaasSandboxFunctionId={setVefaasSandboxFunctionId}
-          vefaasSandboxGatewayUrl={vefaasSandboxGatewayUrl}
-          setVefaasSandboxGatewayUrl={setVefaasSandboxGatewayUrl}
-          vefaasSandboxTimeoutMs={vefaasSandboxTimeoutMs}
-          setVefaasSandboxTimeoutMs={setVefaasSandboxTimeoutMs}
-          sandboxPoolSize={sandboxPoolSize}
-          setSandboxPoolSize={setSandboxPoolSize}
+          L={L} error={error} setError={setError}
+          sandboxProvider={sandboxProvider} setSandboxProvider={setSandboxProvider} volcengineConnected={volcengineConnected}
+          e2bApiKey={e2bApiKey} setE2bApiKey={setE2bApiKey}
+          daytonaServerUrl={daytonaServerUrl} setDaytonaServerUrl={setDaytonaServerUrl} daytonaApiKey={daytonaApiKey} setDaytonaApiKey={setDaytonaApiKey}
+          vefaasSandboxFunctionId={vefaasSandboxFunctionId} setVefaasSandboxFunctionId={setVefaasSandboxFunctionId} vefaasSandboxGatewayUrl={vefaasSandboxGatewayUrl} setVefaasSandboxGatewayUrl={setVefaasSandboxGatewayUrl}
+          vefaasSandboxTimeoutInput={vefaasSandboxTimeoutInput} setVefaasSandboxTimeoutInput={setVefaasSandboxTimeoutInput} sandboxPoolSizeInput={sandboxPoolSizeInput} setSandboxPoolSizeInput={setSandboxPoolSizeInput}
         />
       ) : null}
 

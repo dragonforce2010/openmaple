@@ -9,12 +9,12 @@ import type {
   Environment,
   JsonRecord,
   ModelConfig,
+  SessionEvent,
   SessionDetail,
   Vault
 } from "../../types";
 import { Icon, useToast } from "../../ui";
 import { ApiResult, BuilderProgressHints, QuickstartSidePanel, ReasoningBlock, StepProgress, templateConfigText, templatePrompt } from "./QuickstartParts";
-
 export function QuickstartView(props: {
   step: WizardStep;
   prompt: string;
@@ -88,25 +88,20 @@ export function QuickstartView(props: {
     const q = query.trim().toLowerCase();
     const indexed = templateCards.map((card, index) => [card, index] as const);
     if (!q) return indexed;
-    return indexed.filter(([[name, description]]) => name.toLowerCase().includes(q) || description.toLowerCase().includes(q));
+    return indexed.filter(([card]) => card.some((text) => text.toLowerCase().includes(q)));
   }, [query]);
-
-
 
   const codeText = props.yaml && fmt === "json" && props.draft ? JSON.stringify(props.draft, null, 2) : props.yaml;
   const copyCode = () => {
     if (!codeText) return;
     const done = () => toast(L("已复制", "Copied"));
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(codeText).then(done, done);
-    else done();
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(codeText).then(done, done); else done();
   };
-
   const tplDetailCode = viewTpl != null ? templateConfigText(viewTpl, fmt) : "";
   const copyTpl = () => {
     if (!tplDetailCode) return;
     const done = () => toast(L("已复制", "Copied"));
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(tplDetailCode).then(done, done);
-    else done();
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(tplDetailCode).then(done, done); else done();
   };
   const useTemplate = (index: number) => {
     const nextPrompt = templatePrompt(index);
@@ -114,7 +109,6 @@ export function QuickstartView(props: {
     setViewTpl(null);
     props.buildDraft(nextPrompt);
   };
-
   const detail = props.sessionDetail;
   const quickSessionDetail = props.quickSessionId &&
     detail?.session.id === props.quickSessionId &&
@@ -122,10 +116,9 @@ export function QuickstartView(props: {
     (!props.environment || detail.session.environment_id === props.environment.id)
     ? detail
     : null;
-  const transcriptMessages = transcriptMessagesFromEvents((props.step === "session" || props.step === "integration") ? quickSessionDetail?.events ?? [] : []);
-  // preview chat is a plain user/agent transcript — reasoning blocks belong to the builder
-  // conversation, not the test-run chat.
-  const realMessages = transcriptMessages.filter((message) => message.kind !== "reasoning").map((message) => ({ who: message.kind as "user" | "agent", text: message.text }));
+  const previewEvents = (props.step === "session" || props.step === "integration") ? quickSessionDetail?.events ?? [] : [];
+  const transcriptMessages = transcriptMessagesFromEvents(previewEvents);
+  const realMessages = previewMessagesFromEvents(previewEvents, L);
   const previewComplete = Boolean(
     props.step === "session" &&
     quickSessionDetail &&
@@ -382,4 +375,25 @@ export function QuickstartView(props: {
       </div>
     </div>
   );
+}
+
+function previewMessagesFromEvents(events: SessionEvent[], L: (zh: string, en: string) => string) {
+  const indexById = new Map(events.map((event, index) => [event.id, index]));
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  const transcript = transcriptMessagesFromEvents(events).filter((message) => message.kind !== "reasoning").map((message) => {
+    const event = eventById.get(message.id);
+    return { at: event?.created_at ?? "", index: indexById.get(message.id) ?? 0, message: { who: message.kind as "user" | "agent", text: message.text } };
+  });
+  const failures = events.filter((event) => event.type === "session.status_failed").map((event) => ({
+    at: event.created_at, index: indexById.get(event.id) ?? 0, message: { who: "system" as const, text: sessionFailureMessage(event, L) }
+  }));
+  return [...transcript, ...failures].sort((left, right) => left.at.localeCompare(right.at) || left.index - right.index).map((item) => item.message);
+}
+function sessionFailureMessage(event: SessionEvent, L: (zh: string, en: string) => string) {
+  const reason = String(event.payload.reason || "");
+  const error = String(event.payload.error || "").trim();
+  const bootstrap = reason === "runtime_bootstrap_failed";
+  const title = bootstrap ? L("环境初始化失败", "Environment initialization failed") : L("Agent 运行失败", "Agent run failed");
+  const hint = bootstrap ? L("请检查 Runtime Provider 地址、运行时池和网络可达性。", "Check the Runtime Provider URL, runtime pool, and network reachability.") : L("请检查 Agent runtime、模型配置或工具调用日志。", "Check the agent runtime, model config, or tool-call logs.");
+  return error ? `${title}: ${error}\n${hint}` : `${title}。\n${hint}`;
 }

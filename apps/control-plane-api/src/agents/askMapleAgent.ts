@@ -110,6 +110,10 @@ function activeAskMapleSession(context: AskMapleContext) {
 export function ensureAskMapleSession(context: AskMapleContext) {
   const existing = activeAskMapleSession(context);
   if (existing) return existing;
+  return createAskMapleSession(context);
+}
+
+export function createAskMapleSession(context: AskMapleContext) {
   const agent = ensureAskMapleAgent(context.workspaceId);
   const environment = ensureAskMapleEnvironment(context.workspaceId);
   const session = createSession({
@@ -231,8 +235,8 @@ function emitAskReasoning(sessionId: string, text: string, final: boolean) {
   emitEvent(sessionId, final ? "agent.reasoning" : "agent.reasoning_delta", { text }, final ? "reasoning_stop" : null);
 }
 
-export async function runAskMapleTurn(context: AskMapleContext, detail: SessionDetailLike, question: string) {
-  const askSession = ensureAskMapleSession(context) as JsonRecord | null;
+export async function runAskMapleTurn(context: AskMapleContext, detail: SessionDetailLike, question: string, askSessionIdOverride?: string) {
+  const askSession = (askSessionIdOverride ? getSession(askSessionIdOverride) : ensureAskMapleSession(context)) as JsonRecord | null;
   if (!askSession?.id) throw new Error("ask_maple_session_create_failed");
   const askSessionId = String(askSession.id);
   const stats = askMapleSessionStats(detail);

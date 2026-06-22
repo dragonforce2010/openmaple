@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "infra" / "vefaas" / "deploy_vefaas_runtime.py"
 APP_DEPLOY_PATH = ROOT / "infra" / "vefaas" / "deploy_vefaas_application.py"
 STABLE_DEPLOY_PATH = ROOT / "infra" / "vefaas" / "deploy_vefaas_stable.py"
+STORE_PROVISIONING_PATH = ROOT / "apps" / "control-plane-api" / "src" / "storage" / "storeWorkspaceProvisioning.ts"
+RUNTIME_RUN_SCRIPT_PATH = ROOT / "infra" / "vefaas" / "runtime-app" / "run.sh"
+TEST_RUNTIME_IMAGE = "registry.example.com/agentkit/maple-runtime:ark"
 
 
 def load_module():
@@ -45,6 +48,28 @@ def test_backend_package_carries_runtime_provisioner_scripts():
     runtime_source = MODULE_PATH.read_text()
     assert '"LoadBalancerSettings"' not in runtime_source
     assert '"LoadBalancerSettings"' not in source
+
+
+def test_source_zip_runtime_installs_python_requirements_on_startup():
+    source = RUNTIME_RUN_SCRIPT_PATH.read_text()
+    assert 'python3 -c "import claude_agent_sdk"' in source
+    assert 'python3 -m pip install --no-cache-dir' in source
+    assert "--target \"$deps_dir\" -r requirements.txt" in source
+    assert 'export PYTHONPATH="$deps_dir:${PYTHONPATH:-}"' in source
+
+
+def test_workspace_pool_passes_resource_limits_to_runtime_deploy_script():
+    source = STORE_PROVISIONING_PATH.read_text()
+    assert "MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function)," in source
+    assert "MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function)," in source
+    assert source.count("MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES") == 2
+    assert source.count("MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES") == 2
+    assert 'const configuredImage = String(process.env.MAPLE_VEFAAS_IMAGE || "").trim();' in source
+    assert 'payload = await runDeploy(`${appName}-src`, { MAPLE_VEFAAS_IMAGE: "" });' in source
+    assert 'payload = await runDeploy(appName, { MAPLE_VEFAAS_IMAGE: "" });' in source
+    assert "image_fallback_error: imageFallbackError" in source
+    assert "MAPLE_VEFAAS_RUNTIME_PROVISION_CONCURRENCY" in source
+    assert "await Promise.all(Array.from({ length: concurrency }, provisionNext));" in source
 
 
 class FakeVefaasApi:
@@ -342,7 +367,7 @@ def test_direct_provisioner_deploys_runtime_image_with_route():
         secret_key="sk",
         region="cn-beijing",
         app_name="maple-image-contract",
-        image_url=module.DEFAULT_RUNTIME_IMAGE,
+        image_url=TEST_RUNTIME_IMAGE,
         runtime="native/v1",
         command="/opt/maple-runtime/run.sh",
         port=8000,
@@ -369,7 +394,7 @@ def test_direct_provisioner_deploys_runtime_image_with_route():
         "function_id": "fn_contract",
         "url": "https://runtime.example.invalid/maple-runtime/maple-image-contract",
         "invoke_url": "https://runtime.example.invalid/maple-runtime/maple-image-contract/invoke",
-        "image": module.DEFAULT_RUNTIME_IMAGE,
+        "image": TEST_RUNTIME_IMAGE,
         "region": "cn-beijing",
         "reused": False,
         "released": True,
@@ -390,7 +415,7 @@ def test_direct_provisioner_deploys_runtime_image_with_route():
             "vpc_config": {"vpc_id": "", "subnet_ids": [], "security_group_ids": [], "enable_shared_internet_access": None},
             "envs": {"MAPLE_AGENT_LOOP_INSTALL_POLICY": "never"},
             "tags": {"provider": "managed-agents-platform", "component": "agent-runtime"},
-            "source": module.DEFAULT_RUNTIME_IMAGE,
+            "source": TEST_RUNTIME_IMAGE,
             "source_type": "image",
         }
     ]
@@ -413,6 +438,7 @@ def test_config_loads_project_env_only_and_defaults_region():
                     "VOLCENGINE_ACCESS_KEY=project-ak",
                     "VOLCENGINE_SECRET_KEY=project-sk",
                     "MAPLE_VEFAAS_APP_NAME=maple-env-contract",
+                    f"MAPLE_VEFAAS_IMAGE={TEST_RUNTIME_IMAGE}",
                     "",
                 ]
             )
@@ -427,6 +453,7 @@ def test_config_loads_project_env_only_and_defaults_region():
                 "MAPLE_AGENT_LOOP_INSTALL_POLICY",
                 "MAPLE_CLAUDE_CODE_VERSION",
                 "MAPLE_CODEX_VERSION",
+                "MAPLE_VEFAAS_IMAGE",
             ]
         }
         for key in previous:
@@ -444,7 +471,7 @@ def test_config_loads_project_env_only_and_defaults_region():
     assert config.secret_key == "project-sk"
     assert config.region == "cn-beijing"
     assert config.app_name == "maple-env-contract"
-    assert config.image_url == module.DEFAULT_RUNTIME_IMAGE
+    assert config.image_url == TEST_RUNTIME_IMAGE
     assert config.runtime == "native/v1"
     assert config.command == "/opt/maple-runtime/run.sh"
     assert config.port == 8000
@@ -454,6 +481,110 @@ def test_config_loads_project_env_only_and_defaults_region():
     assert config.envs["MAPLE_AGENT_TEMPLATE_SOURCE"] == "runtime_request"
     assert config.envs["MAPLE_AGENT_LOOP_RUNTIME"] == "managed-agents-platform-vefaas"
     assert config.envs["MAPLE_AGENT_LOOP_INSTALL_POLICY"] == "never"
+
+
+def test_config_defaults_to_source_zip_when_runtime_image_is_absent():
+    module = load_module()
+    keys = ["VOLCENGINE_ACCESS_KEY", "VOLCENGINE_SECRET_KEY", "MAPLE_VEFAAS_IMAGE"]
+    previous = {key: os.environ.get(key) for key in keys}
+    try:
+        for key in keys:
+            os.environ.pop(key, None)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / ".env").write_text(
+                "\n".join(
+                    [
+                        "VOLCENGINE_ACCESS_KEY=project-ak",
+                        "VOLCENGINE_SECRET_KEY=project-sk",
+                        "",
+                    ]
+                )
+            )
+            config = module.build_config_from_env(cwd=root)
+
+        assert config.image_url == ""
+        assert config.runtime == "native-python3.12/v1"
+        assert config.command == "./run.sh"
+        assert config.port is None
+
+        for key in keys:
+            os.environ.pop(key, None)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / ".env").write_text(
+                "\n".join(
+                    [
+                        "VOLCENGINE_ACCESS_KEY=project-ak",
+                        "VOLCENGINE_SECRET_KEY=project-sk",
+                        "MAPLE_VEFAAS_IMAGE=",
+                        "",
+                    ]
+                )
+            )
+            config = module.build_config_from_env(cwd=root)
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    assert config.image_url == ""
+    assert config.runtime == "native-python3.12/v1"
+    assert config.command == "./run.sh"
+    assert config.port is None
+
+
+def test_config_loads_runtime_vpc_envs():
+    module = load_module()
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        (root / ".env").write_text(
+            "\n".join(
+                [
+                    "VOLCENGINE_ACCESS_KEY=project-ak",
+                    "VOLCENGINE_SECRET_KEY=project-sk",
+                    "MAPLE_VEFAAS_RUNTIME_VPC_ID=vpc-contract",
+                    f"MAPLE_VEFAAS_IMAGE={TEST_RUNTIME_IMAGE}",
+                    "MAPLE_VEFAAS_RUNTIME_SUBNET_IDS=subnet-a, subnet-b",
+                    "MAPLE_VEFAAS_RUNTIME_SECURITY_GROUP_IDS=sg-a,sg-b",
+                    "MAPLE_VEFAAS_RUNTIME_ENABLE_SHARED_INTERNET_ACCESS=true",
+                    "",
+                ]
+            )
+        )
+        previous = {
+            key: os.environ.get(key)
+            for key in [
+                "VOLCENGINE_ACCESS_KEY",
+                "VOLCENGINE_SECRET_KEY",
+                "MAPLE_VEFAAS_RUNTIME_VPC_ID",
+                "MAPLE_VEFAAS_RUNTIME_SUBNET_IDS",
+                "MAPLE_VEFAAS_RUNTIME_SECURITY_GROUP_IDS",
+                "MAPLE_VEFAAS_RUNTIME_ENABLE_SHARED_INTERNET_ACCESS",
+                "MAPLE_VEFAAS_VPC_ID",
+                "MAPLE_VEFAAS_SUBNET_IDS",
+                "MAPLE_VEFAAS_SECURITY_GROUP_IDS",
+                "MAPLE_VEFAAS_ENABLE_SHARED_INTERNET_ACCESS",
+                "MAPLE_VEFAAS_IMAGE",
+            ]
+        }
+        for key in previous:
+            os.environ.pop(key, None)
+        try:
+            config = module.build_config_from_env(cwd=root)
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    assert config.vpc_id == "vpc-contract"
+    assert config.subnet_ids == ["subnet-a", "subnet-b"]
+    assert config.security_group_ids == ["sg-a", "sg-b"]
+    assert config.enable_shared_internet_access is True
 
 
 def test_agent_loop_cli_envs_are_forwarded_to_runtime():
@@ -469,6 +600,7 @@ def test_agent_loop_cli_envs_are_forwarded_to_runtime():
                     "MAPLE_CLAUDE_AGENT_SDK_RUNNER_COMMAND=python3 /opt/maple/claude_agent_sdk_runner.py",
                     "MAPLE_CLAUDE_CODE_VERSION=2.1.158",
                     "MAPLE_CODEX_COMMAND=/opt/codex/bin/codex",
+                    f"MAPLE_VEFAAS_IMAGE={TEST_RUNTIME_IMAGE}",
                     'MAPLE_VEFAAS_RUNTIME_ENVS={"EXTRA_RUNTIME_ENV":"ok"}',
                     "",
                 ]
@@ -483,6 +615,7 @@ def test_agent_loop_cli_envs_are_forwarded_to_runtime():
                 "MAPLE_CLAUDE_AGENT_SDK_RUNNER_COMMAND",
                 "MAPLE_CLAUDE_CODE_VERSION",
                 "MAPLE_CODEX_COMMAND",
+                "MAPLE_VEFAAS_IMAGE",
                 "MAPLE_VEFAAS_RUNTIME_ENVS",
             ]
         }
@@ -514,6 +647,7 @@ def test_config_can_disable_or_target_tls_logs_from_env():
                     "VOLCENGINE_ACCESS_KEY=project-ak",
                     "VOLCENGINE_SECRET_KEY=project-sk",
                     "MAPLE_VEFAAS_ENABLE_LOGS=false",
+                    f"MAPLE_VEFAAS_IMAGE={TEST_RUNTIME_IMAGE}",
                     "MAPLE_VEFAAS_TLS_PROJECT_ID=tls-project-contract",
                     "MAPLE_VEFAAS_TLS_TOPIC_ID=tls-topic-contract",
                     "",
@@ -528,6 +662,7 @@ def test_config_can_disable_or_target_tls_logs_from_env():
                 "MAPLE_VEFAAS_ENABLE_LOGS",
                 "MAPLE_VEFAAS_TLS_PROJECT_ID",
                 "MAPLE_VEFAAS_TLS_TOPIC_ID",
+                "MAPLE_VEFAAS_IMAGE",
             ]
         }
         for key in previous:
@@ -657,11 +792,15 @@ def test_env_parser_and_error_json_are_defensive():
 
 if __name__ == "__main__":
     test_backend_package_carries_runtime_provisioner_scripts()
+    test_source_zip_runtime_installs_python_requirements_on_startup()
+    test_workspace_pool_passes_resource_limits_to_runtime_deploy_script()
     test_stable_deploy_retries_resource_update_while_function_is_deploying()
     test_stable_deploy_does_not_retry_fatal_resource_update_errors()
     test_direct_provisioner_deploys_fixed_runtime_template()
     test_direct_provisioner_deploys_runtime_image_with_route()
     test_config_loads_project_env_only_and_defaults_region()
+    test_config_defaults_to_source_zip_when_runtime_image_is_absent()
+    test_config_loads_runtime_vpc_envs()
     test_agent_loop_cli_envs_are_forwarded_to_runtime()
     test_config_can_disable_or_target_tls_logs_from_env()
     test_tls_config_is_only_sent_when_fully_configured()

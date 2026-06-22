@@ -71,6 +71,10 @@ export function getVaultCredential(id: string) {
   return hydrateVaultCredential(row);
 }
 
+export function getRawVaultCredential(id: string) {
+  return db.prepare("SELECT * FROM vault_credentials WHERE id = ? AND archived_at IS NULL").get(id) as JsonRecord | undefined;
+}
+
 export function listVaultCredentials(vaultId: string) {
   return (db
     .prepare("SELECT * FROM vault_credentials WHERE vault_id = ? AND archived_at IS NULL ORDER BY created_at DESC")

@@ -13,6 +13,7 @@ export type ConsoleRouteState = {
   eventMode: "transcript" | "debug";
   modal: Modal;
   modalVaultId: string;
+  modalMcpServer: string;
   sessionAgentLock: string;
   askMapleOpen: boolean;
   settingsOpen: boolean;
@@ -36,6 +37,7 @@ const PAGE_VIEWS = new Set<View>([
 const MODALS = new Set<Modal>(["environment", "vault", "credential", "session", "model_config", "workspace_settings", "workspace_create", "mcp_connect", "agent_create"]);
 const DRAWER_KINDS = new Set<EntityKind>(["agent", "environment", "vault", "session", "workspace"]);
 const STATUS_PARAMS = ["credential_connected", "mcp_connected", "mcp_error", "vault"];
+const CREDENTIAL_MCP_PARAMS = ["mcp_server", "mcp_provider", "mcp_url"];
 
 function decodePart(value: string | undefined) {
   try {
@@ -53,6 +55,11 @@ function cleanId(value: string | null | undefined) {
 function cleanMetric(value: string | null) {
   const decoded = cleanId(value);
   return decoded || null;
+}
+
+function cleanMcpParam(value: string | null | undefined) {
+  const decoded = decodePart(value ?? "");
+  return decoded && decoded.length <= 1024 && !/[\u0000-\u001f\u007f]/.test(decoded) ? decoded : "";
 }
 
 function cleanModal(value: string | null): Modal {
@@ -73,10 +80,19 @@ function parseDrawers(value: string | null): ConsoleDrawerRoute[] {
 }
 
 function paramsHaveAnchor(params: URLSearchParams) {
-  for (const key of ["edit", "modal", "modal_vault", "session_agent", "drawer", "ask", "settings", "metric", "event", "mode"]) {
+  for (const key of ["edit", "modal", "modal_vault", "session_agent", "drawer", "ask", "settings", "metric", "event", "mode", ...CREDENTIAL_MCP_PARAMS]) {
     if (params.has(key)) return true;
   }
   return false;
+}
+
+function preserveCredentialMcpParams(params: URLSearchParams) {
+  if (typeof window === "undefined") return;
+  const current = new URLSearchParams(window.location.search);
+  for (const key of CREDENTIAL_MCP_PARAMS) {
+    const value = current.get(key);
+    if (value && value.length <= 1024) params.set(key, value);
+  }
 }
 
 export function consoleRouteFromLocation(location: Pick<Location, "pathname" | "search"> = window.location): ConsoleRouteState {
@@ -111,6 +127,7 @@ export function consoleRouteFromLocation(location: Pick<Location, "pathname" | "
     eventMode: params.get("mode") === "debug" ? "debug" : "transcript",
     modal: cleanModal(params.get("modal")),
     modalVaultId: cleanId(params.get("modal_vault")),
+    modalMcpServer: cleanMcpParam(params.get("mcp_server") || params.get("mcp_provider") || params.get("mcp_url")),
     sessionAgentLock: cleanId(params.get("session_agent")),
     askMapleOpen: params.get("ask") === "1",
     settingsOpen: params.get("settings") === "1",
@@ -183,6 +200,7 @@ export function consolePathForState(input: {
   eventMode: "transcript" | "debug";
   modal: Modal;
   modalVaultId: string;
+  modalMcpServer: string;
   sessionAgentLock: string;
   askMapleOpen: boolean;
   settingsOpen: boolean;
@@ -197,6 +215,8 @@ export function consolePathForState(input: {
   if (input.view === "sessions" && input.eventMode === "debug") params.set("mode", "debug");
   if (input.modal) params.set("modal", input.modal);
   if (input.modal === "credential" && input.modalVaultId) params.set("modal_vault", input.modalVaultId);
+  if (input.modal === "credential" && input.modalMcpServer) params.set("mcp_server", input.modalMcpServer);
+  else if (input.modal === "credential") preserveCredentialMcpParams(params);
   if (input.modal === "session" && input.sessionAgentLock) params.set("session_agent", input.sessionAgentLock);
   if (input.askMapleOpen) params.set("ask", "1");
   if (input.settingsOpen) params.set("settings", "1");

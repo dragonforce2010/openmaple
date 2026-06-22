@@ -23,6 +23,7 @@ const sources = {
     // loading overlay/skeleton live in the extracted SessionLoadState component
     readFileSync("apps/admin-web/src/pages/sessions/SessionLoadState.tsx", "utf8")
   ].join("\n"),
+  quickstartView: readFileSync("apps/admin-web/src/pages/quickstart/QuickstartView.tsx", "utf8"),
   sessionSandbox: readFileSync("apps/admin-web/src/pages/sessions/SessionSandboxSummary.tsx", "utf8"),
   sessionSandboxDetail: readFileSync("apps/admin-web/src/pages/sessions/SessionSandboxDetail.tsx", "utf8"),
   sessionToolEventDetail: readFileSync("apps/admin-web/src/pages/sessions/SessionToolEventDetail.tsx", "utf8"),
@@ -84,6 +85,10 @@ assert.match(sources.bootstrapController, /bootstrapStartedRef/, "initial bootst
 assert.match(sources.appFrame, /loading=\{resourceLoading\}/, "workspace list pages must receive resourceLoading");
 assert.match(sources.appFrame, /loadingSessions=\{resourceLoading\}/, "SessionsView list loading must receive resourceLoading");
 assert.match(sources.sessionsView, /session-header-actions/, "Session header actions must keep Ask Maple and New Session side by side");
+assert.match(sources.sessionsView, /isFailure[\s\S]*role === "User"[\s\S]*isFailure/, "Session transcript mode must show failed/error events");
+assert.match(sources.quickstartView, /previewMessagesFromEvents/, "Quickstart preview must derive system messages from session events");
+assert.match(sources.quickstartView, /session\.status_failed/, "Quickstart preview must surface session.status_failed");
+assert.match(sources.quickstartView, /环境初始化失败|Environment initialization failed/, "Quickstart preview must explain environment bootstrap failures");
 assert.match(sources.askMaple, /ask-chat-body/, "AskMaple drawer must make the chat stream the primary surface");
 assert.match(sources.askMaple, /ask-info-toggle/, "AskMaple drawer must expose current session details through a separate button");
 assert.match(sources.askMaple, /ask-session-panel/, "AskMaple must keep current session information out of the chat stream");

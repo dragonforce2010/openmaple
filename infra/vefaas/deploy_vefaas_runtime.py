@@ -21,7 +21,7 @@ from typing import Any, Callable
 
 
 DEFAULT_TEMPLATE_ID = "6874f3360bdbc40008ecf8c7"
-DEFAULT_RUNTIME_IMAGE = os.environ.get("MAPLE_VEFAAS_IMAGE") or "maple-vefaas-runtime:latest"
+DEFAULT_RUNTIME_IMAGE = ""
 OPENAPI_HOST = "open.volcengineapi.com"
 OPENAPI_VERSION = "2021-03-03"
 OPENAPI_SERVICE = "vefaas"
@@ -833,8 +833,7 @@ def build_config_from_env(cwd: Path | str | None = None) -> DeployConfig:
 
     region = os.environ.get("MAPLE_VEFAAS_REGION") or os.environ.get("VEFAAS_REGION") or "cn-beijing"
     app_name = os.environ.get("MAPLE_VEFAAS_APP_NAME") or f"maple-runtime-bun-{timestamp()}"
-    image_env = os.environ.get("MAPLE_VEFAAS_IMAGE")
-    image_url = (DEFAULT_RUNTIME_IMAGE if image_env is None else image_env).strip()
+    image_url = (os.environ.get("MAPLE_VEFAAS_IMAGE") or "").strip()
     default_runtime = "native/v1" if image_url else "native-python3.12/v1"
     default_command = "/opt/maple-runtime/run.sh" if image_url else "./run.sh"
     return DeployConfig(
@@ -858,6 +857,13 @@ def build_config_from_env(cwd: Path | str | None = None) -> DeployConfig:
         enable_logs=parse_bool(os.environ.get("MAPLE_VEFAAS_ENABLE_LOGS") or os.environ.get("MAPLE_VEFAAS_ENABLE_TLS_LOGS") or "false"),
         tls_project_id=os.environ.get("MAPLE_VEFAAS_TLS_PROJECT_ID") or "",
         tls_topic_id=os.environ.get("MAPLE_VEFAAS_TLS_TOPIC_ID") or "",
+        vpc_id=os.environ.get("MAPLE_VEFAAS_RUNTIME_VPC_ID") or os.environ.get("MAPLE_VEFAAS_VPC_ID") or "",
+        subnet_ids=csv_env("MAPLE_VEFAAS_RUNTIME_SUBNET_IDS") or csv_env("MAPLE_VEFAAS_SUBNET_IDS"),
+        security_group_ids=csv_env("MAPLE_VEFAAS_RUNTIME_SECURITY_GROUP_IDS") or csv_env("MAPLE_VEFAAS_SECURITY_GROUP_IDS"),
+        enable_shared_internet_access=parse_optional_bool(
+            os.environ.get("MAPLE_VEFAAS_RUNTIME_ENABLE_SHARED_INTERNET_ACCESS")
+            or os.environ.get("MAPLE_VEFAAS_ENABLE_SHARED_INTERNET_ACCESS")
+        ),
         enable_key_auth=parse_bool(os.environ.get("MAPLE_VEFAAS_ENABLE_KEY_AUTH") or "false"),
         enable_mcp_session=parse_bool(os.environ.get("MAPLE_VEFAAS_ENABLE_MCP_SESSION") or "false"),
         reuse_existing=parse_bool(os.environ.get("MAPLE_VEFAAS_REUSE_EXISTING") or "false"),
@@ -946,8 +952,18 @@ def build_runtime_envs() -> dict[str, str]:
     return envs
 
 
+def csv_env(key: str) -> list[str]:
+    return [part.strip() for part in (os.environ.get(key) or "").split(",") if part.strip()]
+
+
 def parse_bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def parse_optional_bool(value: str | None) -> bool | None:
+    if value is None or value == "":
+        return None
+    return parse_bool(value)
 
 
 def zip_source_dir(source_dir: Path) -> bytes:

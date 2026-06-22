@@ -8,6 +8,8 @@ import { Icon, ModalLayer, useConfirm, useToast } from "../../ui";
 import { TenantKeysPanel } from "./TenantKeysPanel";
 import { CLOUD_PROVIDERS } from "./cloudProviders";
 
+const MASKED_CLOUD_SECRET = "************";
+
 export function TenantView(props: { workspace: Workspace | null; workspaces: Workspace[]; currentUser: User; setView: (view: View) => void; onDeleteWorkspace: (workspace: Workspace) => void | Promise<void> }) {
   const { language } = useI18n();
   const toast = useToast();
@@ -90,10 +92,12 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
   async function saveCloudProvider(event?: FormEvent) {
     event?.preventDefault();
     if (!base?.tenant_id || !cloudModal) return;
+    const connected = Boolean(cloudProviders[cloudModal]?.connected);
+    const secretUnchanged = connected && cloudSecretKey === MASKED_CLOUD_SECRET;
     setCloudSaving(true);
     setTenantError("");
     try {
-      const saved = await apiPost<JsonRecord>(`/v1/tenants/${encodeURIComponent(base.tenant_id)}/cloud_providers/${encodeURIComponent(cloudModal)}`, { access_key: cloudAccessKey, secret_key: cloudSecretKey, region: cloudRegion });
+      const saved = await apiPost<JsonRecord>(`/v1/tenants/${encodeURIComponent(base.tenant_id)}/cloud_providers/${encodeURIComponent(cloudModal)}`, { access_key: cloudAccessKey, ...(secretUnchanged ? {} : { secret_key: cloudSecretKey }), region: cloudRegion });
       setCloudProviders((current) => ({ ...current, [String(saved.provider)]: saved }));
       setCloudModal("");
       setCloudAccessKey("");
@@ -105,6 +109,8 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
       setCloudSaving(false);
     }
   }
+
+  function openCloudProviderModal(providerId: string) { const current = cloudProviders[providerId] ?? {}; setCloudAccessKey(String(current.access_key || current.access_key_hint || "")); setCloudSecretKey(current.connected ? MASKED_CLOUD_SECRET : ""); setCloudRegion(String(current.region || "cn-beijing")); setCloudModal(providerId); }
 
   function memberName(member: User) {
     return member.name?.trim() || member.email.split("@")[0] || member.email;
@@ -237,19 +243,18 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
           <b>{createdAt}</b>
         </div>
       </div>
-
-
       <div className="section-title">{L("云厂商接入", "Cloud provider access")}</div>
+      <div className="modal-note cloud-access-hint"><Icon name="i-cloud" size={16} /><span>{L("点击可接入云厂商卡片完成 AK/SK 接入。接入完成后，创建工作区会自动复用租户级云凭据。", "Click an available cloud provider card to connect AK/SK. Workspace creation then reuses tenant-level cloud credentials automatically.")}</span></div>
       <div className="cfg-cards tenant-cloud-cards">
         {CLOUD_PROVIDERS.map((provider) => {
           const connected = Boolean(cloudProviders[provider.id]?.connected);
           return (
-            <button key={provider.id} type="button" className={`prov-card ${connected ? "on" : ""} ${provider.enabled ? "" : "disabled"}`} disabled={!provider.enabled} onClick={() => { if (provider.enabled) setCloudModal(provider.id); }}>
+            <button key={provider.id} type="button" className={`prov-card ${connected ? "on connected" : ""} ${provider.enabled ? "cloud-connectable" : "disabled"}`} disabled={!provider.enabled} onClick={() => { if (provider.enabled) openCloudProviderModal(provider.id); }}>
               <div className="pc-ic"><Icon name="i-cloud" size={18} /></div>
+              {connected ? <span className="cloud-connected-pill">{L("已接入", "Connected")}</span> : null}
               <b>{provider.name}</b>
               <span>{provider.enabled ? provider.capabilities.map((cap) => cap.toUpperCase()).join(" / ") : L("敬请期待", "Coming soon")}</span>
-              <small className="pc-state">{connected ? L(`已接入 · ${String(cloudProviders[provider.id]?.access_key_hint || "")}`, `Connected · ${String(cloudProviders[provider.id]?.access_key_hint || "")}`) : provider.enabled ? L("可接入", "Available") : L("敬请期待", "Coming soon")}</small>
-              {connected ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}
+              <small className={`pc-state ${connected ? "connected" : provider.enabled ? "actionable" : ""}`}>{connected ? L(`凭据已保存 · ${String(cloudProviders[provider.id]?.access_key_hint || "")}`, `Credentials saved · ${String(cloudProviders[provider.id]?.access_key_hint || "")}`) : provider.enabled ? L("点击卡片接入", "Click card to connect") : L("敬请期待", "Coming soon")}</small>
             </button>
           );
         })}
@@ -331,9 +336,6 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
       ) : (
         <div className="panel-empty">{L("当前工作区未配置后台登录链接。", "No console URL configured for this workspace.")}</div>
       )}
-
-
-
       {cloudModal ? (
         <ModalLayer onClose={() => !cloudSaving && setCloudModal("")}>
           <div className="modal" role="dialog" aria-modal="true" aria-label={L("接入云厂商", "Connect cloud provider")} onClick={(event) => event.stopPropagation()}>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type * as React from "react";
 import type { OnboardingCustomModelConfig } from "../../appConfig";
 import { Select } from "../../components/shared/forms";
@@ -90,6 +91,8 @@ export function WorkspaceOnboardingSteps(props: {
   workspaceApiKeyPlaceholder: string;
 }) {
   const L = props.L;
+  const [timeoutHelpOpen, setTimeoutHelpOpen] = useState(false);
+  const timeoutHelp = L("VeFaaS 沙箱的保活/请求超时时间，单位毫秒。通常建议 3600000（一小时）；短任务可设 600000 到 1800000，长任务不建议低于一小时。", "VeFaaS sandbox keep-alive/request timeout in milliseconds. 3600000 (one hour) is a good default; short jobs can use 600000-1800000, while long jobs should usually stay at one hour or more.");
   if (props.step === 0) {
     return (
       <>
@@ -218,7 +221,7 @@ export function WorkspaceOnboardingSteps(props: {
             <div className="cred-head"><Icon name="i-key" size={14} /> VeFaaS Sandbox</div>
             <label className="form">VEFAAS_SANDBOX_FUNCTION_ID<input className="fld" value={props.vefaasSandboxFunctionId} autoComplete="off" placeholder="vefaas sandbox function id" onChange={(event) => props.setVefaasSandboxFunctionId(event.target.value)} /></label>
             <label className="form">VEFAAS_SANDBOX_GATEWAY_URL<input className="fld" value={props.vefaasSandboxGatewayUrl} autoComplete="off" placeholder="https://your-sandbox-app.example.com" onChange={(event) => props.setVefaasSandboxGatewayUrl(event.target.value)} /></label>
-            <label className="form">VEFAAS_SANDBOX_TIMEOUT_MS<input className="fld" type="number" min={60000} step={60000} value={props.vefaasSandboxTimeoutInput} onChange={(event) => props.setVefaasSandboxTimeoutInput(event.target.value)} /></label>
+            <label className="form"><span className="field-label-inline">VEFAAS_SANDBOX_TIMEOUT_MS <button type="button" className="field-help" title={timeoutHelp} aria-label={timeoutHelp} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setTimeoutHelpOpen((open) => !open); }}><Icon name="i-info" size={13} /></button>{timeoutHelpOpen ? <span className="field-help-popover" role="tooltip">{timeoutHelp}</span> : null}</span><input className="fld" type="number" min={60000} step={60000} value={props.vefaasSandboxTimeoutInput} onChange={(event) => props.setVefaasSandboxTimeoutInput(event.target.value)} /></label>
           </div>
         )}
         <div className="cfg-head"><Icon name="i-gauge" size={16} /> <b>{L("沙箱池配置", "Sandbox pool")}</b></div>

@@ -9,17 +9,19 @@ export const MODEL_PRESET_OPTIONS = [
   { value: "maple-code", label: "Maple Code", name: "Maple Code" }
 ];
 
-export const templateCards = [
-  ["Data insights analyst", "Clean CSV/XLSX files with pandas and openpyxl, explain metrics, and isolate anomalies"],
-  ["Customer knowledge assistant", "Search product docs, return cited answers, and flag cases that need human escalation"],
-  ["Market monitoring brief", "Track brands, competitors, and high-signal sources, then summarize shifts by theme"],
-  ["Incident response commander", "Organize alerts, timelines, impact, owners, and the next response actions"],
-  ["Compliance audit investigator", "Review logs, permissions, evidence chains, and audit findings with risk levels"],
-  ["Developer productivity assistant", "Read repositories, run tests, locate failures, and propose the smallest useful change"],
-  ["Growth experiment designer", "Break down hypotheses, metrics, sample size, tracking needs, and review templates"],
-  ["Finance reconciliation bot", "Use openpyxl and pandas to compare ledgers, invoices, deltas, and explanations"],
-  ["Browser QA specialist", "Use playwright for end-to-end checks, screenshots, performance notes, and interaction issues"],
-  ["Node automation builder", "Use npm and pnpm scripts to batch content, call APIs, and generate deliverables"]
+export type TemplateCard = readonly [string, string, string, string];
+
+export const templateCards: TemplateCard[] = [
+  ["Data insights analyst", "Clean CSV/XLSX files with pandas and openpyxl, explain metrics, and isolate anomalies", "数据洞察分析师", "使用 pandas 和 openpyxl 清洗 CSV/XLSX 文件，解释指标并定位异常"],
+  ["Customer knowledge assistant", "Search product docs, return cited answers, and flag cases that need human escalation", "客户知识助手", "检索产品文档，返回带引用的回答，并标记需要人工升级的案例"],
+  ["Market monitoring brief", "Track brands, competitors, and high-signal sources, then summarize shifts by theme", "市场监测简报", "跟踪品牌、竞品和高信号来源，并按主题总结变化"],
+  ["Incident response commander", "Organize alerts, timelines, impact, owners, and the next response actions", "应急响应指挥官", "整理告警、时间线、影响面、负责人和下一步响应动作"],
+  ["Compliance audit investigator", "Review logs, permissions, evidence chains, and audit findings with risk levels", "合规审计调查员", "审查日志、权限和证据链，并按风险等级输出审计发现"],
+  ["Developer productivity assistant", "Read repositories, run tests, locate failures, and propose the smallest useful change", "研发效率助手", "读取代码仓库、运行测试、定位失败，并提出最小有效改动"],
+  ["Growth experiment designer", "Break down hypotheses, metrics, sample size, tracking needs, and review templates", "增长实验设计师", "拆解假设、指标、样本量、埋点需求和复盘模板"],
+  ["Finance reconciliation bot", "Use openpyxl and pandas to compare ledgers, invoices, deltas, and explanations", "财务对账机器人", "使用 openpyxl 和 pandas 比对台账、发票、差异和解释"],
+  ["Browser QA specialist", "Use playwright for end-to-end checks, screenshots, performance notes, and interaction issues", "浏览器 QA 专家", "使用 Playwright 做端到端检查、截图、性能记录和交互问题定位"],
+  ["Node automation builder", "Use npm and pnpm scripts to batch content, call APIs, and generate deliverables", "Node 自动化构建器", "使用 npm 和 pnpm 脚本批处理内容、调用 API 并生成交付物"]
 ];
 
 export const TEMPLATE_SYSTEMS = [

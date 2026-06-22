@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Icon } from "../../ui";
 
 type LFn = (zh: string, en: string) => string;
@@ -9,6 +10,12 @@ export type ProvisioningLog = {
 };
 
 export function ProvisioningLogPanel(props: { logs: ProvisioningLog[]; active: boolean; L: LFn }) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [props.logs.length]);
+
   if (!props.logs.length) return null;
   return (
     <div className="provision-log-panel" aria-live="polite">
@@ -16,7 +23,7 @@ export function ProvisioningLogPanel(props: { logs: ProvisioningLog[]; active: b
         <span>{props.active ? <span className="spin-dot" /> : <Icon name="i-check" size={14} />}</span>
         <b>{props.L("初始化日志", "Provisioning logs")}</b>
       </div>
-      <div className="log-list provision-log-list">
+      <div className="log-list provision-log-list" ref={listRef}>
         {props.logs.map((log, index) => (
           <div className="log-line" key={`${log.at}-${index}`}>
             <span className="ts">{log.at}</span>
