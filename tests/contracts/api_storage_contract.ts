@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import "../../apps/control-plane-api/src/env";
-import { db } from "../../apps/control-plane-api/src/store";
+import { db, initDatabase } from "../../apps/control-plane-api/src/store";
 import { deleteObject, readObject } from "../../apps/control-plane-api/src/objectStorage";
 import { workspaceTosCreds } from "../../apps/control-plane-api/src/files/workspaceStorage";
 import { writeFakeVefaasRuntimeDeployScript } from "./helpers/fakeVefaasDeploy";
@@ -48,6 +48,7 @@ server.stderr.on("data", (chunk) => (serverOutput += String(chunk)));
 
 try {
   await waitForHealth();
+  initDatabase();
   assert.equal(countRows("environments", "name", seedNames), 0, "initDatabase must not seed default environments");
   assert.equal(countRows("agent_templates", "name", seedNames), 0, "initDatabase must not seed default agent_templates");
   assert.equal(countRows("memory_stores", "name", seedNames), 0, "initDatabase must not seed default memory stores");

@@ -94,7 +94,7 @@ export function ensureTenantAdmin(tenantId: string, userId: string) {
     if (String(existing.role) !== "admin") db.prepare("UPDATE tenant_members SET role = 'admin' WHERE id = ?").run(existing.id);
     return;
   }
-  db.prepare("INSERT OR IGNORE INTO tenant_members (id, tenant_id, user_id, role, created_at) VALUES (?, ?, ?, 'admin', ?)").run(
+  db.prepare("INSERT IGNORE INTO tenant_members (id, tenant_id, user_id, role, created_at) VALUES (?, ?, ?, 'admin', ?)").run(
     `tnmem_${nanoid(10)}`,
     tenantId,
     userId,

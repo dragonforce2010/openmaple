@@ -22,7 +22,6 @@ type MysqlDatabase = {
   exec: (sql: string) => unknown;
   prepare: (sql: string) => MysqlStatement;
   transaction: <T extends (...args: never[]) => unknown>(fn: T) => T;
-  pragma: (_sql: string) => unknown;
   runAsync: (sql: string, params: unknown[]) => Promise<void>;
 };
 
@@ -63,9 +62,6 @@ export function createMysqlDatabase(): MysqlDatabase {
           throw error;
         }
       }) as T;
-    },
-    pragma() {
-      return null;
     },
     async runAsync(sql: string, params: unknown[]) {
       if (transactionQueries) throw new Error("runAsync is not allowed inside a transaction.");

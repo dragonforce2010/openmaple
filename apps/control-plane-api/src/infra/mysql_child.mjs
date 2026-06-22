@@ -51,14 +51,6 @@ if (process.argv[1] && process.argv[1].endsWith("mysql_child.mjs")) {
 
 async function execute(connection, mode, sql, params) {
   const translated = translateSql(sql);
-  if (translated.kind === "table_info") {
-    const [rows] = await connection.execute(
-      "SELECT COLUMN_NAME AS name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
-      [translated.table]
-    );
-    return mode === "get" ? rows[0] ?? null : rows;
-  }
-
   try {
     const [rows] = await connection.execute(translated.sql, normalizeParams(params));
     if (mode === "get") return Array.isArray(rows) ? rows[0] ?? null : null;
@@ -75,14 +67,7 @@ async function execute(connection, mode, sql, params) {
 
 function translateSql(sql) {
   const trimmed = sql.trim();
-  const pragma = /^PRAGMA\s+table_info\(([^)]+)\)$/i.exec(trimmed);
-  if (pragma) return { kind: "table_info", table: stripIdentifier(pragma[1]) };
-
-  let next = trimmed
-    .replace(/\bINSERT\s+OR\s+IGNORE\b/gi, "INSERT IGNORE")
-    .replace(/\bCREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\b/gi, "CREATE UNIQUE INDEX")
-    .replace(/\bCREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\b/gi, "CREATE INDEX");
-
+  let next = trimmed;
   if (/^CREATE\s+TABLE\b/i.test(next)) next = translateCreateTable(next);
   next = translateAlterAddColumn(next);
   return { kind: "sql", sql: next };
@@ -146,10 +131,6 @@ function isIgnorableDdlError(sql, error) {
   if (/^CREATE\s+(UNIQUE\s+)?INDEX\b/i.test(sql) && code === "ER_DUP_KEYNAME") return true;
   if (/\bADD\s+COLUMN\b/i.test(sql) && code === "ER_DUP_FIELDNAME") return true;
   return false;
-}
-
-function stripIdentifier(value) {
-  return String(value).trim().replace(/^`|`$/g, "");
 }
 
 export function env(...keysAndDefault) {
