@@ -74,11 +74,14 @@ def build_clients() -> dict[str, Any]:
     if not access_key or not secret_key:
         raise RuntimeError("missing VOLCENGINE_ACCESS_KEY/VOLCENGINE_SECRET_KEY in environment or project .env")
     region = os.environ.get("MAPLE_VEFAAS_REGION") or os.environ.get("VEFAAS_REGION") or "cn-beijing"
+    vefaas_api = VolcengineVefaasApi(access_key, secret_key, region)
+    vefaas_openapi = SignedOpenApiClient(access_key=access_key, secret_key=secret_key, region=region, service="vefaas", version="2024-06-06")
+    vefaas_api.openapi = vefaas_openapi
     return {
         "region": region,
-        "vefaas_api": VolcengineVefaasApi(access_key, secret_key, region),
+        "vefaas_api": vefaas_api,
         "app": SignedOpenApiClient(access_key=access_key, secret_key=secret_key, region=region),
-        "release": SignedOpenApiClient(access_key=access_key, secret_key=secret_key, region=region, service="vefaas", version="2024-06-06"),
+        "release": vefaas_openapi,
         "apig_2021": SignedOpenApiClient(access_key=access_key, secret_key=secret_key, region=region, service="apig", version="2021-03-03"),
         "apig_2022": SignedOpenApiClient(access_key=access_key, secret_key=secret_key, region=region, service="apig", version="2022-11-12"),
         "apig_api": VolcengineApigApi(access_key, secret_key, region),
@@ -185,13 +188,76 @@ def deploy_update(state: dict[str, Any], state_path: Path, clients: dict[str, An
     frontend = app_deploy.build_frontend_package(app_name)
     backend = app_deploy.build_backend_package(app_name)
 
-    update_existing_function(clients, state["frontend"]["function_id"], config, frontend)
-    update_existing_function(clients, state["backend"]["function_id"], config, backend)
+    deploy_stable_role(clients, state, "frontend", config, frontend, ["/"], min_instance, max_instance)
+    deploy_stable_role(clients, state, "backend", config, backend, ["/v1", "/health"], min_instance, max_instance)
     ensure_resource(clients, state["frontend"]["function_id"], min_instance, max_instance)
     ensure_resource(clients, state["backend"]["function_id"], min_instance, max_instance)
     state = refresh_state(state, clients, min_instance, max_instance, include_probe=True)
     write_state(state_path, state)
     return state
+
+
+def deploy_stable_role(
+    clients: dict[str, Any],
+    state: dict[str, Any],
+    role: str,
+    config: DeployConfig,
+    package: app_deploy.FunctionPackage,
+    route_paths: list[str],
+    min_instance: int,
+    max_instance: int,
+) -> None:
+    function_id = str(state[role]["function_id"])
+    current_runtime = function_runtime(clients, function_id)
+    if current_runtime and current_runtime != package.runtime:
+        rotate_function_runtime(clients, state, role, config, package, route_paths, current_runtime, min_instance, max_instance)
+        return
+    update_existing_function(clients, function_id, config, package)
+
+
+def rotate_function_runtime(
+    clients: dict[str, Any],
+    state: dict[str, Any],
+    role: str,
+    config: DeployConfig,
+    package: app_deploy.FunctionPackage,
+    route_paths: list[str],
+    previous_runtime: str,
+    min_instance: int,
+    max_instance: int,
+) -> None:
+    previous_id = str(state[role]["function_id"])
+    replacement = replace(package, name=f"{package.name}-{timestamp()}")
+    replacement_id = app_deploy.create_function_with_code(clients["vefaas_api"], clients["app"], config, replacement)
+    app_deploy.release_function(clients["release"], replacement_id, config)
+    try:
+        ensure_resource(clients, replacement_id, min_instance, max_instance)
+        wait_function_ready(clients, replacement_id, min_instance)
+    except Exception:
+        try:
+            ensure_resource(clients, replacement_id, 0, 1)
+        finally:
+            raise
+    upstream_id = ensure_upstream(clients, state["gateway"]["gateway_id"], f"{replacement.name}-us", replacement_id)
+    for path in route_paths:
+        update_route_upstream(clients, state["gateway"]["service_id"], path, upstream_id)
+    state.setdefault("rotated_functions", []).append({
+        "role": role,
+        "from_function_id": previous_id,
+        "from_function_name": state[role].get("function_name"),
+        "from_runtime": previous_runtime,
+        "to_function_id": replacement_id,
+        "to_function_name": replacement.name,
+        "to_runtime": replacement.runtime,
+        "rotated_at": dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).isoformat(timespec="seconds"),
+    })
+    state[role]["function_id"] = replacement_id
+    state[role]["function_name"] = replacement.name
+    state[role]["upstream_id"] = upstream_id
+    try:
+        ensure_resource(clients, previous_id, 0, 1)
+    except Exception as error:
+        state.setdefault("rotation_warnings", []).append({"role": role, "function_id": previous_id, "error": str(error)[:300]})
 
 
 def update_existing_function(clients: dict[str, Any], function_id: str, config: DeployConfig, package: app_deploy.FunctionPackage) -> None:
@@ -209,8 +275,15 @@ def with_existing_envs(api: VolcengineVefaasApi, function_id: str, package: app_
     if not existing:
         return package
     # Stable updates replace the whole env list. Preserve live secrets when CI lacks them.
-    merged = {**existing, **{key: value for key, value in package.envs.items() if value != ""}}
+    drop_keys = existing_env_drop_keys()
+    merged = {key: value for key, value in existing.items() if key not in drop_keys}
+    merged.update({key: value for key, value in package.envs.items() if value != ""})
     return replace(package, envs=merged)
+
+
+def existing_env_drop_keys() -> set[str]:
+    raw = os.environ.get("MAPLE_VEFAAS_DROP_EXISTING_ENVS") or ""
+    return {key.strip() for key in raw.split(",") if key.strip()}
 
 
 def function_envs(api: VolcengineVefaasApi, function_id: str) -> dict[str, str]:
@@ -229,6 +302,16 @@ def function_envs(api: VolcengineVefaasApi, function_id: str) -> dict[str, str]:
     return result
 
 
+def function_runtime(clients: dict[str, Any], function_id: str) -> str:
+    api = clients["vefaas_api"]
+    if getattr(api, "openapi", None):
+        data = api.openapi.post("GetFunction", {"Id": function_id}).get("Result", {})
+    else:
+        sdk = api.sdk
+        data = to_plain_dict(api.client.get_function(sdk.GetFunctionRequest(id=function_id)))
+    return str(data.get("runtime") or data.get("Runtime") or "")
+
+
 def update_function_config(api: VolcengineVefaasApi, function_id: str, config: DeployConfig, package: app_deploy.FunctionPackage) -> None:
     raw_vpc = app_deploy.vpc_config_for_role(config, package.role)
     if getattr(api, "openapi", None):
@@ -236,6 +319,7 @@ def update_function_config(api: VolcengineVefaasApi, function_id: str, config: D
             "Id": function_id,
             "Description": f"managed-agents-platform {package.role}",
             "Command": package.command,
+            "Runtime": package.runtime,
             "Port": package.port,
             "RequestTimeout": config.request_timeout,
             "MemoryMB": package.memory_mb,
@@ -321,6 +405,19 @@ def ensure_resource(clients: dict[str, Any], function_id: str, min_instance: int
             if not is_function_deploying_error(error) or time.monotonic() >= deadline:
                 raise
             time.sleep(RESOURCE_UPDATE_RETRY_SECONDS)
+
+
+def wait_function_ready(clients: dict[str, Any], function_id: str, min_instance: int) -> None:
+    if min_instance <= 0:
+        return
+    deadline = time.monotonic() + READY_TIMEOUT_SECONDS
+    last_instances: list[dict[str, Any]] = []
+    while time.monotonic() < deadline:
+        last_instances = function_instances(clients, function_id)
+        if ready_instance_count(last_instances) >= min_instance:
+            return
+        time.sleep(PROBE_RETRY_SECONDS)
+    raise TimeoutError(f"function {function_id} did not reach {min_instance} ready instance(s): {safe_json(last_instances)}")
 
 
 def is_function_deploying_error(error: Exception) -> bool:
@@ -457,6 +554,23 @@ def ensure_route(clients: dict[str, Any], service_id: str, suffix: str, path: st
     if route:
         return str(route["id"])
     return app_deploy.create_apig_route(clients["apig_2022"], service_id, suffix, path, upstream_id, priority=priority)
+
+
+def update_route_upstream(clients: dict[str, Any], service_id: str, path: str, upstream_id: str) -> None:
+    route = must_find_route(clients, service_id, path)
+    clients["apig_2022"].post(
+        "UpdateRoute",
+        {
+            "Id": route["id"],
+            "ServiceId": service_id,
+            "Name": route["name"],
+            "ResourceType": "Console",
+            "Enable": route["enable"],
+            "Priority": route["priority"],
+            "UpstreamList": [{"UpstreamId": upstream_id, "Weight": 100}],
+            "MatchRule": route["match_rule"],
+        },
+    )
 
 
 def find_route(clients: dict[str, Any], service_id: str, path: str) -> dict[str, Any] | None:

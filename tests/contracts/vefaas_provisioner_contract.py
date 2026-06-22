@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -17,6 +18,8 @@ APP_DEPLOY_PATH = ROOT / "infra" / "vefaas" / "deploy_vefaas_application.py"
 STABLE_DEPLOY_PATH = ROOT / "infra" / "vefaas" / "deploy_vefaas_stable.py"
 STORE_PROVISIONING_PATH = ROOT / "apps" / "control-plane-api" / "src" / "storage" / "storeWorkspaceProvisioning.ts"
 RUNTIME_RUN_SCRIPT_PATH = ROOT / "infra" / "vefaas" / "runtime-app" / "run.sh"
+RUNTIME_SANDBOX_TOOLS_PATH = ROOT / "infra" / "vefaas" / "runtime-app" / "sandbox_tools.py"
+RUNTIME_DETERMINISTIC_LOOP_PATH = ROOT / "infra" / "vefaas" / "runtime-app" / "deterministic_agent_loop.py"
 TEST_RUNTIME_IMAGE = "registry.example.com/agentkit/maple-runtime:ark"
 
 
@@ -83,10 +86,37 @@ def test_backend_package_carries_runtime_provisioner_scripts():
 
 def test_source_zip_runtime_installs_python_requirements_on_startup():
     source = RUNTIME_RUN_SCRIPT_PATH.read_text()
+    tools_source = RUNTIME_SANDBOX_TOOLS_PATH.read_text()
+    deterministic_source = RUNTIME_DETERMINISTIC_LOOP_PATH.read_text()
+    assert 'export MAPLE_RUNTIME_APP_DIR="$PWD"' in source
     assert 'python3 -c "import claude_agent_sdk"' in source
+    assert 'MAPLE_SKIP_CLAUDE_AGENT_SDK_INSTALL' in source
     assert 'python3 -m pip install --no-cache-dir' in source
     assert "--target \"$deps_dir\" -r requirements.txt" in source
     assert 'export PYTHONPATH="$deps_dir:${PYTHONPATH:-}"' in source
+    assert "except ModuleNotFoundError" in tools_source
+    assert "claude_agent_sdk is required to build the Maple sandbox MCP server" in tools_source
+    assert "Deterministic agent-loop fixture for cloud smoke tests" in deterministic_source
+
+
+def test_deterministic_runtime_loop_emits_completed_native_tool_events():
+    prompt = "Use write_file to create qa/min-sdk-contract.txt with content min-story-contract, then use list_files on qa."
+    with tempfile.TemporaryDirectory() as workspace:
+        completed = subprocess.run(
+            [sys.executable, str(RUNTIME_DETERMINISTIC_LOOP_PATH)],
+            cwd=workspace,
+            input=prompt,
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=True,
+        )
+        events = [json.loads(line) for line in completed.stdout.splitlines() if line.strip()]
+        assert (Path(workspace) / "qa" / "min-sdk-contract.txt").read_text() == "min-story-contract"
+        contents = [part for event in events for part in event.get("message", {}).get("content", [])]
+        assert any(part.get("type") == "tool_use" and part.get("name") == "Write" for part in contents)
+        assert any(part.get("type") == "tool_result" and part.get("tool_use_id") == "toolu_write_deterministic" and part.get("is_error") is False for part in contents)
+        assert any(part.get("type") == "tool_use" and part.get("name") == "Bash" and "ls qa" in part.get("input", {}).get("command", "") for part in contents)
 
 
 def test_workspace_pool_passes_resource_limits_to_runtime_deploy_script():
@@ -101,6 +131,8 @@ def test_workspace_pool_passes_resource_limits_to_runtime_deploy_script():
     assert "image_fallback_error: imageFallbackError" in source
     assert "MAPLE_VEFAAS_RUNTIME_PROVISION_CONCURRENCY" in source
     assert "await Promise.all(Array.from({ length: concurrency }, provisionNext));" in source
+    assert "runtimeEnvOverrides(process.env.MAPLE_VEFAAS_RUNTIME_ENVS)" in source
+    assert "runtimeEnvOverrides(process.env.MAPLE_ALIYUN_FC_RUNTIME_ENVS)" in source
 
 
 def test_backend_envs_require_explicit_deployed_mysql_host():
@@ -138,6 +170,26 @@ def test_backend_envs_require_explicit_deployed_mysql_host():
 
     assert envs["MAPLE_MYSQL_HOST"] == "private.mysql.internal"
     assert "MYSQL_HOST" not in envs
+
+
+def test_web_runtime_can_be_overridden_explicitly():
+    with patched_env({"MAPLE_VEFAAS_RUNTIME": "native-python3.12/v1"}, clear=("MAPLE_VEFAAS_WEB_RUNTIME",)):
+        module = load_app_deploy_module()
+
+    assert module.WEB_RUNTIME == "native-python3.12/v1"
+
+    with patched_env({"MAPLE_VEFAAS_RUNTIME": "native-python3.12/v1", "MAPLE_VEFAAS_WEB_RUNTIME": "node20/custom"}):
+        module = load_app_deploy_module()
+
+    assert module.WEB_RUNTIME == "node20/custom"
+
+
+def test_stable_updates_web_function_runtime():
+    source = STABLE_DEPLOY_PATH.read_text()
+    assert "vefaas_api.openapi = vefaas_openapi" in source
+    assert '"Runtime": package.runtime' in source
+    assert '{"EnableVpc": False}' not in source
+    assert "wait_function_ready(clients, replacement_id, min_instance)" in source
 
 
 class FakeVefaasApi:
@@ -267,6 +319,28 @@ class FlakyResourceApi:
             raise RuntimeError(self.failures.pop(0))
 
 
+class FakeInstanceReleaseApi:
+    def __init__(self, instance_batches):
+        self.instance_batches = list(instance_batches)
+        self.calls = []
+
+    def post(self, action, body):
+        self.calls.append({"action": action, "body": body})
+        assert action == "ListFunctionInstances"
+        batch = self.instance_batches.pop(0) if self.instance_batches else []
+        return {"Result": {"Items": batch}}
+
+
+class FakeFunctionGetApi:
+    def __init__(self, envs):
+        self.openapi = self
+        self.envs = envs
+
+    def post(self, action, body):
+        assert action == "GetFunction"
+        return {"Result": {"Envs": [{"Key": key, "Value": value} for key, value in self.envs.items()]}}
+
+
 def test_stable_deploy_retries_resource_update_while_function_is_deploying():
     module = load_stable_module()
     module.RESOURCE_UPDATE_RETRY_SECONDS = 0
@@ -296,6 +370,35 @@ def test_stable_deploy_does_not_retry_fatal_resource_update_errors():
         raise AssertionError("expected fatal resource update error to be raised")
 
     assert len(api.calls) == 1
+
+
+def test_stable_runtime_rotation_waits_for_ready_instance():
+    module = load_stable_module()
+    module.PROBE_RETRY_SECONDS = 0
+    release = FakeInstanceReleaseApi([
+        [{"Status": "Starting"}],
+        [{"Status": "Ready"}],
+    ])
+
+    module.wait_function_ready({"release": release}, "fn_contract", 1)
+
+    assert len(release.calls) == 2
+    assert release.calls[-1] == {"action": "ListFunctionInstances", "body": {"FunctionId": "fn_contract"}}
+
+
+def test_stable_can_drop_preserved_envs():
+    module = load_stable_module()
+    package = module.app_deploy.FunctionPackage(
+        role="backend",
+        name="fn_contract",
+        source_dir=Path("."),
+        envs={"KEEP": "", "NEW": "new"},
+    )
+
+    with patched_env({"MAPLE_VEFAAS_DROP_EXISTING_ENVS": "DROP"}):
+        merged = module.with_existing_envs(FakeFunctionGetApi({"KEEP": "old", "DROP": "old"}), "fn_contract", package)
+
+    assert merged.envs == {"KEEP": "old", "NEW": "new"}
 
 
 def test_direct_provisioner_deploys_fixed_runtime_template():
@@ -861,10 +964,15 @@ def test_env_parser_and_error_json_are_defensive():
 if __name__ == "__main__":
     test_backend_package_carries_runtime_provisioner_scripts()
     test_source_zip_runtime_installs_python_requirements_on_startup()
+    test_deterministic_runtime_loop_emits_completed_native_tool_events()
     test_workspace_pool_passes_resource_limits_to_runtime_deploy_script()
     test_backend_envs_require_explicit_deployed_mysql_host()
+    test_web_runtime_can_be_overridden_explicitly()
+    test_stable_updates_web_function_runtime()
     test_stable_deploy_retries_resource_update_while_function_is_deploying()
     test_stable_deploy_does_not_retry_fatal_resource_update_errors()
+    test_stable_runtime_rotation_waits_for_ready_instance()
+    test_stable_can_drop_preserved_envs()
     test_direct_provisioner_deploys_fixed_runtime_template()
     test_direct_provisioner_deploys_runtime_image_with_route()
     test_config_loads_project_env_only_and_defaults_region()

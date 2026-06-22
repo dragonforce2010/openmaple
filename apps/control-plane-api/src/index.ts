@@ -35,9 +35,14 @@ app.use((request, _response, next) => {
 });
 
 let databaseInitialized = false;
+let databaseWarmupStarted = false;
 
 function ensureDatabaseInitialized() {
   if (databaseInitialized) return;
+  if (process.env.MAPLE_ASSUME_DATABASE_READY === "true") {
+    databaseInitialized = true;
+    return;
+  }
   initDatabase();
   try {
     ensureGlobalModelConfigs();
@@ -47,7 +52,21 @@ function ensureDatabaseInitialized() {
   databaseInitialized = true;
 }
 
+function startDatabaseWarmup() {
+  if (databaseInitialized || databaseWarmupStarted) return;
+  databaseWarmupStarted = true;
+  setImmediate(() => {
+    try {
+      ensureDatabaseInitialized();
+    } catch (error) {
+      databaseWarmupStarted = false;
+      console.error("[startup] database warmup failed:", error);
+    }
+  });
+}
+
 function anonymousAuthBootstrap(response: Response) {
+  response.once("finish", startDatabaseWarmup);
   response.clearCookie(authCookieName, { path: "/" });
   response.json({ user: null, tenants: [], created_count: 0, owned_count: 0, member_only_count: 0, recommended_view: "login" });
 }

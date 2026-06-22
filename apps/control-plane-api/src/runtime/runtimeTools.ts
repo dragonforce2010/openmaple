@@ -1,5 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { execFile } from "node:child_process";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, relative } from "node:path";
+import { promisify } from "node:util";
 import { traceAsync } from "../perfTrace";
 import {
   getSession,
@@ -12,7 +14,7 @@ import {
 import type { JsonRecord } from "../types";
 import { runDockerCommand } from "./dockerRuntime";
 import { readE2BFile, runE2BCommand, syncE2BWorkspaceToHost, writeE2BFile } from "./e2bRuntime";
-import { assertSafeWorkspacePath, isSandboxAbsolutePath, safeSandboxReadPath } from "./runtimeCommon";
+import { asRecord, assertSafeWorkspacePath, isSandboxAbsolutePath, safeSandboxReadPath } from "./runtimeCommon";
 import { ensureSessionRuntime, ensureSessionSandboxRuntime } from "./runtimeManager";
 import type { RuntimeInfo } from "./runtimeTypes";
 import { invokeAliyunFc } from "./aliyunFcRuntime";
@@ -27,6 +29,7 @@ import {
 import { toVefaasSandboxMountedPath } from "./vefaasSandboxHelpers";
 
 const readOnlyBashCommands = new Set(["date", "pwd", "whoami", "id", "uname", "hostname", "ls", "which", "type"]);
+const execFileAsync = promisify(execFile);
 
 export async function markRuntimeReady(sessionId: string) {
   return traceAsync("runtime.mark_ready", { session_id: sessionId }, async () => {
@@ -40,7 +43,28 @@ export async function executeTool(sessionId: string, name: string, input: JsonRe
   return traceAsync("runtime.tool", { session_id: sessionId, tool: name }, async () => {
     const session = getSession(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
-    const runtime = await ensureSessionSandboxRuntime(sessionId);
+    let runtime: RuntimeInfo;
+    try {
+      runtime = await ensureSessionSandboxRuntime(sessionId);
+    } catch (error) {
+      const fallback = agentRuntimeToolFallback(session);
+      if (fallback) {
+        console.warn("[runtime] sandbox unavailable; using agent runtime tool fallback", {
+          session_id: sessionId,
+          provider: fallback.type,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        runtime = fallback;
+      } else if (process.env.MAPLE_RUNTIME_TOOL_BRIDGE_HOST_FALLBACK === "true") {
+        console.warn("[runtime] sandbox unavailable; using host workspace tool fallback", {
+          session_id: sessionId,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        return runToolWithHostWorkspace(session, name, input);
+      } else {
+        throw error;
+      }
+    }
     try {
       return await runToolWithRuntime(session, runtime, name, input);
     } catch (error) {
@@ -52,6 +76,66 @@ export async function executeTool(sessionId: string, name: string, input: JsonRe
       });
     }
   });
+}
+
+function agentRuntimeToolFallback(session: JsonRecord): RuntimeInfo | null {
+  if (process.env.MAPLE_RUNTIME_TOOL_BRIDGE_AGENT_RUNTIME_FALLBACK !== "true") return null;
+  const runtime = asRecord(asRecord(session.metadata).agent_runtime);
+  const type = String(runtime.type || runtime.provider || "");
+  if (type !== "vefaas" && type !== "aliyun_fc") return null;
+  return { ...runtime, type } as unknown as RuntimeInfo;
+}
+
+async function runToolWithHostWorkspace(session: JsonRecord, name: string, input: JsonRecord) {
+  markHostFallbackRuntime(session);
+  const workspacePath = String(session.workspace_path);
+  switch (name) {
+    case "bash":
+      return runHostBash(workspacePath, String(input.command || ""));
+    case "read_file":
+      return readWorkspaceFile(workspacePath, String(input.path || ""));
+    case "write_file":
+      return writeWorkspaceFile(workspacePath, String(input.path || ""), String(input.content || ""));
+    case "list_files":
+      return listHostFiles(workspacePath, String(input.path || "."));
+    case "grep":
+      return grepHostFiles(workspacePath, String(input.pattern || ""), String(input.path || "."));
+    case "memory_search":
+      return memorySearch(input);
+    case "memory_write":
+      return memoryWrite(input);
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+
+function markHostFallbackRuntime(session: JsonRecord) {
+  const sessionId = String(session.id || "");
+  if (!sessionId) return;
+  const existing = asRecord(asRecord(session.metadata).runtime);
+  if (existing.provider === "host_fallback") return;
+  const runtimeType = process.env.MAPLE_SANDBOX_PROVIDER === "e2b" ? "e2b" : "host_fallback";
+  const runtime = {
+    type: runtimeType,
+    provider: "host_fallback",
+    sandbox_id: `host_${sessionId}`,
+    container_id: `host_${sessionId}`,
+    workspace_path: String(session.workspace_path || ""),
+    sandbox_workspace_path: String(session.workspace_path || ""),
+    lifecycle: { fallback: "host_workspace" }
+  };
+  updateSessionMetadata(sessionId, { runtime, sandbox_runtime: runtime });
+}
+
+async function runHostBash(workspacePath: string, command: string) {
+  if (!command.trim()) throw new Error("Missing bash command");
+  try {
+    const result = await execFileAsync("bash", ["-lc", command], { cwd: workspacePath, timeout: 120_000, maxBuffer: 8 * 1024 * 1024 });
+    return { stdout: result.stdout, stderr: result.stderr, exit_code: 0 };
+  } catch (error) {
+    const failed = error as { stdout?: unknown; stderr?: unknown; code?: unknown };
+    return { stdout: String(failed.stdout || ""), stderr: String(failed.stderr || error), exit_code: Number(failed.code || 1) };
+  }
 }
 
 async function runToolWithRuntime(session: JsonRecord, runtime: RuntimeInfo, name: string, input: JsonRecord) {
@@ -177,6 +261,13 @@ async function listFiles(_workspacePath: string, runtime: RuntimeInfo, path: str
   return { path, files: result.stdout.split("\n").filter(Boolean) };
 }
 
+async function listHostFiles(workspacePath: string, path: string) {
+  const base = assertSafeWorkspacePath(workspacePath, path);
+  const info = await stat(base);
+  const files = info.isFile() ? [relative(workspacePath, base) || basename(base)] : await collectHostFiles(base, workspacePath, 5);
+  return { path, files: files.sort().slice(0, 200) };
+}
+
 async function grep(_workspacePath: string, runtime: RuntimeInfo, pattern: string, path: string) {
   if (!pattern.trim()) throw new Error("Missing grep pattern");
   if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "grep", input: { pattern, path } });
@@ -194,6 +285,42 @@ async function grep(_workspacePath: string, runtime: RuntimeInfo, pattern: strin
   }
   const result = await runDockerCommand(runtime.container_id, `grep -RIn -- '${quotedPattern}' '${quotedPath}' 2>/dev/null | sed -n '1,200p' || true`, 30_000);
   return { pattern, path, matches: result.stdout.split("\n").filter(Boolean) };
+}
+
+async function grepHostFiles(workspacePath: string, pattern: string, path: string) {
+  if (!pattern.trim()) throw new Error("Missing grep pattern");
+  const base = assertSafeWorkspacePath(workspacePath, path);
+  const info = await stat(base);
+  const files = info.isFile() ? [base] : (await collectHostFiles(base, workspacePath, 5)).map((item) => assertSafeWorkspacePath(workspacePath, item));
+  const matches: string[] = [];
+  for (const file of files) {
+    try {
+      const content = await readFile(file, "utf8");
+      const rel = relative(workspacePath, file) || basename(file);
+      content.split(/\r?\n/).forEach((line, index) => {
+        if (line.includes(pattern)) matches.push(`${rel}:${index + 1}:${line}`);
+      });
+    } catch {
+      // Skip unreadable or binary-ish files in the host fallback.
+    }
+    if (matches.length >= 200) break;
+  }
+  return { pattern, path, matches: matches.slice(0, 200) };
+}
+
+async function collectHostFiles(root: string, workspacePath: string, maxDepth: number, depth = 0): Promise<string[]> {
+  if (depth > maxDepth) return [];
+  const entries = await readdir(root, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const fullPath = `${root.replace(/\/$/, "")}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...await collectHostFiles(fullPath, workspacePath, maxDepth, depth + 1));
+    } else if (entry.isFile()) {
+      files.push(relative(workspacePath, fullPath) || entry.name);
+    }
+  }
+  return files;
 }
 
 async function memorySearch(input: JsonRecord) {

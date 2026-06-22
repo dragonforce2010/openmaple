@@ -10,6 +10,7 @@ loadProjectEnv();
 const baseUrl = (process.env.MAPLE_CLOUD_BASE_URL || process.env.E2E_API_BASE || "http://127.0.0.1:27951").replace(/\/$/, "");
 const runtimeInvokeUrl = process.env.VEFAAS_INVOKE_URL || `${baseUrl}/maple-ark`;
 const platformDevKey = process.env.MAPLE_CLOUD_DEV_API_KEY || process.env.MAPLE_DEV_API_KEY || "maple_dev_key";
+const agentLoopProtocol = String(process.env.MAPLE_CLOUD_AGENT_LOOP_PROTOCOL || "").trim();
 const runId = String(Date.now());
 
 for (const key of ["VOLCENGINE_ACCESS_KEY", "VOLCENGINE_SECRET_KEY", "E2B_API_KEY"]) {
@@ -96,7 +97,7 @@ const agent = await client.createAgent({
     config_id: defaultModel.id,
     name: defaultModel.name || "VolcoEngine"
   },
-  agent_loop: { type: "anthropic_claude_code", config: {}, hooks: [] },
+  agent_loop: { type: "anthropic_claude_code", config: agentLoopProtocol ? { protocol: agentLoopProtocol } : {}, hooks: [] },
   system: "Use runtime tools to write and list files. Keep responses concise.",
   tools: [{ type: "agent_toolset_20260401", default_config: { enabled: true, read: true, write: true, bash: true, grep: true } }],
   mcp_servers: [],

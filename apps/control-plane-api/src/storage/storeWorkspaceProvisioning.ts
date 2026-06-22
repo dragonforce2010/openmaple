@@ -68,6 +68,7 @@ async function directVefaasRuntimeProvisioning(workspaceId: string, index: numbe
     MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
     MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function),
     MAPLE_VEFAAS_RUNTIME_ENVS: JSON.stringify({
+      ...runtimeEnvOverrides(process.env.MAPLE_VEFAAS_RUNTIME_ENVS),
       ...runtimePoolMemberEnvs(defaults.vefaas.envs, workspaceId, index),
       MAPLE_RUNTIME_FUNCTION_MEMORY_MB: String(poolConfig.memory_mb),
       MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
@@ -169,6 +170,7 @@ async function directAliyunFcRuntimeProvisioning(workspaceId: string, index: num
     MAPLE_ALIYUN_FC_FUNCTION_NAME: functionName,
     MAPLE_ALIYUN_FC_MEMORY_MB: String(poolConfig.memory_mb),
     MAPLE_ALIYUN_FC_RUNTIME_ENVS: JSON.stringify({
+      ...runtimeEnvOverrides(process.env.MAPLE_ALIYUN_FC_RUNTIME_ENVS),
       ...runtimePoolMemberEnvs(defaults.aliyun_fc.envs, workspaceId, index, "managed-agents-platform-aliyun-fc"),
       MAPLE_RUNTIME_FUNCTION_MEMORY_MB: String(poolConfig.memory_mb),
       MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
@@ -207,6 +209,13 @@ async function runDeployScript(script: string, env: NodeJS.ProcessEnv) {
     env
   });
   return JSON.parse(stdout) as JsonRecord;
+}
+
+function runtimeEnvOverrides(raw: string | undefined) {
+  if (!raw) return {};
+  const parsed = JSON.parse(raw) as JsonRecord;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("runtime env overrides must be a JSON object");
+  return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value)]));
 }
 
 function updateRuntimePoolMember(memberId: string, fields: { cloud_function_id?: string; cloud_app_id?: string; invoke_url?: string; region?: string; status?: string; config?: JsonRecord }) {
