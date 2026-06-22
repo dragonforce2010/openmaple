@@ -6,6 +6,7 @@ import { errorMessage, formatTime } from "../../components/shared/misc";
 import type { JsonRecord, User, Workspace } from "../../types";
 import { Icon, ModalLayer, useConfirm, useToast } from "../../ui";
 import { TenantKeysPanel } from "./TenantKeysPanel";
+import { CLOUD_PROVIDERS } from "./cloudProviders";
 
 export function TenantView(props: { workspace: Workspace | null; workspaces: Workspace[]; currentUser: User; setView: (view: View) => void; onDeleteWorkspace: (workspace: Workspace) => void | Promise<void> }) {
   const { language } = useI18n();
@@ -36,6 +37,12 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
   const [removingUserId, setRemovingUserId] = useState("");
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState("");
   const [tenantError, setTenantError] = useState("");
+  const [cloudProviders, setCloudProviders] = useState<Record<string, JsonRecord>>({});
+  const [cloudModal, setCloudModal] = useState<string>("");
+  const [cloudAccessKey, setCloudAccessKey] = useState("");
+  const [cloudSecretKey, setCloudSecretKey] = useState("");
+  const [cloudRegion, setCloudRegion] = useState("cn-beijing");
+  const [cloudSaving, setCloudSaving] = useState(false);
 
   async function deleteWorkspace(workspace: Workspace) {
     if (deletingWorkspaceId) return;
@@ -65,6 +72,39 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
       cancelled = true;
     };
   }, [base?.tenant_id, props.currentUser.id, props.currentUser.email, props.currentUser.name, props.currentUser.auth_provider, props.currentUser.role, props.currentUser.created_at]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!base?.tenant_id) { setCloudProviders({}); return; }
+    apiGet<ApiList<JsonRecord>>(`/v1/tenants/${encodeURIComponent(base.tenant_id)}/cloud_providers`)
+      .then((result) => {
+        if (cancelled) return;
+        setCloudProviders(Object.fromEntries(result.data.map((provider) => [String(provider.provider), provider])));
+      })
+      .catch((reason) => { if (!cancelled) setTenantError(errorMessage(reason)); });
+    return () => { cancelled = true; };
+  }, [base?.tenant_id]);
+
+  async function saveCloudProvider(event?: FormEvent) {
+    event?.preventDefault();
+    if (!base?.tenant_id || !cloudModal) return;
+    setCloudSaving(true);
+    setTenantError("");
+    try {
+      const saved = await apiPost<JsonRecord>(`/v1/tenants/${encodeURIComponent(base.tenant_id)}/cloud_providers/${encodeURIComponent(cloudModal)}`, { access_key: cloudAccessKey, secret_key: cloudSecretKey, region: cloudRegion });
+      setCloudProviders((current) => ({ ...current, [String(saved.provider)]: saved }));
+      setCloudModal("");
+      setCloudAccessKey("");
+      setCloudSecretKey("");
+      toast(L("云厂商已接入", "Cloud provider connected"), "ok");
+    } catch (reason) {
+      setTenantError(errorMessage(reason));
+    } finally {
+      setCloudSaving(false);
+    }
+  }
 
   function memberName(member: User) {
     return member.name?.trim() || member.email.split("@")[0] || member.email;
@@ -198,6 +238,23 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
         </div>
       </div>
 
+
+      <div className="section-title">{L("云厂商接入", "Cloud provider access")}</div>
+      <div className="cfg-cards tenant-cloud-cards">
+        {CLOUD_PROVIDERS.map((provider) => {
+          const connected = Boolean(cloudProviders[provider.id]?.connected);
+          return (
+            <button key={provider.id} type="button" className={`prov-card ${connected ? "on" : ""} ${provider.enabled ? "" : "disabled"}`} disabled={!provider.enabled} onClick={() => { if (provider.enabled) setCloudModal(provider.id); }}>
+              <div className="pc-ic"><Icon name="i-cloud" size={18} /></div>
+              <b>{provider.name}</b>
+              <span>{provider.enabled ? provider.capabilities.map((cap) => cap.toUpperCase()).join(" / ") : L("敬请期待", "Coming soon")}</span>
+              <small className="pc-state">{connected ? L(`已接入 · ${String(cloudProviders[provider.id]?.access_key_hint || "")}`, `Connected · ${String(cloudProviders[provider.id]?.access_key_hint || "")}`) : provider.enabled ? L("可接入", "Available") : L("敬请期待", "Coming soon")}</small>
+              {connected ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="section-title">{L("工作区", "Workspaces")}</div>
       {tenantWorkspaces.length ? (
         <DataTable
@@ -274,6 +331,26 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
       ) : (
         <div className="panel-empty">{L("当前工作区未配置后台登录链接。", "No console URL configured for this workspace.")}</div>
       )}
+
+
+
+      {cloudModal ? (
+        <ModalLayer onClose={() => !cloudSaving && setCloudModal("")}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label={L("接入云厂商", "Connect cloud provider")} onClick={(event) => event.stopPropagation()}>
+            <div className="modal-head"><b>{L("接入火山引擎", "Connect Volcengine")}</b><button className="x" onClick={() => setCloudModal("")} aria-label={L("关闭", "Close")}><Icon name="i-x" size={18} /></button></div>
+            <form onSubmit={saveCloudProvider}>
+              <div className="modal-body">
+                <div className="modal-note"><Icon name="i-alert" size={16} /> {L("AK/SK 将保存在租户级别，后续开通空间选择火山引擎 Runtime/Sandbox/Artifact Provider 时无需重复输入。", "AK/SK is saved at tenant level, so workspace provisioning does not ask again for Volcengine Runtime/Sandbox/Artifact providers.")}</div>
+                <label className="form">Access Key<input className="fld" value={cloudAccessKey} onChange={(event) => setCloudAccessKey(event.target.value)} autoComplete="off" autoFocus /></label>
+                <label className="form">SecretKey<input className="fld" type="password" value={cloudSecretKey} onChange={(event) => setCloudSecretKey(event.target.value)} autoComplete="off" /></label>
+                <label className="form">Region<select className="fld" value={cloudRegion} onChange={(event) => setCloudRegion(event.target.value)}><option>cn-beijing</option><option>cn-shanghai</option><option>cn-guangzhou</option><option>ap-southeast-1</option></select></label>
+                {tenantError ? <div className="modal-note"><Icon name="i-alert" size={16} /> {tenantError}</div> : null}
+              </div>
+              <div className="modal-foot"><button className="btn secondary" type="button" onClick={() => setCloudModal("")} disabled={cloudSaving}>{L("取消", "Cancel")}</button><button className="btn primary" type="submit" disabled={cloudSaving || !cloudAccessKey.trim() || !cloudSecretKey.trim()}>{cloudSaving ? L("保存中…", "Saving…") : L("保存接入", "Save access")}</button></div>
+            </form>
+          </div>
+        </ModalLayer>
+      ) : null}
 
       {adding ? (
         <ModalLayer onClose={closeAddAdmin}>

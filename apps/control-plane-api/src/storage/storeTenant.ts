@@ -200,3 +200,35 @@ export function removeTenantMember(tenantId: string, userId: string) {
     .run(tenantId, userId) as { changes?: number };
   return { removed: Number(result.changes || 0) > 0 };
 }
+
+export function tenantCloudProviders(tenantId: string) {
+  const tenant = db.prepare("SELECT metadata_json FROM tenants WHERE id = ?").get(tenantId) as JsonRecord | undefined;
+  const metadata = fromJson<JsonRecord>(String(tenant?.metadata_json ?? ""), {});
+  return recordValue(metadata.cloud_providers);
+}
+
+export function upsertTenantCloudProvider(tenantId: string, provider: string, credentials: JsonRecord) {
+  const tenant = db.prepare("SELECT metadata_json FROM tenants WHERE id = ?").get(tenantId) as JsonRecord | undefined;
+  if (!tenant) return null;
+  const metadata = fromJson<JsonRecord>(String(tenant.metadata_json ?? ""), {});
+  const providers = recordValue(metadata.cloud_providers);
+  const nowValue = now();
+  providers[provider] = {
+    provider,
+    connected: true,
+    access_key_hint: maskTenantSecretHint(String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || "")),
+    region: String(credentials.region || credentials.VEFAAS_REGION || "cn-beijing"),
+    credential_source: `tenant.cloud_providers.${provider}`,
+    updated_at: nowValue,
+    credentials
+  };
+  metadata.cloud_providers = providers;
+  db.prepare("UPDATE tenants SET metadata_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(metadata), nowValue, tenantId);
+  return providers[provider] as JsonRecord;
+}
+
+function maskTenantSecretHint(value: string) {
+  if (!value) return "";
+  if (value.length <= 8) return `${value[0] ?? ""}***${value[value.length - 1] ?? ""}`;
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}

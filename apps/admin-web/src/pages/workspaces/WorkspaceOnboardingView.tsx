@@ -47,14 +47,17 @@ export function WorkspaceOnboardingView(props: {
   const [apiKeyName, setApiKeyName] = useState("");
   const [modelConfigIds, setModelConfigIds] = useState<string[]>(Array.isArray(draft0.modelConfigIds) ? (draft0.modelConfigIds as string[]) : []);
   const [customModelConfigs, setCustomModelConfigs] = useState<OnboardingCustomModelConfig[]>([]);
-  const [runtimeProvider, setRuntimeProvider] = useState<OnboardingRuntimeProvider>(draft0.runtimeProvider === "vefaas" ? "vefaas" : "local_docker");
+  const [connectedCloudProviders, setConnectedCloudProviders] = useState<string[]>(Array.isArray(draft0.connectedCloudProviders) ? draft0.connectedCloudProviders as string[] : []);
+  const [runtimeProvider, setRuntimeProvider] = useState<OnboardingRuntimeProvider>("vefaas");
   const [vefaasAccessKey, setVefaasAccessKey] = useState("");
   const [vefaasSecretKey, setVefaasSecretKey] = useState("");
   const [vefaasRegion, setVefaasRegion] = useState(typeof draft0.vefaasRegion === "string" ? draft0.vefaasRegion : "cn-beijing");
   const [sandboxProvider, setSandboxProvider] = useState<OnboardingSandboxProvider>(
-    draft0.sandboxProvider === "vefaas" ? "vefaas" : draft0.sandboxProvider === "e2b" ? "e2b" : "local_docker"
+    draft0.sandboxProvider === "vefaas" ? "vefaas" : draft0.sandboxProvider === "daytona" ? "daytona" : "e2b"
   );
   const [e2bApiKey, setE2bApiKey] = useState("");
+  const [daytonaServerUrl, setDaytonaServerUrl] = useState("");
+  const [daytonaApiKey, setDaytonaApiKey] = useState("");
   const [vefaasSandboxFunctionId, setVefaasSandboxFunctionId] = useState("");
   const [vefaasSandboxGatewayUrl, setVefaasSandboxGatewayUrl] = useState("");
   const [vefaasSandboxTimeoutInput, setVefaasSandboxTimeoutInput] = useState(numString("vefaasSandboxTimeoutMs", 3_600_000));
@@ -76,11 +79,12 @@ export function WorkspaceOnboardingView(props: {
   const validModelConfigIds = useMemo(() => modelConfigIds.filter((id) => props.modelConfigs.some((config) => config.id === id)), [modelConfigIds, props.modelConfigs]);
   const warmQps = desiredSize * minInstances * maxConcurrency;
   const peakQps = desiredSize * maxInstances * maxConcurrency;
-  const runtimeCredsFilled = runtimeProvider === "local_docker" || Boolean(vefaasAccessKey.trim() && vefaasSecretKey.trim() && vefaasRegion.trim());
-  const sandboxFilled = sandboxProvider === "local_docker"
-    ? true
-    : sandboxProvider === "e2b"
+  const cloudProviderFilled = connectedCloudProviders.includes("volcengine") && Boolean(vefaasAccessKey.trim() && vefaasSecretKey.trim() && vefaasRegion.trim());
+  const runtimeCredsFilled = cloudProviderFilled;
+  const sandboxFilled = sandboxProvider === "e2b"
     ? Boolean(e2bApiKey.trim())
+    : sandboxProvider === "daytona"
+    ? Boolean(daytonaServerUrl.trim() && daytonaApiKey.trim())
     : Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim());
   const workspaceSlugReady = Boolean(derivedWorkspaceSlug.trim() && slugStatus?.available === true);
 
@@ -88,7 +92,7 @@ export function WorkspaceOnboardingView(props: {
   // secrets (AK/SK, e2b key) are intentionally NOT persisted and must be re-entered
   useEffect(() => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, modelConfigIds: validModelConfigIds, runtimeProvider, vefaasRegion, sandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize }));
+      localStorage.setItem(draftKey, JSON.stringify({ desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, modelConfigIds: validModelConfigIds, connectedCloudProviders, runtimeProvider, vefaasRegion, sandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize }));
     } catch { /* ignore storage quota */ }
   }, [desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, validModelConfigIds, runtimeProvider, vefaasRegion, sandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize, draftKey]);
 
@@ -125,21 +129,23 @@ export function WorkspaceOnboardingView(props: {
 
   function isStepComplete(index: number) {
     if (index === 0) return Boolean(tenantName.trim());
-    if (index === 1) return Boolean(workspaceName.trim() && workspaceSlugReady);
-    if (index === 2) return runtimeCredsFilled;
-    if (index === 3) return sandboxFilled;
+    if (index === 1) return cloudProviderFilled;
+    if (index === 2) return Boolean(workspaceName.trim() && workspaceSlugReady);
+    if (index === 3) return runtimeCredsFilled;
+    if (index === 4) return sandboxFilled;
     return true;
   }
 
   function stepError(index: number) {
     if (index === 0) return L("请先填写租户名称。", "Enter the tenant name first.");
-    if (index === 1) return L("请先填写工作区名称，并等待 slug 校验通过。", "Enter the workspace name and wait for slug validation to pass.");
-    if (index === 2) return L("请选择运行时 Provider；VeFaaS 需要填写 VOLCENGINE_ACCESS_KEY、VOLCENGINE_SECRET_KEY 与 VEFAAS_REGION。", "Choose a runtime provider; VeFaaS requires VOLCENGINE_ACCESS_KEY, VOLCENGINE_SECRET_KEY, and VEFAAS_REGION.");
-    if (index === 3) return sandboxProvider === "local_docker"
-      ? L("Local Docker 沙箱无需额外凭据。", "Local Docker sandbox does not need extra credentials.")
-      : sandboxProvider === "e2b"
+    if (index === 1) return L("请至少接入火山引擎，并填写 Access Key / SecretKey。", "Connect Volcengine and enter Access Key / SecretKey first.");
+    if (index === 2) return L("请先填写工作区名称，并等待 slug 校验通过。", "Enter the workspace name and wait for slug validation to pass.");
+    if (index === 3) return L("请选择运行时 Provider；VeFaaS 需要填写 VOLCENGINE_ACCESS_KEY、VOLCENGINE_SECRET_KEY 与 VEFAAS_REGION。", "Choose a runtime provider; VeFaaS requires VOLCENGINE_ACCESS_KEY, VOLCENGINE_SECRET_KEY, and VEFAAS_REGION.");
+    if (index === 4) return sandboxProvider === "e2b"
       ? L("请先填写 E2B_API_KEY。", "Enter E2B_API_KEY first.")
-      : L("请确认上一步 AK/SK/Region 已填写，并填写 VEFAAS_SANDBOX_FUNCTION_ID 与 VEFAAS_SANDBOX_GATEWAY_URL。", "Confirm AK/SK/Region in the previous step, then enter VEFAAS_SANDBOX_FUNCTION_ID and VEFAAS_SANDBOX_GATEWAY_URL.");
+      : sandboxProvider === "daytona"
+      ? L("请先填写 DAYTONA_SERVER_URL 与 DAYTONA_API_KEY。", "Enter DAYTONA_SERVER_URL and DAYTONA_API_KEY first.")
+      : L("请填写 VEFAAS_SANDBOX_FUNCTION_ID 与 VEFAAS_SANDBOX_GATEWAY_URL。", "Enter VEFAAS_SANDBOX_FUNCTION_ID and VEFAAS_SANDBOX_GATEWAY_URL.");
     return L("请按顺序完成前面的步骤。", "Complete previous steps in order.");
   }
 
@@ -170,30 +176,30 @@ export function WorkspaceOnboardingView(props: {
       return;
     }
     setError("");
-    setStep(Math.min(4, step + 1));
+    setStep(Math.min(5, step + 1));
   }
 
   async function submit() {
     if (!runtimeCredsFilled) {
       setError("请先在「运行时」步骤填写 VOLCENGINE_ACCESS_KEY、VOLCENGINE_SECRET_KEY 与 VEFAAS_REGION。");
-      setStep(2);
+      setStep(1);
       return;
     }
     if (sandboxProvider === "e2b" && !sandboxFilled) {
       setError("请先在「沙箱」步骤填写 E2B_API_KEY。");
-      setStep(3);
+      setStep(4);
       return;
     }
     if (sandboxProvider === "vefaas" && !sandboxFilled) {
       setError("请确认「运行时」步骤 AK/SK/Region 已填写，并在「沙箱」步骤填写 VEFAAS_SANDBOX_FUNCTION_ID 与 VEFAAS_SANDBOX_GATEWAY_URL。");
-      setStep(3);
+      setStep(4);
       return;
     }
     setSaving(true);
     setError("");
     setProvisionLogs(provisioningPlan());
     const heartbeat = window.setInterval(() => {
-      setProvisionLogs((current) => [...current, provisioningLog("info", runtimeProvider === "local_docker" ? L("仍在初始化本地 Docker 资源。", "Still initializing local Docker resources.") : L("仍在提交云端初始化请求。", "Still submitting cloud provisioning request."))]);
+      setProvisionLogs((current) => [...current, provisioningLog("info", L("仍在提交云端初始化请求。", "Still submitting cloud provisioning request."))]);
     }, 8000);
     try {
       await props.onSubmit({
@@ -211,12 +217,15 @@ export function WorkspaceOnboardingView(props: {
         modelConfigIds: validModelConfigIds,
         customModelConfigs,
         apiKeyName: apiKeyName.trim() || workspaceApiKeyPlaceholder,
+        connectedCloudProviders,
         runtimeProvider,
         vefaasAccessKey,
         vefaasSecretKey,
         vefaasRegion,
         sandboxProvider,
         e2bApiKey,
+        daytonaServerUrl,
+        daytonaApiKey,
         vefaasSandboxFunctionId,
         vefaasSandboxGatewayUrl,
         vefaasSandboxTimeoutMs,
@@ -235,14 +244,10 @@ export function WorkspaceOnboardingView(props: {
   function provisioningPlan() {
     return [
       provisioningLog("info", L("创建 tenant、workspace、workspace members 和 Workspace API key。", "Creating tenant, workspace, workspace members, and workspace API key.")),
-      provisioningLog("info", runtimeProvider === "local_docker"
-        ? L(`初始化 Runtime Pool：${desiredSize} 个 Local Docker runtime member。`, `Initializing Runtime Pool: ${desiredSize} Local Docker runtime members.`)
-        : L(`初始化 Runtime Pool：${desiredSize} 个 VeFaaS 函数，min=${minInstances}，max=${maxInstances}，concurrency=${maxConcurrency}。`, `Initializing Runtime Pool: ${desiredSize} VeFaaS functions, min=${minInstances}, max=${maxInstances}, concurrency=${maxConcurrency}.`)),
-      provisioningLog("info", sandboxProvider === "local_docker"
-        ? L(`初始化 Sandbox Pool：${sandboxPoolSize} 个 Local Docker standby member。`, `Initializing Sandbox Pool: ${sandboxPoolSize} Local Docker standby members.`)
-        : sandboxProvider === "vefaas"
+      provisioningLog("info", L(`初始化 Runtime Pool：${desiredSize} 个 VeFaaS 函数，min=${minInstances}，max=${maxInstances}，concurrency=${maxConcurrency}。`, `Initializing Runtime Pool: ${desiredSize} VeFaaS functions, min=${minInstances}, max=${maxInstances}, concurrency=${maxConcurrency}.`)),
+      provisioningLog("info", sandboxProvider === "vefaas"
         ? L(`初始化 Sandbox Pool：${sandboxPoolSize} 个 standby veFaaS 沙箱，TTL 30m。`, `Initializing Sandbox Pool: ${sandboxPoolSize} standby veFaaS sandboxes, TTL 30m.`)
-        : L("Sandbox Provider 为 E2B：记录配置，standby veFaaS pool 不创建。", "Sandbox Provider is E2B: storing config; standby veFaaS pool is not created.")),
+        : L(`Sandbox Provider 为 ${sandboxProvider}：记录独立沙箱配置。`, `Sandbox Provider is ${sandboxProvider}: storing independent sandbox config.`)),
       provisioningLog("info", L("创建成功后 runtime pool 和 sandbox pool 会在后台继续初始化。", "After creation, the runtime pool and sandbox pool continue provisioning in the background."))
     ];
   }
@@ -266,11 +271,11 @@ export function WorkspaceOnboardingView(props: {
           <Icon name="i-boxes" size={24} />
           <div>
             <h1>{L("开通Maple租户", "Provision Maple tenant")}</h1>
-            <p>{[L("租户信息", "Tenant"), L("默认工作区", "Workspace"), L("运行时", "Runtime"), L("沙箱", "Sandbox"), L("模型池与 Workspace API Key", "Model pool & workspace API key")][step]} · {props.currentUser.email}</p>
+            <p>{[L("租户信息", "Tenant"), L("接入云厂商", "Cloud access"), L("默认工作区", "Workspace"), L("运行时", "Runtime"), L("沙箱", "Sandbox"), L("模型池与 Workspace API Key", "Model pool & workspace API key")][step]} · {props.currentUser.email}</p>
           </div>
         </div>
         <div className="pv-steps">
-          {["Tenant", "Workspace", "Runtime", "Sandbox", "Models"].map((label, index) => (
+          {["Tenant", "Cloud", "Workspace", "Runtime", "Sandbox", "Models"].map((label, index) => (
             <Fragment key={label}>
               {index > 0 ? <span className="pv-sep" /> : null}
               <button className={`pv-step ${step === index ? "active" : step > index ? "done" : ""}`} onClick={() => goToStep(index)} disabled={saving || !canSelectStep(index)}>
@@ -316,6 +321,8 @@ export function WorkspaceOnboardingView(props: {
             slugStatusClass={slugStatusClass}
             inferredWorkspaceSlug={inferredWorkspaceSlug}
             derivedWorkspaceSlug={derivedWorkspaceSlug}
+            connectedCloudProviders={connectedCloudProviders}
+            setConnectedCloudProviders={setConnectedCloudProviders}
             vefaasAccessKey={vefaasAccessKey}
             setVefaasAccessKey={setVefaasAccessKey}
             vefaasSecretKey={vefaasSecretKey}
@@ -341,14 +348,15 @@ export function WorkspaceOnboardingView(props: {
             warmQps={warmQps}
             peakQps={peakQps}
             runtimeProvider={runtimeProvider}
-            setRuntimeProvider={(value) => {
-              setRuntimeProvider(value);
-              if (value === "local_docker") setSandboxProvider("local_docker");
-            }}
+            setRuntimeProvider={setRuntimeProvider}
             sandboxProvider={sandboxProvider}
             setSandboxProvider={setSandboxProvider}
             e2bApiKey={e2bApiKey}
             setE2bApiKey={setE2bApiKey}
+            daytonaServerUrl={daytonaServerUrl}
+            setDaytonaServerUrl={setDaytonaServerUrl}
+            daytonaApiKey={daytonaApiKey}
+            setDaytonaApiKey={setDaytonaApiKey}
             vefaasSandboxFunctionId={vefaasSandboxFunctionId}
             setVefaasSandboxFunctionId={setVefaasSandboxFunctionId}
             vefaasSandboxGatewayUrl={vefaasSandboxGatewayUrl}
@@ -368,13 +376,13 @@ export function WorkspaceOnboardingView(props: {
           />
         </div>
         <div className="prov-foot">
-          {step === 4 ? (
+          {step === 5 ? (
             <span className="prov-note"><Icon name="i-alert" size={14} /> {L("模型配置可跳过，完成开通后仍可在模型页补充。", "Models are optional; you can add them later from Models.")}</span>
           ) : (
-            <span className="pv-progress">{L("第", "Step")} {step + 1} / 5</span>
+            <span className="pv-progress">{L("第", "Step")} {step + 1} / 6</span>
           )}
           <button className="btn secondary" onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0 || saving}><Icon name="i-chevron-left" size={14} /> {L("上一步", "Back")}</button>
-          {step < 4 ? (
+          {step < 5 ? (
             <button className="btn primary" onClick={nextStep} disabled={saving || !isStepComplete(step)}>{L("下一步", "Next")} <Icon name="i-chevron-right" size={14} /></button>
           ) : (
             <button className="btn primary" onClick={submit} disabled={saving || !tenantName.trim() || !workspaceName.trim() || slugStatus?.available === false}>

@@ -89,12 +89,15 @@ export function useWorkspaceActions(input: {
     modelConfigIds: string[];
     customModelConfigs: OnboardingCustomModelConfig[];
     apiKeyName: string;
-    runtimeProvider: "local_docker" | "vefaas";
+    connectedCloudProviders: string[];
+    runtimeProvider: "vefaas";
     vefaasAccessKey: string;
     vefaasSecretKey: string;
     vefaasRegion: string;
-    sandboxProvider: "local_docker" | "e2b" | "vefaas";
+    sandboxProvider: "e2b" | "daytona" | "vefaas";
     e2bApiKey: string;
+    daytonaServerUrl: string;
+    daytonaApiKey: string;
     vefaasSandboxFunctionId: string;
     vefaasSandboxGatewayUrl: string;
     vefaasSandboxTimeoutMs: number;
@@ -115,8 +118,8 @@ export function useWorkspaceActions(input: {
       sandbox_provider: onboarding.sandboxProvider,
       sandbox_config: onboarding.sandboxProvider === "vefaas"
         ? { vefaas: { function_id: onboarding.vefaasSandboxFunctionId, gateway_url: onboarding.vefaasSandboxGatewayUrl, timeout_ms: onboarding.vefaasSandboxTimeoutMs, workspace_path: "/home/tiger/workspace" } }
-        : onboarding.sandboxProvider === "local_docker"
-          ? { local_docker: { image: "node:22-bookworm", networking: { mode: "limited", allow_mcp_servers: true, allow_package_managers: true } } }
+        : onboarding.sandboxProvider === "daytona"
+          ? { daytona: { server_url: onboarding.daytonaServerUrl, api_key: onboarding.daytonaApiKey } }
         : {},
       sandbox_pool: { desired_size: onboarding.sandboxPoolSize, standby_ttl_ms: 30 * 60 * 1000 },
       model_config_ids: onboarding.modelConfigIds,
@@ -124,8 +127,9 @@ export function useWorkspaceActions(input: {
       api_key: { display_name: onboarding.apiKeyName, scopes: ["control_plane", "data_plane"] },
       admin: { email: input.currentUser?.email, name: input.currentUser?.name },
       provider_credentials: {
-        vefaas: onboarding.runtimeProvider === "vefaas" ? { VOLCENGINE_ACCESS_KEY: onboarding.vefaasAccessKey, VOLCENGINE_SECRET_KEY: onboarding.vefaasSecretKey, VEFAAS_REGION: onboarding.vefaasRegion } : {},
-        e2b: onboarding.sandboxProvider === "e2b" ? { E2B_API_KEY: onboarding.e2bApiKey } : {}
+        vefaas: onboarding.connectedCloudProviders.includes("volcengine") ? { VOLCENGINE_ACCESS_KEY: onboarding.vefaasAccessKey, VOLCENGINE_SECRET_KEY: onboarding.vefaasSecretKey, VEFAAS_REGION: onboarding.vefaasRegion } : {},
+        e2b: onboarding.sandboxProvider === "e2b" ? { E2B_API_KEY: onboarding.e2bApiKey } : {},
+        daytona: onboarding.sandboxProvider === "daytona" ? { DAYTONA_SERVER_URL: onboarding.daytonaServerUrl, DAYTONA_API_KEY: onboarding.daytonaApiKey } : {}
       }
     });
     const issuedKey = result.api_key.key ?? "";
