@@ -101,6 +101,7 @@ function translateSql(sql) {
   const trimmed = sql.trim();
   let next = trimmed;
   if (/^CREATE\s+TABLE\b/i.test(next)) next = translateCreateTable(next);
+  next = translateCreateIndex(next);
   next = translateAlterAddColumn(next);
   return { kind: "sql", sql: next };
 }
@@ -120,6 +121,10 @@ function translateCreateTable(sql) {
 
 function translateAlterAddColumn(sql) {
   return sql.replace(/\bADD\s+COLUMN\s+([A-Za-z_][A-Za-z0-9_]*)\s+TEXT\b/gi, (_all, column) => `ADD COLUMN ${column} ${columnType(column)}`);
+}
+
+function translateCreateIndex(sql) {
+  return sql.replace(/^CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+/i, (_all, unique = "") => `CREATE ${unique}INDEX `);
 }
 
 function columnType(column) {

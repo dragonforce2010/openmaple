@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -42,6 +43,36 @@ def load_stable_module():
     return module
 
 
+def load_app_deploy_module():
+    infra_path = str(ROOT / "infra" / "vefaas")
+    if infra_path not in sys.path:
+        sys.path.insert(0, infra_path)
+    spec = importlib.util.spec_from_file_location("deploy_vefaas_application", APP_DEPLOY_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@contextmanager
+def patched_env(updates: dict[str, str], clear: tuple[str, ...] = ()):
+    keys = set(updates) | set(clear)
+    previous = {key: os.environ.get(key) for key in keys}
+    try:
+        for key in clear:
+            os.environ.pop(key, None)
+        for key, value in updates.items():
+            os.environ[key] = value
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def test_backend_package_carries_runtime_provisioner_scripts():
     source = APP_DEPLOY_PATH.read_text()
     assert 'copy_source_dir(ROOT / "infra/vefaas", package_dir / "infra/vefaas")' in source
@@ -70,6 +101,43 @@ def test_workspace_pool_passes_resource_limits_to_runtime_deploy_script():
     assert "image_fallback_error: imageFallbackError" in source
     assert "MAPLE_VEFAAS_RUNTIME_PROVISION_CONCURRENCY" in source
     assert "await Promise.all(Array.from({ length: concurrency }, provisionNext));" in source
+
+
+def test_backend_envs_require_explicit_deployed_mysql_host():
+    module = load_app_deploy_module()
+
+    with patched_env(
+        {
+            "MAPLE_MYSQL_HOST": "127.0.0.1",
+            "MYSQL_HOST": "mysql.local",
+            "MAPLE_MYSQL_PORT": "3307",
+            "MYSQL_PASSWORD": "maple",
+            "MAPLE_VEFAAS_PUBLIC_BASE_URL": "https://public.example.invalid",
+            "ARK_API_KEY": "ark_contract",
+        },
+        clear=("MAPLE_VEFAAS_BACKEND_MYSQL_HOST",),
+    ):
+        envs = module.backend_envs()
+
+    assert "MAPLE_MYSQL_HOST" not in envs
+    assert "MYSQL_HOST" not in envs
+    assert envs["MAPLE_MYSQL_PORT"] == "3307"
+    assert envs["MYSQL_PASSWORD"] == "maple"
+    assert envs["MAPLE_API_BASE_URL"] == "https://public.example.invalid"
+    assert envs["ARK_API_KEY"] == "ark_contract"
+
+    with patched_env(
+        {
+            "MAPLE_MYSQL_HOST": "127.0.0.1",
+            "MYSQL_HOST": "mysql.local",
+            "MAPLE_VEFAAS_BACKEND_MYSQL_HOST": "private.mysql.internal",
+            "MAPLE_VEFAAS_PUBLIC_BASE_URL": "https://public.example.invalid",
+        }
+    ):
+        envs = module.backend_envs()
+
+    assert envs["MAPLE_MYSQL_HOST"] == "private.mysql.internal"
+    assert "MYSQL_HOST" not in envs
 
 
 class FakeVefaasApi:
@@ -794,6 +862,7 @@ if __name__ == "__main__":
     test_backend_package_carries_runtime_provisioner_scripts()
     test_source_zip_runtime_installs_python_requirements_on_startup()
     test_workspace_pool_passes_resource_limits_to_runtime_deploy_script()
+    test_backend_envs_require_explicit_deployed_mysql_host()
     test_stable_deploy_retries_resource_update_while_function_is_deploying()
     test_stable_deploy_does_not_retry_fatal_resource_update_errors()
     test_direct_provisioner_deploys_fixed_runtime_template()
