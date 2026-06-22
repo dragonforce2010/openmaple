@@ -1,8 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import mysql from "mysql2/promise";
 
-const tableInfoCache = new Map();
-
 export function mysqlConnectionConfig() {
   return {
     host: env("MAPLE_MYSQL_HOST", "MYSQL_HOST", "127.0.0.1"),
@@ -60,21 +58,8 @@ if (process.argv[1] && process.argv[1].endsWith("mysql_child.mjs")) {
 
 async function execute(connection, mode, sql, params) {
   const translated = translateSql(sql);
-  if (translated.kind === "table_info") {
-    let rows = tableInfoCache.get(translated.table);
-    if (!rows) {
-      [rows] = await connection.execute(
-        "SELECT COLUMN_NAME AS name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
-        [translated.table]
-      );
-      tableInfoCache.set(translated.table, rows);
-    }
-    return mode === "get" ? rows[0] ?? null : rows;
-  }
-
   try {
     const [rows] = await connection.execute(translated.sql, normalizeParams(params));
-    invalidateTableInfoCache(translated.sql);
     if (mode === "get") return Array.isArray(rows) ? rows[0] ?? null : null;
     if (mode === "all") return Array.isArray(rows) ? rows : [];
     return {
@@ -83,30 +68,15 @@ async function execute(connection, mode, sql, params) {
     };
   } catch (error) {
     if (isIgnorableDdlError(translated.sql, error)) {
-      invalidateTableInfoCache(translated.sql);
       return { changes: 0 };
     }
     throw error;
   }
 }
 
-function invalidateTableInfoCache(sql) {
-  const table =
-    /^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z_][A-Za-z0-9_]*)`?/i.exec(sql)?.[1] ||
-    /^ALTER\s+TABLE\s+`?([A-Za-z_][A-Za-z0-9_]*)`?/i.exec(sql)?.[1];
-  if (table) tableInfoCache.delete(table);
-}
-
 function translateSql(sql) {
   const trimmed = sql.trim();
-  const pragma = /^PRAGMA\s+table_info\(([^)]+)\)$/i.exec(trimmed);
-  if (pragma) return { kind: "table_info", table: stripIdentifier(pragma[1]) };
-
-  let next = trimmed
-    .replace(/\bINSERT\s+OR\s+IGNORE\b/gi, "INSERT IGNORE")
-    .replace(/\bCREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\b/gi, "CREATE UNIQUE INDEX")
-    .replace(/\bCREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\b/gi, "CREATE INDEX");
-
+  let next = trimmed;
   if (/^CREATE\s+TABLE\b/i.test(next)) next = translateCreateTable(next);
   next = translateAlterAddColumn(next);
   return { kind: "sql", sql: next };
@@ -170,10 +140,6 @@ function isIgnorableDdlError(sql, error) {
   if (/^CREATE\s+(UNIQUE\s+)?INDEX\b/i.test(sql) && code === "ER_DUP_KEYNAME") return true;
   if (/\bADD\s+COLUMN\b/i.test(sql) && code === "ER_DUP_FIELDNAME") return true;
   return false;
-}
-
-function stripIdentifier(value) {
-  return String(value).trim().replace(/^`|`$/g, "");
 }
 
 export function env(...keysAndDefault) {

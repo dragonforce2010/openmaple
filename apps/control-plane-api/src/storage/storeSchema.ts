@@ -106,7 +106,7 @@ export const storeSchemaSql = `
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_mcp_servers_workspace ON mcp_servers(workspace_id);
+    CREATE INDEX idx_mcp_servers_workspace ON mcp_servers(workspace_id);
     CREATE TABLE IF NOT EXISTS memory_stores (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -247,20 +247,20 @@ export const storeSchemaSql = `
       UNIQUE(session_id, path),
       FOREIGN KEY(session_id) REFERENCES sessions(id)
     );
-    CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
-    CREATE INDEX IF NOT EXISTS idx_events_session_created ON session_events(session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_tool_calls_session_created ON tool_calls(session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_memories_store_path ON memories(memory_store_id, path);
-    CREATE INDEX IF NOT EXISTS idx_auth_sessions_hash ON auth_sessions(token_hash);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email);
-    CREATE INDEX IF NOT EXISTS idx_model_configs_owner ON model_configs(owner_user_id);
-    CREATE INDEX IF NOT EXISTS idx_agent_deployments_user ON agent_deployments(user_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_deployment_runs_deployment ON deployment_runs(deployment_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_deployment_runs_session ON deployment_runs(session_id);
-    CREATE INDEX IF NOT EXISTS idx_managed_files_created ON managed_files(created_at);
+    CREATE INDEX idx_sessions_status ON sessions(status);
+    CREATE INDEX idx_events_session_created ON session_events(session_id, created_at);
+    CREATE INDEX idx_tool_calls_session_created ON tool_calls(session_id, created_at);
+    CREATE INDEX idx_memories_store_path ON memories(memory_store_id, path);
+    CREATE INDEX idx_auth_sessions_hash ON auth_sessions(token_hash);
+    CREATE UNIQUE INDEX idx_users_email_unique ON users(email);
+    CREATE INDEX idx_model_configs_owner ON model_configs(owner_user_id);
+    CREATE INDEX idx_agent_deployments_user ON agent_deployments(user_id, created_at);
+    CREATE INDEX idx_deployment_runs_deployment ON deployment_runs(deployment_id, created_at);
+    CREATE INDEX idx_deployment_runs_session ON deployment_runs(session_id);
+    CREATE INDEX idx_managed_files_created ON managed_files(created_at);
+    CREATE INDEX idx_session_artifacts_session ON session_artifacts(session_id, updated_at);
     CREATE TABLE IF NOT EXISTS tenant_cloud_provider_credentials (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, provider TEXT NOT NULL, secret_cipher TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(tenant_id, provider));
-    CREATE INDEX IF NOT EXISTS idx_tenant_cloud_provider_credentials_tenant ON tenant_cloud_provider_credentials(tenant_id);
-    CREATE INDEX IF NOT EXISTS idx_session_artifacts_session ON session_artifacts(session_id, updated_at);
+    CREATE INDEX idx_tenant_cloud_provider_credentials_tenant ON tenant_cloud_provider_credentials(tenant_id);
     CREATE TABLE IF NOT EXISTS tenants (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -386,11 +386,11 @@ export const storeSchemaSql = `
       last_used_at TEXT,
       FOREIGN KEY(tenant_id) REFERENCES tenants(id)
     );
-    CREATE INDEX IF NOT EXISTS idx_tenant_members_user ON tenant_members(user_id);
-    CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id);
-    CREATE INDEX IF NOT EXISTS idx_runtime_pool_members_workspace ON workspace_runtime_pool_members(workspace_id, status);
-    CREATE INDEX IF NOT EXISTS idx_sandbox_pool_members_workspace ON workspace_sandbox_pool_members(workspace_id, provider, status);
-    CREATE INDEX IF NOT EXISTS idx_workspace_api_keys_hash ON workspace_api_keys(key_hash);
-    CREATE INDEX IF NOT EXISTS idx_tenant_api_keys_hash ON tenant_api_keys(key_hash);
-    CREATE INDEX IF NOT EXISTS idx_tenant_api_keys_tenant ON tenant_api_keys(tenant_id);
+    CREATE INDEX idx_tenant_members_user ON tenant_members(user_id);
+    CREATE INDEX idx_workspace_members_user ON workspace_members(user_id);
+    CREATE INDEX idx_runtime_pool_members_workspace ON workspace_runtime_pool_members(workspace_id, status);
+    CREATE INDEX idx_sandbox_pool_members_workspace ON workspace_sandbox_pool_members(workspace_id, provider, status);
+    CREATE INDEX idx_workspace_api_keys_hash ON workspace_api_keys(key_hash);
+    CREATE INDEX idx_tenant_api_keys_hash ON tenant_api_keys(key_hash);
+    CREATE INDEX idx_tenant_api_keys_tenant ON tenant_api_keys(tenant_id);
   `;
