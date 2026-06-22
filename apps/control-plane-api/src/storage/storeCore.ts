@@ -14,22 +14,11 @@ type StoreDatabase = {
   exec: (sql: string) => unknown;
   prepare: (sql: string) => DatabaseStatement;
   transaction: <T extends (...args: never[]) => unknown>(fn: T) => T;
-  pragma?: (sql: string) => unknown;
   runAsync?: (sql: string, params: unknown[]) => Promise<void>;
 };
 
 export const GLOBAL_SCOPE_ID = "-1";
 export const db: StoreDatabase = createMysqlDatabase();
-setPragma("journal_mode = WAL");
-setPragma("foreign_keys = ON");
-
-function setPragma(sql: string) {
-  if (db.pragma) {
-    db.pragma(sql);
-    return;
-  }
-  db.exec(`PRAGMA ${sql}`);
-}
 
 export const now = () => new Date().toISOString();
 export const toJson = (value: unknown) => JSON.stringify(value ?? {});

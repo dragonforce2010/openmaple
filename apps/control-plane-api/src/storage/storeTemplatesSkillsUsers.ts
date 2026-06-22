@@ -113,7 +113,7 @@ export function upsertUser(input: { email: string; name: string; auth_provider: 
   const stamp = now();
   const id = `user_${nanoid(10)}`;
   db.prepare(`
-    INSERT OR IGNORE INTO users (id, email, name, auth_provider, role, metadata_json, created_at, updated_at)
+    INSERT IGNORE INTO users (id, email, name, auth_provider, role, metadata_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, email, input.name, input.auth_provider, input.role ?? "member", toJson(input.metadata), stamp, stamp);
   const current = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as JsonRecord | undefined;
@@ -141,7 +141,7 @@ export function ensureUserByEmail(input: { email: string; name?: string; auth_pr
   const id = `user_${nanoid(10)}`;
   const name = input.name?.trim() || email.split("@")[0] || email;
   db.prepare(`
-    INSERT OR IGNORE INTO users (id, email, name, auth_provider, role, metadata_json, created_at, updated_at)
+    INSERT IGNORE INTO users (id, email, name, auth_provider, role, metadata_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,

@@ -304,7 +304,7 @@ flowchart LR
 - **Brain/hands split**: agent loops run through runtime adapters; commands, files, and network access run through sandbox providers.
 - **Secret isolation**: secrets are stored through `secret_ref` records; agents receive references and scoped tool access, not plaintext keys in config.
 - **Workspace scoping**: every list route must filter through the user's accessible workspaces. No global table scans in user-facing APIs.
-- **Remote MySQL**: the data store exposes a synchronous better-sqlite3-style API, but the backing database is remote MySQL through a worker bridge.
+- **Remote MySQL**: the control-plane data store uses a MySQL worker bridge with pooled remote connections.
 - **Provider portability**: veFaaS, E2B, Docker, and future Lambda/FC-style runtimes can sit behind the same session contract.
 
 ## Product Surface

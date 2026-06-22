@@ -106,7 +106,7 @@ export const storeSchemaSql = `
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_mcp_servers_workspace ON mcp_servers(workspace_id);
+    CREATE INDEX idx_mcp_servers_workspace ON mcp_servers(workspace_id);
     CREATE TABLE IF NOT EXISTS memory_stores (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -386,11 +386,11 @@ export const storeSchemaSql = `
       last_used_at TEXT,
       FOREIGN KEY(tenant_id) REFERENCES tenants(id)
     );
-    CREATE INDEX IF NOT EXISTS idx_tenant_members_user ON tenant_members(user_id);
-    CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id);
-    CREATE INDEX IF NOT EXISTS idx_runtime_pool_members_workspace ON workspace_runtime_pool_members(workspace_id, status);
-    CREATE INDEX IF NOT EXISTS idx_sandbox_pool_members_workspace ON workspace_sandbox_pool_members(workspace_id, provider, status);
-    CREATE INDEX IF NOT EXISTS idx_workspace_api_keys_hash ON workspace_api_keys(key_hash);
-    CREATE INDEX IF NOT EXISTS idx_tenant_api_keys_hash ON tenant_api_keys(key_hash);
-    CREATE INDEX IF NOT EXISTS idx_tenant_api_keys_tenant ON tenant_api_keys(tenant_id);
+    CREATE INDEX idx_tenant_members_user ON tenant_members(user_id);
+    CREATE INDEX idx_workspace_members_user ON workspace_members(user_id);
+    CREATE INDEX idx_runtime_pool_members_workspace ON workspace_runtime_pool_members(workspace_id, status);
+    CREATE INDEX idx_sandbox_pool_members_workspace ON workspace_sandbox_pool_members(workspace_id, provider, status);
+    CREATE INDEX idx_workspace_api_keys_hash ON workspace_api_keys(key_hash);
+    CREATE INDEX idx_tenant_api_keys_hash ON tenant_api_keys(key_hash);
+    CREATE INDEX idx_tenant_api_keys_tenant ON tenant_api_keys(tenant_id);
   `;

@@ -8,7 +8,8 @@ const dependencies = { ...(packageJson as { dependencies?: Record<string, string
 assert.equal(packageJson.packageManager?.startsWith("bun@"), true, "package.json must declare Bun as the package manager");
 assert.equal(existsSync("bun.lock"), true, "bun.lock must exist");
 assert.equal(existsSync("package-lock.json"), false, "package-lock.json must not be the active project lockfile");
-assert.equal(dependencies["better-sqlite3"], undefined, "Bun runtime must not depend on legacy local database packages");
+const databaseDependencies = Object.keys(dependencies).filter((packageName) => /sql/i.test(packageName)).sort();
+assert.deepEqual(databaseDependencies, ["mysql2"], "Bun runtime database dependencies must stay MySQL-only");
 assert.equal(existsSync("vite.config.ts"), false, "Bun frontend must not keep vite.config.ts");
 assert.equal(existsSync("apps/admin-web/vite.config.ts"), true, "admin-web must own the Vite config in the monorepo");
 

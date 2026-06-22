@@ -125,14 +125,14 @@ function ensureWorkspaceColumns() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_sandbox_pool_members_workspace ON workspace_sandbox_pool_members(workspace_id, provider, status);
+    CREATE INDEX idx_sandbox_pool_members_workspace ON workspace_sandbox_pool_members(workspace_id, provider, status);
   `);
   // index created after the column is ensured above, so pre-existing tenants tables migrate cleanly
-  db.exec("CREATE INDEX IF NOT EXISTS idx_tenants_created_by ON tenants(created_by_user_id)");
+  db.exec("CREATE INDEX idx_tenants_created_by ON tenants(created_by_user_id)");
   // session timelines are polled every 500ms while a turn runs — without these the remote
   // MySQL walks the whole events table per tick
-  db.exec("CREATE INDEX IF NOT EXISTS idx_session_events_session_created ON session_events(session_id, created_at)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_tool_calls_session_created ON tool_calls(session_id, created_at)");
+  db.exec("CREATE INDEX idx_session_events_session_created ON session_events(session_id, created_at)");
+  db.exec("CREATE INDEX idx_tool_calls_session_created ON tool_calls(session_id, created_at)");
 }
 
 function ensureTenantApiKeysTable() {
@@ -151,8 +151,8 @@ function ensureTenantApiKeysTable() {
       updated_at TEXT NOT NULL,
       last_used_at TEXT
     );
-    CREATE INDEX IF NOT EXISTS idx_tenant_api_keys_hash ON tenant_api_keys(key_hash);
-    CREATE INDEX IF NOT EXISTS idx_tenant_api_keys_tenant ON tenant_api_keys(tenant_id);
+    CREATE INDEX idx_tenant_api_keys_hash ON tenant_api_keys(key_hash);
+    CREATE INDEX idx_tenant_api_keys_tenant ON tenant_api_keys(tenant_id);
   `);
   ensureColumn("tenant_api_keys", "key_ciphertext", "TEXT");
   ensureColumn("tenant_api_keys", "created_by_user_id", "TEXT");
@@ -192,10 +192,10 @@ function ensureDeploymentColumns() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_agent_deployments_workspace ON agent_deployments(workspace_id, updated_at);
-    CREATE INDEX IF NOT EXISTS idx_agent_deployments_due ON agent_deployments(status, next_run_at);
-    CREATE INDEX IF NOT EXISTS idx_deployment_runs_deployment ON deployment_runs(deployment_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_deployment_runs_session ON deployment_runs(session_id);
+    CREATE INDEX idx_agent_deployments_workspace ON agent_deployments(workspace_id, updated_at);
+    CREATE INDEX idx_agent_deployments_due ON agent_deployments(status, next_run_at);
+    CREATE INDEX idx_deployment_runs_deployment ON deployment_runs(deployment_id, created_at);
+    CREATE INDEX idx_deployment_runs_session ON deployment_runs(session_id);
   `);
 }
 
@@ -227,15 +227,13 @@ function ensureTenantAdminBackfill() {
 }
 
 function ensureColumn(table: string, column: string, definition: string) {
-  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  const columns = db
+    .prepare("SELECT COLUMN_NAME AS name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION")
+    .all(table) as Array<{ name: string }>;
   if (columns.some((item) => item.name === column)) return;
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 function ensureMysqlColumnType(table: string, column: string, definition: string) {
-  try {
-    db.exec(`ALTER TABLE ${table} MODIFY COLUMN ${column} ${definition}`);
-  } catch {
-    // Non-MySQL adapters do not support MODIFY COLUMN; their TEXT type is already wide enough.
-  }
+  db.exec(`ALTER TABLE ${table} MODIFY COLUMN ${column} ${definition}`);
 }

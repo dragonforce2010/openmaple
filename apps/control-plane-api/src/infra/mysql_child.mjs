@@ -99,14 +99,7 @@ function invalidateTableInfoCache(sql) {
 
 function translateSql(sql) {
   const trimmed = sql.trim();
-  const pragma = /^PRAGMA\s+table_info\(([^)]+)\)$/i.exec(trimmed);
-  if (pragma) return { kind: "table_info", table: stripIdentifier(pragma[1]) };
-
-  let next = trimmed
-    .replace(/\bINSERT\s+OR\s+IGNORE\b/gi, "INSERT IGNORE")
-    .replace(/\bCREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS\b/gi, "CREATE UNIQUE INDEX")
-    .replace(/\bCREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\b/gi, "CREATE INDEX");
-
+  let next = trimmed;
   if (/^CREATE\s+TABLE\b/i.test(next)) next = translateCreateTable(next);
   next = translateAlterAddColumn(next);
   return { kind: "sql", sql: next };
@@ -170,10 +163,6 @@ function isIgnorableDdlError(sql, error) {
   if (/^CREATE\s+(UNIQUE\s+)?INDEX\b/i.test(sql) && code === "ER_DUP_KEYNAME") return true;
   if (/\bADD\s+COLUMN\b/i.test(sql) && code === "ER_DUP_FIELDNAME") return true;
   return false;
-}
-
-function stripIdentifier(value) {
-  return String(value).trim().replace(/^`|`$/g, "");
 }
 
 export function env(...keysAndDefault) {

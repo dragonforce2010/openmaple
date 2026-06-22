@@ -120,7 +120,7 @@ export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
       stamp,
       stamp
     );
-    db.prepare("INSERT OR IGNORE INTO tenant_members (id, tenant_id, user_id, role, created_at) VALUES (?, ?, ?, 'admin', ?)").run(
+    db.prepare("INSERT IGNORE INTO tenant_members (id, tenant_id, user_id, role, created_at) VALUES (?, ?, ?, 'admin', ?)").run(
       `tnmem_${nanoid(10)}`,
       tenantId,
       input.user_id,
@@ -150,7 +150,7 @@ export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
       stamp
     );
     workspaceMemberUsers.forEach((user) => {
-      db.prepare("INSERT OR IGNORE INTO workspace_members (id, workspace_id, user_id, role, created_at) VALUES (?, ?, ?, 'member', ?)").run(
+      db.prepare("INSERT IGNORE INTO workspace_members (id, workspace_id, user_id, role, created_at) VALUES (?, ?, ?, 'member', ?)").run(
         `wsmem_${nanoid(10)}`,
         workspaceId,
         user.id,
@@ -317,7 +317,7 @@ export function createWorkspaceForUser(input: Omit<WorkspaceOnboardingInput, "te
       stamp
     );
     workspaceMemberUsers.forEach((user) => {
-      db.prepare("INSERT OR IGNORE INTO workspace_members (id, workspace_id, user_id, role, created_at) VALUES (?, ?, ?, 'member', ?)").run(
+      db.prepare("INSERT IGNORE INTO workspace_members (id, workspace_id, user_id, role, created_at) VALUES (?, ?, ?, 'member', ?)").run(
         `wsmem_${nanoid(10)}`,
         workspaceId,
         user.id,
