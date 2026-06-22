@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { parse as parseYaml } from "yaml";
+/* eslint-disable max-lines */
 import type { JsonRecord } from "../types";
 import {
   builtInDefaults,
@@ -96,6 +98,49 @@ export function getSandboxDefaults(): SandboxDefaults {
       workspace_path: process.env.VEFAAS_WORKSPACE_PATH || process.env.MAPLE_VEFAAS_WORKSPACE_PATH || merged.vefaas.workspace_path,
       timeout_ms: Number(process.env.VEFAAS_TIMEOUT_MS || process.env.MAPLE_VEFAAS_TIMEOUT_MS || merged.vefaas.timeout_ms)
     },
+    aliyun_fc: {
+      ...merged.aliyun_fc,
+      access_key_id:
+        process.env.ALIYUN_ACCESS_KEY_ID ||
+        process.env.MAPLE_ALIYUN_ACCESS_KEY_ID ||
+        merged.aliyun_fc.access_key_id,
+      access_key_secret:
+        process.env.ALIYUN_ACCESS_KEY_SECRET ||
+        process.env.MAPLE_ALIYUN_ACCESS_KEY_SECRET ||
+        merged.aliyun_fc.access_key_secret,
+      region: process.env.ALIYUN_REGION || process.env.MAPLE_ALIYUN_REGION || merged.aliyun_fc.region,
+      function_name:
+        process.env.ALIYUN_FC_FUNCTION_NAME ||
+        process.env.MAPLE_ALIYUN_FC_FUNCTION_NAME ||
+        merged.aliyun_fc.function_name,
+      invoke_url:
+        process.env.ALIYUN_FC_INVOKE_URL ||
+        process.env.MAPLE_ALIYUN_FC_INVOKE_URL ||
+        merged.aliyun_fc.invoke_url,
+      api_key:
+        process.env.ALIYUN_FC_API_KEY ||
+        process.env.MAPLE_ALIYUN_FC_API_KEY ||
+        merged.aliyun_fc.api_key,
+      workspace_path:
+        process.env.ALIYUN_FC_WORKSPACE_PATH ||
+        process.env.MAPLE_ALIYUN_FC_WORKSPACE_PATH ||
+        merged.aliyun_fc.workspace_path,
+      timeout_ms: Number(process.env.ALIYUN_FC_TIMEOUT_MS || process.env.MAPLE_ALIYUN_FC_TIMEOUT_MS || merged.aliyun_fc.timeout_ms)
+    },
+    oss: {
+      ...merged.oss,
+      access_key_id:
+        process.env.ALIYUN_ACCESS_KEY_ID ||
+        process.env.MAPLE_ALIYUN_ACCESS_KEY_ID ||
+        merged.oss.access_key_id,
+      access_key_secret:
+        process.env.ALIYUN_ACCESS_KEY_SECRET ||
+        process.env.MAPLE_ALIYUN_ACCESS_KEY_SECRET ||
+        merged.oss.access_key_secret,
+      region: process.env.ALIYUN_OSS_REGION || process.env.ALIYUN_REGION || process.env.MAPLE_ALIYUN_REGION || merged.oss.region,
+      bucket: process.env.ALIYUN_OSS_BUCKET || process.env.MAPLE_ALIYUN_OSS_BUCKET || merged.oss.bucket,
+      endpoint: process.env.ALIYUN_OSS_ENDPOINT || process.env.MAPLE_ALIYUN_OSS_ENDPOINT || merged.oss.endpoint
+    },
     aws_lambda: {
       ...merged.aws_lambda,
       function_name: process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.MAPLE_AWS_LAMBDA_FUNCTION_NAME || merged.aws_lambda.function_name,
@@ -160,6 +205,21 @@ function normalizeAgentRuntime(
       qualifier: String(awsLambda.qualifier || agentRuntime.qualifier || config.qualifier || defaults.aws_lambda.qualifier),
       timeout_ms: Number(awsLambda.timeout_ms || agentRuntime.timeout_ms || config.timeout_ms || defaults.aws_lambda.timeout_ms),
       envs: stringifyRecord({ ...defaults.aws_lambda.envs, ...asRecord(awsLambda.envs ?? agentRuntime.envs ?? config.envs) })
+    };
+  }
+  if (provider === "aliyun_fc") {
+    const aliyun = asRecord(agentRuntime.aliyun_fc ?? agentRuntime.aliyun ?? sandbox.aliyun_fc ?? config.aliyun_fc ?? config.aliyun);
+    return {
+      provider: "aliyun_fc",
+      access_key_id: String(aliyun.access_key_id || aliyun.accessKeyId || aliyun.ak || defaults.aliyun_fc.access_key_id),
+      access_key_secret: String(aliyun.access_key_secret || aliyun.accessKeySecret || aliyun.sk || defaults.aliyun_fc.access_key_secret),
+      region: String(aliyun.region || defaults.aliyun_fc.region),
+      function_name: String(aliyun.function_name || aliyun.functionName || config.function_name || defaults.aliyun_fc.function_name),
+      invoke_url: String(aliyun.invoke_url || aliyun.invokeUrl || config.invoke_url || defaults.aliyun_fc.invoke_url),
+      api_key: String(aliyun.api_key || aliyun.apiKey || config.api_key || defaults.aliyun_fc.api_key),
+      workspace_path: String(aliyun.workspace_path || agentRuntime.workspace_path || config.workspace_path || defaults.aliyun_fc.workspace_path),
+      timeout_ms: Number(aliyun.timeout_ms || agentRuntime.timeout_ms || config.timeout_ms || defaults.aliyun_fc.timeout_ms),
+      envs: stringifyRecord({ ...defaults.aliyun_fc.envs, ...asRecord(aliyun.envs ?? agentRuntime.envs ?? config.envs) })
     };
   }
   if (provider === "local_docker") {
@@ -233,6 +293,23 @@ function normalizeSandboxRuntime(
       packages: normalizeEnvironmentPackages(config)
     };
   }
+  if (provider === "aliyun_fc") {
+    const aliyun = asRecord(sandbox.aliyun_fc ?? sandbox.aliyun ?? config.aliyun_fc ?? config.aliyun);
+    return {
+      provider: "aliyun_fc",
+      access_key_id: String(aliyun.access_key_id || aliyun.accessKeyId || aliyun.ak || defaults.aliyun_fc.access_key_id),
+      access_key_secret: String(aliyun.access_key_secret || aliyun.accessKeySecret || aliyun.sk || defaults.aliyun_fc.access_key_secret),
+      region: String(aliyun.region || defaults.aliyun_fc.region),
+      function_name: String(aliyun.function_name || aliyun.functionName || config.function_name || defaults.aliyun_fc.function_name),
+      invoke_url: String(aliyun.invoke_url || aliyun.invokeUrl || config.invoke_url || defaults.aliyun_fc.invoke_url),
+      api_key: String(aliyun.api_key || aliyun.apiKey || config.api_key || defaults.aliyun_fc.api_key),
+      workspace_path: String(aliyun.workspace_path || config.workspace_path || defaults.aliyun_fc.workspace_path),
+      timeout_ms: Number(aliyun.timeout_ms || config.timeout_ms || defaults.aliyun_fc.timeout_ms),
+      envs: stringifyRecord({ ...defaults.aliyun_fc.envs, ...asRecord(aliyun.envs ?? config.envs) }),
+      metadata: stringifyRecord(asRecord(aliyun.metadata ?? config.metadata)),
+      packages: normalizeEnvironmentPackages(config)
+    };
+  }
   const localDocker = asRecord(sandbox.local_docker ?? config.local_docker ?? config.docker);
   const sandboxOptions = localDocker.sandbox_options ?? config.sandbox_options;
   return {
@@ -244,12 +321,16 @@ function normalizeSandboxRuntime(
 }
 
 function readSandboxConfigFile() {
-  const configPath = resolve(process.env.MAPLE_SANDBOX_CONFIG || "sandbox.config.json");
-  if (!existsSync(configPath)) return {};
+  const configured = process.env.MAPLE_SANDBOX_CONFIG || "";
+  const configPath = resolve(configured || "sandbox.config.yaml");
+  const fallbackJsonPath = resolve("sandbox.config.json");
+  const targetPath = existsSync(configPath) ? configPath : !configured && existsSync(fallbackJsonPath) ? fallbackJsonPath : configPath;
+  if (!existsSync(targetPath)) return {};
   try {
-    return JSON.parse(readFileSync(configPath, "utf8")) as JsonRecord;
+    const text = readFileSync(targetPath, "utf8");
+    return targetPath.endsWith(".json") ? JSON.parse(text) as JsonRecord : parseYaml(text) as JsonRecord;
   } catch (error) {
-    throw new Error(`Failed to parse sandbox config ${configPath}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Failed to parse sandbox config ${targetPath}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -262,6 +343,8 @@ function mergeDefaults(config: JsonRecord): SandboxDefaults {
   const sandbox = asRecord(config.sandbox);
   const vefaasSandbox = asRecord(sandbox.vefaas ?? sandbox.vefaas_sandbox ?? config.vefaas_sandbox ?? config.cloud_sandbox);
   const vefaas = asRecord(agentRuntime.vefaas ?? config.vefaas ?? config.volcengine_faas);
+  const aliyunFc = asRecord(agentRuntime.aliyun_fc ?? agentRuntime.aliyun ?? config.aliyun_fc ?? config.aliyun);
+  const oss = asRecord(config.oss ?? config.aliyun_oss);
   const awsLambda = asRecord(agentRuntime.aws_lambda ?? config.aws_lambda ?? config.lambda);
   return {
     default_provider:
@@ -304,6 +387,15 @@ function mergeDefaults(config: JsonRecord): SandboxDefaults {
       ...vefaas,
       envs: stringifyRecord({ ...builtInDefaults.vefaas.envs, ...asRecord(vefaas.envs) })
     },
+    aliyun_fc: {
+      ...builtInDefaults.aliyun_fc,
+      ...aliyunFc,
+      envs: stringifyRecord({ ...builtInDefaults.aliyun_fc.envs, ...asRecord(aliyunFc.envs) })
+    },
+    oss: {
+      ...builtInDefaults.oss,
+      ...oss
+    },
     aws_lambda: {
       ...builtInDefaults.aws_lambda,
       ...awsLambda,
@@ -319,6 +411,7 @@ function normalizeSandboxProvider(value: string): SandboxProvider | null {
   if (normalized === "e2b") return "e2b";
   if (["vercel", "vercel_sandbox", "vercel-sandbox"].includes(normalized)) return "vercel";
   if (["vefaas", "vefaas_sandbox", "vefaas-sandbox", "volcengine_sandbox", "volcengine-sandbox"].includes(normalized)) return "vefaas";
+  if (["aliyun_fc", "aliyun-fc", "aliyun", "alibaba_cloud_fc", "fc"].includes(normalized)) return "aliyun_fc";
   return null;
 }
 
@@ -327,6 +420,7 @@ function normalizeAgentRuntimeProvider(value: string): AgentRuntimeProvider | nu
   if (["local", "local_agent", "local-agent", "in_process", "in-process"].includes(normalized)) return "local";
   if (["docker", "local_docker", "local-runtime", "local_runtime"].includes(normalized)) return "local_docker";
   if (["vefaas", "volcengine_faas", "volcengine-faas", "faas"].includes(normalized)) return "vefaas";
+  if (["aliyun_fc", "aliyun-fc", "aliyun", "alibaba_cloud_fc", "fc"].includes(normalized)) return "aliyun_fc";
   if (["aws_lambda", "aws-lambda", "lambda"].includes(normalized)) return "aws_lambda";
   return null;
 }

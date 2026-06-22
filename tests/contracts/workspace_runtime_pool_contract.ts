@@ -34,7 +34,9 @@ const server = spawn("bun", ["apps/control-plane-api/src/index.ts"], {
     MAPLE_AGENT_RUNTIME_PROVIDER: "local",
     MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript,
     ARK_API_KEY: "contract-ark-key",
-    MAPLE_DEV_LOGIN: "true"
+    MAPLE_DEV_LOGIN: "true",
+    MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off",
+    MAPLE_ALIYUN_CREDENTIAL_VALIDATION: "off"
   },
   stdio: ["ignore", "pipe", "pipe"]
 });

@@ -21,7 +21,9 @@ import {
   ensureSessionSandboxRuntime,
   executeTool,
   markRuntimeReady,
+  runAgentLoopOnAliyunFc,
   runAgentLoopOnVefaas,
+  sessionUsesAliyunFcAgentRuntime,
   sessionUsesVefaasAgentRuntime
 } from "./runtime";
 
@@ -176,6 +178,38 @@ export async function runUserMessage(sessionId: string, text: string) {
       );
       updateSessionStatus(sessionId, "idle");
       record(sessionId, threadId, "session.status_idle", { reason: "end_turn", stop_reason: { type: "end_turn" }, runtime: "vefaas_agent_loop" });
+      return;
+    }
+    if (sessionUsesAliyunFcAgentRuntime(sessionId)) {
+      record(sessionId, threadId, "session.status_preparing_runtime", { reason: "aliyun_fc_agent_runtime.ensure" });
+      const runtimeResult = await runAgentLoopOnAliyunFc(sessionId, effectiveText);
+      if (runtimeResult.timings && typeof runtimeResult.timings === "object") {
+        record(sessionId, threadId, "session.runtime_timings", runtimeResult.timings as JsonRecord);
+      }
+      const runtimeEvents = Array.isArray(runtimeResult.events) ? (runtimeResult.events as JsonRecord[]) : [];
+      await flushSessionEventInserts(sessionId);
+      const streamedCount = Math.min(Math.max(Number(runtimeResult.streamed_count) || 0, 0), runtimeEvents.length);
+      const remaining = runtimeEvents.slice(streamedCount);
+      createSessionEvents(
+        sessionId,
+        threadId,
+        remaining.map((event) => ({
+          type: "agent.external_loop_event",
+          payload: { driver: "aliyun_fc_agent_loop", event },
+          provider_event_type: String(event.type || "")
+        }))
+      ).forEach(emitSessionEvent);
+      const content = runtimeMessageContent(runtimeResult);
+      record(sessionId, threadId, "agent.message_delta", { text: content, usage: runtimeResult.usage }, "message_stop");
+      record(
+        sessionId,
+        threadId,
+        "agent.message",
+        { content: [{ type: "text", text: content }], usage: runtimeResult.usage },
+        "message_stop"
+      );
+      updateSessionStatus(sessionId, "idle");
+      record(sessionId, threadId, "session.status_idle", { reason: "end_turn", stop_reason: { type: "end_turn" }, runtime: "aliyun_fc_agent_loop" });
       return;
     }
     await markRuntimeReady(sessionId);

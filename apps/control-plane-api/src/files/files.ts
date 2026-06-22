@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { createManagedFileRecord, getManagedFileRecord } from "../store";
 import type { JsonRecord } from "../types";
-import { objectKey, putObject, readObject, type TosCreds } from "./objectStorage";
-import { workspaceObjectStorage, workspaceTosCreds } from "./workspaceStorage";
+import { objectKey, putObject, readObject, type ObjectStorageCreds } from "./objectStorage";
+import { workspaceObjectStorage, workspaceObjectStorageCreds } from "./workspaceStorage";
 
 export type ManagedFile = {
   id: string;
@@ -51,9 +51,9 @@ export async function readManagedFile(fileId: string) {
 }
 
 // Rebuild the bucket-scoped creds for a stored file from its own workspace + bucket columns.
-function managedFileCreds(file: ManagedFile): TosCreds {
+function managedFileCreds(file: ManagedFile): ObjectStorageCreds {
   const workspaceId = String(file.workspace_id || "");
-  const creds = workspaceId ? workspaceTosCreds(workspaceId) : null;
+  const creds = workspaceId ? workspaceObjectStorageCreds(workspaceId, file.storage_provider) : null;
   if (!creds) throw new Error(`managed file ${file.id} has no resolvable workspace credentials`);
   return { ...creds, bucket: file.bucket };
 }

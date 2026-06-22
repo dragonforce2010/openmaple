@@ -93,8 +93,8 @@ def test_workspace_pool_passes_resource_limits_to_runtime_deploy_script():
     source = STORE_PROVISIONING_PATH.read_text()
     assert "MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function)," in source
     assert "MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function)," in source
-    assert source.count("MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES") == 2
-    assert source.count("MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES") == 2
+    assert source.count("MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES") == 3
+    assert source.count("MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES") == 3
     assert 'const configuredImage = String(process.env.MAPLE_VEFAAS_IMAGE || "").trim();' in source
     assert 'payload = await runDeploy(`${appName}-src`, { MAPLE_VEFAAS_IMAGE: "" });' in source
     assert 'payload = await runDeploy(appName, { MAPLE_VEFAAS_IMAGE: "" });' in source

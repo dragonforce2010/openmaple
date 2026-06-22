@@ -1,7 +1,7 @@
 import type { JsonRecord } from "../types";
 
-export type AgentRuntimeProvider = "local" | "local_docker" | "vefaas" | "aws_lambda";
-export type SandboxProvider = "e2b" | "local_docker" | "daytona" | "vercel" | "vefaas";
+export type AgentRuntimeProvider = "local" | "local_docker" | "vefaas" | "aliyun_fc" | "aws_lambda";
+export type SandboxProvider = "e2b" | "local_docker" | "daytona" | "vercel" | "vefaas" | "aliyun_fc";
 export type EffectiveRuntimeProvider = AgentRuntimeProvider | SandboxProvider;
 
 export type EnvironmentPackage = { manager: string; name: string };
@@ -58,6 +58,24 @@ export type SandboxDefaults = {
     timeout_ms: number;
     envs: Record<string, string>;
   };
+  aliyun_fc: {
+    access_key_id: string;
+    access_key_secret: string;
+    region: string;
+    function_name: string;
+    invoke_url: string;
+    api_key: string;
+    workspace_path: string;
+    timeout_ms: number;
+    envs: Record<string, string>;
+  };
+  oss: {
+    access_key_id: string;
+    access_key_secret: string;
+    region: string;
+    bucket: string;
+    endpoint: string;
+  };
   aws_lambda: {
     function_name: string;
     region: string;
@@ -82,6 +100,18 @@ export type NormalizedAgentRuntimeConfig =
       api_key: string;
       function_id: string;
       region: string;
+      workspace_path: string;
+      timeout_ms: number;
+      envs: Record<string, string>;
+    }
+  | {
+      provider: "aliyun_fc";
+      access_key_id: string;
+      access_key_secret: string;
+      region: string;
+      function_name: string;
+      invoke_url: string;
+      api_key: string;
       workspace_path: string;
       timeout_ms: number;
       envs: Record<string, string>;
@@ -136,6 +166,20 @@ export type NormalizedSandboxRuntimeConfig =
       endpoint: string;
       gateway_url: string;
       api_token: string;
+      workspace_path: string;
+      timeout_ms: number;
+      envs: Record<string, string>;
+      metadata: Record<string, string>;
+      packages: EnvironmentPackage[];
+    }
+  | {
+      provider: "aliyun_fc";
+      access_key_id: string;
+      access_key_secret: string;
+      region: string;
+      function_name: string;
+      invoke_url: string;
+      api_key: string;
       workspace_path: string;
       timeout_ms: number;
       envs: Record<string, string>;
@@ -205,6 +249,24 @@ export const builtInDefaults: SandboxDefaults = {
     workspace_path: "/workspace",
     timeout_ms: 120_000,
     envs: {}
+  },
+  aliyun_fc: {
+    access_key_id: "",
+    access_key_secret: "",
+    region: "cn-hangzhou",
+    function_name: "",
+    invoke_url: "",
+    api_key: "",
+    workspace_path: "/workspace",
+    timeout_ms: 120_000,
+    envs: {}
+  },
+  oss: {
+    access_key_id: "",
+    access_key_secret: "",
+    region: "cn-hangzhou",
+    bucket: "",
+    endpoint: ""
   },
   aws_lambda: {
     function_name: "",

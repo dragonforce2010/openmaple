@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { nanoid } from "nanoid";
 import { encryptSecret } from "../secrets";
 import type { JsonRecord } from "../types";
@@ -6,9 +7,13 @@ import {
   hashString,
   now,
   runtimePoolConfig,
+  runtimeProviderPoolConfigs,
   sandboxPoolConfig,
+  sandboxProviderPoolConfigs,
   toJson,
   workspaceApiKeyMaterial,
+  type RuntimeProviderPoolConfig,
+  type SandboxProviderPoolConfig,
   type WorkspaceOnboardingInput
 } from "./storeCore";
 import { hydrateTenantRow } from "./storeHydrators";
@@ -61,23 +66,61 @@ function pendingWorkspaceMemberUsers(input: { user_id: string; member_emails?: s
 }
 
 function runtimePoolProvisioner(provider: string) {
-  return provider === "local_docker"
-    ? { strategy: "least_active_sessions", provisioner: "local_docker" }
-    : { strategy: "least_active_sessions", provisioner: "vefaas_direct" };
+  if (provider === "local_docker") return { strategy: "least_active_sessions", provisioner: "local_docker" };
+  if (provider === "aliyun_fc") return { strategy: "least_active_sessions", provisioner: "aliyun_fc_direct" };
+  return { strategy: "least_active_sessions", provisioner: "vefaas_direct" };
 }
 
 function runtimePoolMemberRegion(provider: string, providerCredentials?: JsonRecord) {
   if (provider === "local_docker") return "local";
+  if (provider === "aliyun_fc") return String(((providerCredentials?.aliyun ?? providerCredentials?.alibaba_cloud) as Record<string, unknown> | undefined)?.ALIYUN_REGION || "cn-hangzhou");
   return String((providerCredentials?.vefaas as Record<string, unknown> | undefined)?.VEFAAS_REGION || "cn-beijing");
+}
+
+function primaryProvider<T extends { provider: string; role: string; priority: number }>(pools: T[], fallback: string) {
+  return (pools.find((pool) => pool.role === "primary") ?? pools[0])?.provider ?? fallback;
+}
+
+function artifactProvider(input: Pick<WorkspaceOnboardingInput, "artifact_provider" | "object_storage">) {
+  const configured = String(input.artifact_provider || input.object_storage?.provider || "");
+  if (configured === "oss" || configured === "tos") return configured;
+  return undefined;
+}
+
+function runtimePoolInsertConfig(pool: RuntimeProviderPoolConfig) {
+  return {
+    ...runtimePoolProvisioner(pool.provider),
+    role: pool.role,
+    priority: pool.priority,
+    name: pool.name,
+    provider: pool.provider,
+    ...pool.config
+  };
+}
+
+function sandboxPoolRecord(pool: SandboxProviderPoolConfig) {
+  return {
+    provider: pool.provider,
+    role: pool.role,
+    priority: pool.priority,
+    name: pool.name,
+    desired_size: pool.desired_size,
+    standby_ttl_ms: pool.standby_ttl_ms,
+    config: pool.config
+  };
 }
 
 export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
   const stamp = now();
   const tenantId = `tenant_${nanoid(10)}`;
   const workspaceId = `ws_${nanoid(10)}`;
-  const poolId = `rpool_${nanoid(10)}`;
   const poolConfig = runtimePoolConfig(input.runtime_pool);
+  const runtimePools = runtimeProviderPoolConfigs(input.runtime_pools, input.runtime_provider, poolConfig);
   const sandboxPool = sandboxPoolConfig(input.sandbox_pool);
+  const sandboxPools = sandboxProviderPoolConfigs(input.sandbox_pools, input.sandbox_provider, sandboxPool);
+  const primaryRuntimeProvider = primaryProvider(runtimePools, input.runtime_provider);
+  const primarySandboxProvider = primaryProvider(sandboxPools, input.sandbox_provider);
+  const selectedArtifactProvider = artifactProvider(input);
   const slug = resolveWorkspaceSlug(input.workspace.slug, input.workspace.name, workspaceId);
   const tenantSlug = slug;
   const customModelConfigs = (input.custom_model_configs ?? []).map((config) => ({ id: `modelcfg_${nanoid(10)}`, config }));
@@ -88,23 +131,34 @@ export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
     tenant_slug: tenantSlug,
     console_url: workspaceConsoleUrl(tenantSlug, slug),
     admin: input.admin ?? {},
-    runtime_provider: input.runtime_provider,
-    sandbox_provider: input.sandbox_provider,
+    runtime_provider: primaryRuntimeProvider,
+    runtime_pools: runtimePools,
+    sandbox_provider: primarySandboxProvider,
     sandbox_config: input.sandbox_config ?? {},
     sandbox_pool: sandboxPool,
+    sandbox_pools: sandboxPools.map(sandboxPoolRecord),
+    ...(selectedArtifactProvider ? { artifact_provider: selectedArtifactProvider } : {}),
+    object_storage: { ...(input.object_storage ?? {}), ...(selectedArtifactProvider ? { provider: selectedArtifactProvider } : {}) },
     runtime_pool: poolConfig,
     model_config_ids: modelConfigIds,
     provider_credentials: input.provider_credentials ?? {},
     cloud_provider_identities: cloudProviderIdentities({
       providerCredentials: input.provider_credentials,
-      runtimeProvider: input.runtime_provider,
-      sandboxProvider: input.sandbox_provider
+      runtimeProvider: primaryRuntimeProvider,
+      sandboxProvider: primarySandboxProvider,
+      runtimePools,
+      sandboxPools,
+      artifactProvider: selectedArtifactProvider
     }),
     immutable: true
   };
   const apiKey = workspaceApiKeyMaterial();
   const apiKeyId = `wskey_${nanoid(10)}`;
-  const memberIds = Array.from({ length: poolConfig.desired_size }, () => `rpmem_${nanoid(10)}`);
+  const runtimePoolRows = runtimePools.map((pool) => ({
+    pool,
+    poolId: `rpool_${nanoid(10)}`,
+    memberIds: Array.from({ length: pool.desired_size }, () => `rpmem_${nanoid(10)}`)
+  }));
   const workspaceMemberUsers = pendingWorkspaceMemberUsers(input);
 
   const tx = db.transaction(() => {
@@ -135,8 +189,8 @@ export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
       tenantId,
       input.workspace.name,
       input.workspace.description ?? "",
-      input.runtime_provider,
-      input.sandbox_provider,
+      primaryRuntimeProvider,
+      primarySandboxProvider,
       toJson(workspaceConfig),
       hashString(toJson(workspaceConfig)),
       input.user_id,
@@ -183,39 +237,41 @@ export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
         stamp
       );
     });
-    db.prepare(`
-      INSERT INTO workspace_runtime_pools
-      (id, workspace_id, provider, desired_size, min_instances_per_function, max_instances_per_function, max_concurrency_per_instance, cpu_milli, memory_mb, status, config_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-    `).run(
-      poolId,
-      workspaceId,
-      input.runtime_provider,
-      poolConfig.desired_size,
-      poolConfig.min_instances_per_function,
-      poolConfig.max_instances_per_function,
-      poolConfig.max_concurrency_per_instance,
-      poolConfig.cpu_milli,
-      poolConfig.memory_mb,
-      toJson(runtimePoolProvisioner(input.runtime_provider)),
-      stamp,
-      stamp
-    );
-    memberIds.forEach((memberId) => {
+    runtimePoolRows.forEach(({ pool, poolId, memberIds }) => {
       db.prepare(`
-        INSERT INTO workspace_runtime_pool_members
-        (id, runtime_pool_id, workspace_id, provider, cloud_function_id, cloud_app_id, invoke_url, region, status, weight, active_session_count, config_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, '', '', '', ?, 'provisioning', 100, 0, ?, ?, ?)
+        INSERT INTO workspace_runtime_pools
+        (id, workspace_id, provider, desired_size, min_instances_per_function, max_instances_per_function, max_concurrency_per_instance, cpu_milli, memory_mb, status, config_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
       `).run(
-        memberId,
         poolId,
         workspaceId,
-        input.runtime_provider,
-        runtimePoolMemberRegion(input.runtime_provider, input.provider_credentials),
-        toJson({ provisioning: true }),
+        pool.provider,
+        pool.desired_size,
+        pool.min_instances_per_function,
+        pool.max_instances_per_function,
+        pool.max_concurrency_per_instance,
+        pool.cpu_milli,
+        pool.memory_mb,
+        toJson(runtimePoolInsertConfig(pool)),
         stamp,
         stamp
       );
+      memberIds.forEach((memberId) => {
+        db.prepare(`
+          INSERT INTO workspace_runtime_pool_members
+          (id, runtime_pool_id, workspace_id, provider, cloud_function_id, cloud_app_id, invoke_url, region, status, weight, active_session_count, config_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, '', '', '', ?, 'provisioning', 100, 0, ?, ?, ?)
+        `).run(
+          memberId,
+          poolId,
+          workspaceId,
+          pool.provider,
+          runtimePoolMemberRegion(pool.provider, input.provider_credentials),
+          toJson({ provisioning: true, role: pool.role, priority: pool.priority, pool_name: pool.name }),
+          stamp,
+          stamp
+        );
+      });
     });
     db.prepare(`
       INSERT INTO workspace_api_keys
@@ -231,7 +287,9 @@ export function createWorkspaceOnboarding(input: WorkspaceOnboardingInput) {
 
   ensureDefaultEnvironments(workspaceId);
   if (input.provisioning_mode !== "manual") {
-    void provisionPoolMembersBackground(workspaceId, memberIds.map((memberId, index) => ({ memberId, index })), poolConfig, input.provider_credentials);
+    runtimePoolRows.forEach(({ pool, memberIds }) => {
+      void provisionPoolMembersBackground(workspaceId, memberIds.map((memberId, index) => ({ memberId, index })), pool, input.provider_credentials);
+    });
   }
 
   const tenant = db.prepare("SELECT * FROM tenants WHERE id = ?").get(tenantId) as JsonRecord;
@@ -261,9 +319,13 @@ export function createWorkspaceForUser(input: Omit<WorkspaceOnboardingInput, "te
   }
   const stamp = now();
   const workspaceId = `ws_${nanoid(10)}`;
-  const poolId = `rpool_${nanoid(10)}`;
   const poolConfig = runtimePoolConfig(input.runtime_pool);
+  const runtimePools = runtimeProviderPoolConfigs(input.runtime_pools, input.runtime_provider, poolConfig);
   const sandboxPool = sandboxPoolConfig(input.sandbox_pool);
+  const sandboxPools = sandboxProviderPoolConfigs(input.sandbox_pools, input.sandbox_provider, sandboxPool);
+  const primaryRuntimeProvider = primaryProvider(runtimePools, input.runtime_provider);
+  const primarySandboxProvider = primaryProvider(sandboxPools, input.sandbox_provider);
+  const selectedArtifactProvider = artifactProvider(input);
   const slug = resolveWorkspaceSlug(input.workspace.slug, input.workspace.name, workspaceId);
   const tenantSlug = tenantSlugFromRecord(targetTenant);
   const selectedModelConfigs = workspaceModelConfigsForCreate({ model_config_ids: input.model_config_ids, workspaceId });
@@ -272,23 +334,34 @@ export function createWorkspaceForUser(input: Omit<WorkspaceOnboardingInput, "te
     tenant_slug: tenantSlug,
     console_url: workspaceConsoleUrl(tenantSlug, slug),
     admin: input.admin ?? {},
-    runtime_provider: input.runtime_provider,
-    sandbox_provider: input.sandbox_provider,
+    runtime_provider: primaryRuntimeProvider,
+    runtime_pools: runtimePools,
+    sandbox_provider: primarySandboxProvider,
     sandbox_config: input.sandbox_config ?? {},
     sandbox_pool: sandboxPool,
+    sandbox_pools: sandboxPools.map(sandboxPoolRecord),
+    ...(selectedArtifactProvider ? { artifact_provider: selectedArtifactProvider } : {}),
+    object_storage: { ...(input.object_storage ?? {}), ...(selectedArtifactProvider ? { provider: selectedArtifactProvider } : {}) },
     runtime_pool: poolConfig,
     model_config_ids: selectedModelConfigs.map((item) => item.id),
     provider_credentials: input.provider_credentials ?? {},
     cloud_provider_identities: cloudProviderIdentities({
       providerCredentials: input.provider_credentials,
-      runtimeProvider: input.runtime_provider,
-      sandboxProvider: input.sandbox_provider
+      runtimeProvider: primaryRuntimeProvider,
+      sandboxProvider: primarySandboxProvider,
+      runtimePools,
+      sandboxPools,
+      artifactProvider: selectedArtifactProvider
     }),
     immutable: true
   };
   const apiKey = workspaceApiKeyMaterial();
   const apiKeyId = `wskey_${nanoid(10)}`;
-  const memberIds = Array.from({ length: poolConfig.desired_size }, () => `rpmem_${nanoid(10)}`);
+  const runtimePoolRows = runtimePools.map((pool) => ({
+    pool,
+    poolId: `rpool_${nanoid(10)}`,
+    memberIds: Array.from({ length: pool.desired_size }, () => `rpmem_${nanoid(10)}`)
+  }));
   const apiKeyInput = input.api_key ?? { display_name: "Default workspace key", scopes: ["control_plane", "data_plane"] };
   const workspaceMemberUsers = pendingWorkspaceMemberUsers(input);
 
@@ -302,8 +375,8 @@ export function createWorkspaceForUser(input: Omit<WorkspaceOnboardingInput, "te
       targetTenant.id,
       input.workspace.name,
       input.workspace.description ?? "",
-      input.runtime_provider,
-      input.sandbox_provider,
+      primaryRuntimeProvider,
+      primarySandboxProvider,
       toJson(workspaceConfig),
       hashString(toJson(workspaceConfig)),
       input.user_id,
@@ -325,39 +398,41 @@ export function createWorkspaceForUser(input: Omit<WorkspaceOnboardingInput, "te
       );
     });
     selectedModelConfigs.forEach((item) => insertWorkspaceModelConfigClone(item, { workspaceId, tenantId: String(targetTenant.id), userId: input.user_id, stamp }));
-    db.prepare(`
-      INSERT INTO workspace_runtime_pools
-      (id, workspace_id, provider, desired_size, min_instances_per_function, max_instances_per_function, max_concurrency_per_instance, cpu_milli, memory_mb, status, config_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-    `).run(
-      poolId,
-      workspaceId,
-      input.runtime_provider,
-      poolConfig.desired_size,
-      poolConfig.min_instances_per_function,
-      poolConfig.max_instances_per_function,
-      poolConfig.max_concurrency_per_instance,
-      poolConfig.cpu_milli,
-      poolConfig.memory_mb,
-      toJson(runtimePoolProvisioner(input.runtime_provider)),
-      stamp,
-      stamp
-    );
-    memberIds.forEach((memberId) => {
+    runtimePoolRows.forEach(({ pool, poolId, memberIds }) => {
       db.prepare(`
-        INSERT INTO workspace_runtime_pool_members
-        (id, runtime_pool_id, workspace_id, provider, cloud_function_id, cloud_app_id, invoke_url, region, status, weight, active_session_count, config_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, '', '', '', ?, 'provisioning', 100, 0, ?, ?, ?)
+        INSERT INTO workspace_runtime_pools
+        (id, workspace_id, provider, desired_size, min_instances_per_function, max_instances_per_function, max_concurrency_per_instance, cpu_milli, memory_mb, status, config_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
       `).run(
-        memberId,
         poolId,
         workspaceId,
-        input.runtime_provider,
-        runtimePoolMemberRegion(input.runtime_provider, input.provider_credentials),
-        toJson({ provisioning: true }),
+        pool.provider,
+        pool.desired_size,
+        pool.min_instances_per_function,
+        pool.max_instances_per_function,
+        pool.max_concurrency_per_instance,
+        pool.cpu_milli,
+        pool.memory_mb,
+        toJson(runtimePoolInsertConfig(pool)),
         stamp,
         stamp
       );
+      memberIds.forEach((memberId) => {
+        db.prepare(`
+          INSERT INTO workspace_runtime_pool_members
+          (id, runtime_pool_id, workspace_id, provider, cloud_function_id, cloud_app_id, invoke_url, region, status, weight, active_session_count, config_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, '', '', '', ?, 'provisioning', 100, 0, ?, ?, ?)
+        `).run(
+          memberId,
+          poolId,
+          workspaceId,
+          pool.provider,
+          runtimePoolMemberRegion(pool.provider, input.provider_credentials),
+          toJson({ provisioning: true, role: pool.role, priority: pool.priority, pool_name: pool.name }),
+          stamp,
+          stamp
+        );
+      });
     });
     db.prepare(`
       INSERT INTO workspace_api_keys
@@ -369,7 +444,9 @@ export function createWorkspaceForUser(input: Omit<WorkspaceOnboardingInput, "te
 
   ensureDefaultEnvironments(workspaceId);
   if (input.provisioning_mode !== "manual") {
-    void provisionPoolMembersBackground(workspaceId, memberIds.map((memberId, index) => ({ memberId, index })), poolConfig, input.provider_credentials);
+    runtimePoolRows.forEach(({ pool, memberIds }) => {
+      void provisionPoolMembersBackground(workspaceId, memberIds.map((memberId, index) => ({ memberId, index })), pool, input.provider_credentials);
+    });
   }
 
   return {

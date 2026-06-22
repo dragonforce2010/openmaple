@@ -38,7 +38,7 @@ try {
 
   const tenantRoutes = readFileSync("apps/control-plane-api/src/routes/tenantRoutes.ts", "utf8");
   const workspaceRoutes = readFileSync("apps/control-plane-api/src/routes/workspaceRoutes.ts", "utf8");
-  assert.match(tenantRoutes, /const validation = await validateVolcengineCredentials[\s\S]*if \(!validation\.ok\)[\s\S]*upsertTenantCloudProvider/, "tenant cloud provider route must validate before saving credentials");
+  assert.match(tenantRoutes, /validateVolcengineCredentials[\s\S]*if \(!validation\.ok\)[\s\S]*upsertTenantCloudProvider/, "tenant cloud provider route must validate before saving credentials");
   assert.match(workspaceRoutes, /const onboardingCloudValidation = await validateWorkspaceVolcengineCredentials[\s\S]*if \(!onboardingCloudValidation\.ok\)[\s\S]*createWorkspaceOnboarding/, "onboarding must validate Volcengine credentials before creating resources");
   console.log("volcengine credential validation contract passed");
 } finally {

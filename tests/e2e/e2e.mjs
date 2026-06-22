@@ -24,6 +24,11 @@ const useE2BSandbox = e2eSandboxProvider === "e2b";
 const expectedRuntimeType = useE2BSandbox ? "e2b" : "docker";
 const onboardingRuntimeProvider = useE2BSandbox ? "vefaas" : "local_docker";
 const onboardingSandboxProvider = useE2BSandbox ? "e2b" : "local_docker";
+const onboardingRuntimeLabel = providerDisplayName(onboardingRuntimeProvider);
+const onboardingSandboxLabel = providerDisplayName(onboardingSandboxProvider);
+const onboardingRuntimeCardTitle = onboardingRuntimeProvider === "local_docker" ? "Local Docker Runtime" : "VeFaaS Runtime";
+const onboardingSandboxCardTitle =
+  onboardingSandboxProvider === "local_docker" ? "Local Docker Sandbox" : onboardingSandboxProvider === "vefaas" ? "VeFaaS Sandbox" : onboardingSandboxLabel;
 const askMapleTimeoutMs = Number(process.env.E2E_ASK_TIMEOUT_MS || 90_000);
 const sessionAgentRuntimeMetadata = cloudTarget || !useE2BSandbox ? {} : { agent_runtime: { provider: "local", type: "local" } };
 const stamp = Date.now();
@@ -85,6 +90,14 @@ function loadAgentsEnv() {
   loadEnvFile(process.env.AGENTS_ENV_PATH || join(homedir(), ".agents", ".env"));
   loadEnvFile(join(process.cwd(), ".env"));
   loadEnvFile(process.env.MAPLE_LOCAL_ENV_FILE || join(process.cwd(), ".env.local"));
+}
+
+function providerDisplayName(provider) {
+  if (provider === "local_docker") return "Local Docker";
+  if (provider === "vefaas") return "VeFaaS";
+  if (provider === "e2b") return "E2B";
+  if (provider === "daytona") return "Daytona";
+  return String(provider || "").toUpperCase();
 }
 
 function normalizeLocalDockerE2EEnv() {
@@ -283,7 +296,7 @@ async function ensureServers() {
   const web = new URL(webBase);
   if (!apiReady) {
     started.push(
-      startBunScript("api", "dev:api", {
+      startBunScript("api", "start", {
         HOST: api.hostname,
         PORT: api.port,
         MAPLE_AGENT_RUNTIME_PROVIDER: process.env.MAPLE_AGENT_RUNTIME_PROVIDER || "local",
@@ -1493,6 +1506,19 @@ await step("React console customer UI walkthrough", async () => {
     return path;
   };
   const drawerText = async (selector) => page.locator(selector).innerText({ timeout: 10_000 });
+  const waitForDrawerSettled = async (selector) => {
+    try {
+      await page.waitForFunction((target) => {
+        const element = document.querySelector(target);
+        const text = element?.innerText || "";
+        return Boolean(element) && !text.includes("加载中") && !text.includes("Loading");
+      }, selector, { timeout: 20_000 });
+    } catch (error) {
+      const body = await page.locator(selector).innerText().catch(() => "");
+      throw new Error(`Timed out waiting for ${selector} to finish loading: ${body.slice(0, 1400)}`);
+    }
+  };
+  const poolDrawerHasMembers = (text) => !text.includes("当前筛选下没有成员") && !text.includes("No members match this filter");
   const expectTextIncludes = (label, text, required) => {
     const missing = required.filter((item) => !text.includes(item));
     if (missing.length) throw new Error(`${label} missing text: ${missing.join(", ")}; body=${text.slice(0, 1600)}`);
@@ -1532,47 +1558,73 @@ await step("React console customer UI walkthrough", async () => {
 
     await openWorkspaceSettings();
     let settingsText = await drawerText(".settings-drawer");
-    expectTextIncludes("settings overview", settingsText, ["Local Docker", workspaceOnboarding.workspaceRecord.name]);
-    if (!useE2BSandbox) expectTextExcludes("settings overview", settingsText, ["VeFaaS Runtime", "E2B_API_KEY"]);
+    expectTextIncludes("settings overview", settingsText, [onboardingRuntimeLabel, onboardingSandboxLabel, workspaceOnboarding.workspaceRecord.name]);
+    if (onboardingRuntimeProvider === "local_docker") expectTextExcludes("settings overview", settingsText, ["VeFaaS Runtime", "E2B_API_KEY"]);
+    else expectTextExcludes("settings overview", settingsText, ["Local Docker Runtime", "DOCKER_SOCKET", "PREWARMED_MEMBERS"]);
     await screenshotAudit("settings-overview");
 
-    await clickSettingsTab(/运行时配置|Runtime/, "Local Docker Runtime", "workspace-settings:runtime");
-    await waitForAnyBodyText(["预热 Runtime", "Prewarmed runtimes"]);
+    await clickSettingsTab(/运行时配置|Runtime/, onboardingRuntimeCardTitle, "workspace-settings:runtime");
+    await waitForAnyBodyText(onboardingRuntimeProvider === "local_docker" ? ["预热 Runtime", "Prewarmed runtimes"] : ["函数容量", "Functions", "QPS"]);
     settingsText = await drawerText(".settings-drawer");
-    if (!useE2BSandbox) {
+    if (onboardingRuntimeProvider === "local_docker") {
       expectTextIncludes("settings runtime", settingsText, ["Local Docker Runtime", "DOCKER_SOCKET", "IMAGE", "PREWARMED_MEMBERS", "Image", "/workspace"]);
       expectTextExcludes("settings runtime", settingsText, ["VeFaaS Runtime", "cloud_function_id", "CPU Milli", "QPS"]);
+    } else {
+      expectTextIncludes("settings runtime", settingsText, ["VeFaaS Runtime", "VOLCENGINE_ACCESS_KEY", "VOLCENGINE_SECRET_KEY", "QPS"]);
+      expectTextExcludes("settings runtime", settingsText, ["Local Docker Runtime", "DOCKER_SOCKET", "PREWARMED_MEMBERS"]);
     }
     await screenshotAudit("settings-runtime");
 
     await page.locator(".settings-drawer .provider-detail-btn").first().click();
     await page.locator(".pool-detail-drawer").waitFor({ state: "visible", timeout: 10_000 });
-    await waitForAnyBodyText(["Local Docker runtime member 状态", "Local Docker runtime member status"]);
+    await waitForAnyBodyText(
+      onboardingRuntimeProvider === "local_docker"
+        ? ["Local Docker runtime member 状态", "Local Docker runtime member status"]
+        : ["VeFaaS runtime pool member 状态", "VeFaaS runtime pool member status"]
+    );
+    await waitForDrawerSettled(".pool-detail-drawer");
     let poolText = await drawerText(".pool-detail-drawer");
-    if (!useE2BSandbox) {
-      expectTextIncludes("runtime pool drawer", poolText, ["local_docker", "image", "/workspace", "活跃会话"]);
+    if (onboardingRuntimeProvider === "local_docker") {
+      if (poolDrawerHasMembers(poolText)) expectTextIncludes("runtime pool drawer", poolText, ["local_docker", "image", "/workspace", "活跃会话"]);
       expectTextExcludes("runtime pool drawer", poolText, ["cloud_function_id", "invoke_url", "VeFaaS function", "managed-agents-platform-vefaas"]);
+    } else {
+      if (poolDrawerHasMembers(poolText)) expectTextIncludes("runtime pool drawer", poolText, ["cloud_function_id", "invoke_url", "VeFaaS function"]);
+      expectTextExcludes("runtime pool drawer", poolText, ["local_docker", "container_name"]);
     }
     await screenshotAudit("runtime-pool-drawer");
     buttonAudit.push("workspace-settings:runtime-pool-drawer");
     await page.locator(".pool-detail-drawer .x").click();
     await page.locator(".pool-detail-drawer").waitFor({ state: "detached", timeout: 5_000 });
 
-    await clickSettingsTab(/沙箱配置|Providers/, "Local Docker Sandbox", "workspace-settings:providers");
+    await clickSettingsTab(/沙箱配置|Providers/, onboardingSandboxCardTitle, "workspace-settings:providers");
     settingsText = await drawerText(".settings-drawer");
-    if (!useE2BSandbox) {
+    if (onboardingSandboxProvider === "local_docker") {
       expectTextIncludes("settings sandbox", settingsText, ["Local Docker Sandbox", "DOCKER_SOCKET", "IMAGE", "NETWORKING", "Local Docker"]);
       expectTextExcludes("settings sandbox", settingsText, ["E2B_API_KEY", "VEFAAS_SANDBOX_FUNCTION_ID", "gateway_url"]);
+    } else if (onboardingSandboxProvider === "e2b") {
+      expectTextIncludes("settings sandbox", settingsText, ["E2B", "E2B_API_KEY"]);
+      expectTextExcludes("settings sandbox", settingsText, ["Local Docker Sandbox", "DOCKER_SOCKET", "VEFAAS_SANDBOX_FUNCTION_ID"]);
+    } else {
+      expectTextIncludes("settings sandbox", settingsText, [onboardingSandboxCardTitle]);
+      expectTextExcludes("settings sandbox", settingsText, ["Local Docker Sandbox", "DOCKER_SOCKET"]);
     }
     await screenshotAudit("settings-sandbox");
 
     await page.locator(".settings-drawer .provider-detail-btn").first().click();
     await page.locator(".pool-detail-drawer").waitFor({ state: "visible", timeout: 10_000 });
-    await waitForAnyBodyText(["Local Docker standby / claimed / failed", "Local Docker standby / claimed / failed member status"]);
+    await waitForAnyBodyText(
+      onboardingSandboxProvider === "local_docker"
+        ? ["Local Docker standby / claimed / failed", "Local Docker standby / claimed / failed member status"]
+        : ["standby / claimed / failed 沙箱状态", "standby / claimed / failed sandbox status"]
+    );
+    await waitForDrawerSettled(".pool-detail-drawer");
     poolText = await drawerText(".pool-detail-drawer");
-    if (!useE2BSandbox) {
-      expectTextIncludes("sandbox pool drawer", poolText, ["docker_member_id", "image", "container_name"]);
+    if (onboardingSandboxProvider === "local_docker") {
+      if (poolDrawerHasMembers(poolText)) expectTextIncludes("sandbox pool drawer", poolText, ["docker_member_id", "image", "container_name"]);
       expectTextExcludes("sandbox pool drawer", poolText, ["E2B_API_KEY", "function_id", "gateway_url"]);
+    } else {
+      if (poolDrawerHasMembers(poolText)) expectTextIncludes("sandbox pool drawer", poolText, ["sandbox_id", "claimed_session_id"]);
+      expectTextExcludes("sandbox pool drawer", poolText, ["docker_member_id", "container_name"]);
     }
     await screenshotAudit("sandbox-pool-drawer");
     buttonAudit.push("workspace-settings:sandbox-pool-drawer");
@@ -1602,11 +1654,21 @@ await step("React console customer UI walkthrough", async () => {
     await page.locator(".settings-drawer").waitFor({ state: "detached", timeout: 5_000 });
 
     await clickButtonText("构建智能体", "浏览模板", "quickstart:open-from-dashboard");
-    for (const templateName of ["Data insights analyst", "Customer knowledge assistant", "Market monitoring brief", "Incident response commander", "Compliance audit investigator", "Developer productivity assistant", "Growth experiment designer", "Finance reconciliation bot"]) {
-      await waitForBodyText(templateName);
+    const expectedTemplates = [
+      ["Data insights analyst", "数据洞察分析师"],
+      ["Customer knowledge assistant", "客户知识助手"],
+      ["Market monitoring brief", "市场监测简报"],
+      ["Incident response commander", "应急响应指挥官"],
+      ["Compliance audit investigator", "合规审计调查员"],
+      ["Developer productivity assistant", "研发效率助手"],
+      ["Growth experiment designer", "增长实验设计师"],
+      ["Finance reconciliation bot", "财务对账机器人"]
+    ];
+    for (const [templateName, localizedName] of expectedTemplates) {
+      await waitForAnyBodyText([templateName, localizedName]);
       buttonAudit.push(`template-visible:${templateName}`);
     }
-    await page.getByText("Customer knowledge assistant").first().click();
+    await page.getByText(/Customer knowledge assistant|客户知识助手/).first().click();
     await page.waitForTimeout(120);
     buttonAudit.push("template:Customer knowledge assistant");
 

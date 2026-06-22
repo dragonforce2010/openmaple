@@ -64,7 +64,9 @@ const server = spawn("bun", ["apps/control-plane-api/src/index.ts"], {
     HOST: "127.0.0.1",
     MAPLE_DATA_DIR: dataDir,
     MAPLE_AGENT_RUNTIME_PROVIDER: "local",
-    MAPLE_DEV_LOGIN: "true"
+    MAPLE_DEV_LOGIN: "true",
+    MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off",
+    MAPLE_ALIYUN_CREDENTIAL_VALIDATION: "off"
   },
   stdio: ["ignore", "pipe", "pipe"]
 });

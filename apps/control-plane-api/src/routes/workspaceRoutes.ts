@@ -1,11 +1,15 @@
+/* eslint-disable max-lines */
 import type { Express } from "express";
+import { validateAliyunCredentials } from "../cloud/aliyunOpenApi";
 import { validateVolcengineCredentials } from "../cloud/volcengineOpenApi";
 import {
   countRuntimePoolMembersByStatus,
   countSandboxPoolMembersByStatus,
   getWorkspaceSandboxPool,
+  listWorkspaceSandboxPools,
   listRuntimePoolMembersPage,
-  listSandboxPoolMembersPage
+  listSandboxPoolMembersPage,
+  listWorkspaceRuntimePools
 } from "../store";
 import type { AuthenticatedRequest, JsonRecord } from "./routeDeps";
 import {
@@ -90,10 +94,12 @@ app.post("/v1/workspace_onboarding", async (request: AuthenticatedRequest, respo
   const parsed = workspaceOnboardingSchema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json(parsed.error.flatten());
   const onboardingCreds = withTenantCloudCredentials("", parsed.data.provider_credentials as Record<string, Record<string, unknown> | undefined>);
-  const missingCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, onboardingCreds, parsed.data.sandbox_config);
+  const missingCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, onboardingCreds, parsed.data.sandbox_config, parsed.data.runtime_pools, parsed.data.sandbox_pools, parsed.data.artifact_provider);
   if (missingCreds.length) return response.status(400).json({ error: "provider_credentials_required", missing: missingCreds });
   const onboardingCloudValidation = await validateWorkspaceVolcengineCredentials(onboardingCreds);
   if (!onboardingCloudValidation.ok) return response.status(400).json(onboardingCloudValidation);
+  const onboardingAliyunValidation = await validateWorkspaceAliyunCredentials(onboardingCreds);
+  if (!onboardingAliyunValidation.ok) return response.status(400).json(onboardingAliyunValidation);
   ensureGlobalModelConfigs();
   const missingModelConfigId = parsed.data.model_config_ids.find((modelConfigId) => !modelConfigAvailableForProvisioning(modelConfigId, user.id));
   if (missingModelConfigId) return response.status(404).json({ error: "model_config_not_found", model_config_id: missingModelConfigId });
@@ -121,6 +127,9 @@ app.post("/v1/workspace_onboarding", async (request: AuthenticatedRequest, respo
     if (tenantId && onboardingCreds.vefaas?.VOLCENGINE_ACCESS_KEY) {
       upsertTenantCloudProvider(tenantId, "volcengine", onboardingCreds.vefaas as JsonRecord);
     }
+    if (tenantId && onboardingCreds.aliyun?.ALIYUN_ACCESS_KEY_ID) {
+      upsertTenantCloudProvider(tenantId, "aliyun", onboardingCreds.aliyun as JsonRecord);
+    }
     const provisioning = await finishWorkspaceProvisioning(created as JsonRecord, onboardingCreds as JsonRecord);
     response.status(201).json({ ...created, ...provisioning });
   } catch (error) {
@@ -145,14 +154,16 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
   // brand-new users (no tenant yet) onboard their first tenant+workspace here; only enforce
   // tenant-admin when targeting an existing tenant
   if (tenantId && !canAdminTenant(user.id, tenantId)) return response.status(403).json({ error: "tenant_admin_required" });
-  const missingCloudAccess = missingTenantCloudProviderAccess(tenantId, parsed.data.runtime_provider, parsed.data.sandbox_provider);
+  const missingCloudAccess = missingTenantCloudProviderAccess(tenantId, parsed.data.runtime_provider, parsed.data.sandbox_provider, parsed.data.runtime_pools, parsed.data.sandbox_pools, parsed.data.artifact_provider);
   if (missingCloudAccess.length) return response.status(400).json({ error: "cloud_provider_not_connected", missing: missingCloudAccess });
   const createCreds = withTenantCloudCredentials(tenantId, parsed.data.provider_credentials as Record<string, Record<string, unknown> | undefined>);
-  const missingCreateCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, createCreds, parsed.data.sandbox_config);
+  const missingCreateCreds = missingWorkspaceProvisioningCredentials(parsed.data.runtime_provider, parsed.data.sandbox_provider, createCreds, parsed.data.sandbox_config, parsed.data.runtime_pools, parsed.data.sandbox_pools, parsed.data.artifact_provider);
   if (missingCreateCreds.length) return response.status(400).json({ error: "provider_credentials_required", missing: missingCreateCreds });
   if (!tenantId) {
     const createCloudValidation = await validateWorkspaceVolcengineCredentials(createCreds);
     if (!createCloudValidation.ok) return response.status(400).json(createCloudValidation);
+    const createAliyunValidation = await validateWorkspaceAliyunCredentials(createCreds);
+    if (!createAliyunValidation.ok) return response.status(400).json(createAliyunValidation);
   }
   ensureGlobalModelConfigs();
   const missingWorkspaceModelConfigId = parsed.data.model_config_ids.find((modelConfigId) => !modelConfigAvailableForProvisioning(modelConfigId, user.id));
@@ -164,6 +175,9 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
     if (!tenantId && createdTenantId && createCreds.vefaas?.VOLCENGINE_ACCESS_KEY) {
       upsertTenantCloudProvider(createdTenantId, "volcengine", createCreds.vefaas as JsonRecord);
     }
+    if (!tenantId && createdTenantId && createCreds.aliyun?.ALIYUN_ACCESS_KEY_ID) {
+      upsertTenantCloudProvider(createdTenantId, "aliyun", createCreds.aliyun as JsonRecord);
+    }
     const provisioning = await finishWorkspaceProvisioning(created as JsonRecord, createCreds as JsonRecord);
     response.status(201).json({ ...created, ...provisioning, workspace: workspaceResponse((created as JsonRecord).workspace, user.id) });
   } catch (error) {
@@ -173,9 +187,19 @@ app.post("/v1/workspaces", async (request: AuthenticatedRequest, response) => {
 
 function withTenantCloudCredentials(tenantId: string, providerCredentials: Record<string, Record<string, unknown> | undefined>) {
   if (!tenantId) return providerCredentials;
-  const credentials = tenantCloudProviderCredentials(tenantId, "volcengine");
-  if (!Object.keys(credentials).length) return providerCredentials;
-  return { ...providerCredentials, vefaas: { ...credentials, ...(providerCredentials.vefaas ?? {}) } };
+  const volcengine = tenantCloudProviderCredentials(tenantId, "volcengine");
+  const aliyun = tenantCloudProviderCredentials(tenantId, "aliyun");
+  return {
+    ...providerCredentials,
+    ...(Object.keys(volcengine).length ? { vefaas: { ...volcengine, ...(providerCredentials.vefaas ?? {}) } } : {}),
+    ...(Object.keys(aliyun).length ? { aliyun: { ...aliyun, ...(providerCredentials.aliyun ?? {}) } } : {})
+  };
+}
+
+async function validateWorkspaceCloudCredentials(providerCredentials: Record<string, Record<string, unknown> | undefined>) {
+  const volcengine = await validateWorkspaceVolcengineCredentials(providerCredentials);
+  if (!volcengine.ok) return volcengine;
+  return validateWorkspaceAliyunCredentials(providerCredentials);
 }
 
 async function validateWorkspaceVolcengineCredentials(providerCredentials: Record<string, Record<string, unknown> | undefined>) {
@@ -190,48 +214,98 @@ async function validateWorkspaceVolcengineCredentials(providerCredentials: Recor
   });
 }
 
-function missingTenantCloudProviderAccess(tenantId: string, runtimeProvider: "vefaas" | "local_docker", sandboxProvider: "e2b" | "vefaas" | "local_docker" | "daytona") {
+async function validateWorkspaceAliyunCredentials(providerCredentials: Record<string, Record<string, unknown> | undefined>) {
+  const aliyun = providerCredentials.aliyun ?? providerCredentials.alibaba_cloud ?? {};
+  const accessKeyId = String(aliyun.ALIYUN_ACCESS_KEY_ID || aliyun.access_key_id || aliyun.ak || "");
+  const accessKeySecret = String(aliyun.ALIYUN_ACCESS_KEY_SECRET || aliyun.access_key_secret || aliyun.sk || "");
+  if (!accessKeyId && !accessKeySecret) return { ok: true as const };
+  return validateAliyunCredentials({
+    accessKeyId,
+    accessKeySecret,
+    region: String(aliyun.ALIYUN_REGION || aliyun.region || "cn-hangzhou")
+  });
+}
+
+type RuntimeProviderInput = "vefaas" | "local_docker" | "aliyun_fc";
+type SandboxProviderInput = "e2b" | "vefaas" | "local_docker" | "daytona" | "aliyun_fc";
+type ProviderPoolInput = Array<{ provider?: string }>;
+
+function missingTenantCloudProviderAccess(tenantId: string, runtimeProvider: RuntimeProviderInput, sandboxProvider: SandboxProviderInput, runtimePools: ProviderPoolInput = [], sandboxPools: ProviderPoolInput = [], artifactProvider?: "tos" | "oss") {
   if (!tenantId) return [];
   const missing: string[] = [];
-  const needsVolcengine = runtimeProvider === "vefaas" || sandboxProvider === "vefaas";
+  const runtimeProviders = providerSet(runtimeProvider, runtimePools);
+  const sandboxProviders = providerSet(sandboxProvider, sandboxPools);
+  const needsVolcengine = runtimeProviders.has("vefaas") || sandboxProviders.has("vefaas") || artifactProvider === "tos";
+  const needsAliyun = runtimeProviders.has("aliyun_fc") || sandboxProviders.has("aliyun_fc") || artifactProvider === "oss";
   if (needsVolcengine && !Object.keys(tenantCloudProviderCredentials(tenantId, "volcengine")).length) missing.push("volcengine");
+  if (needsAliyun && !Object.keys(tenantCloudProviderCredentials(tenantId, "aliyun")).length) missing.push("aliyun");
   return missing;
 }
 
 function missingWorkspaceProvisioningCredentials(
-  runtimeProvider: "vefaas" | "local_docker",
-  sandboxProvider: "e2b" | "vefaas" | "local_docker" | "daytona",
+  runtimeProvider: RuntimeProviderInput,
+  sandboxProvider: SandboxProviderInput,
   providerCredentials: Record<string, Record<string, unknown> | undefined>,
-  sandboxConfig: Record<string, unknown>
+  sandboxConfig: Record<string, unknown>,
+  runtimePools: ProviderPoolInput = [],
+  sandboxPools: ProviderPoolInput = [],
+  artifactProvider?: "tos" | "oss"
 ) {
   const vefaasCreds = providerCredentials?.vefaas ?? {};
+  const aliyunCreds = providerCredentials?.aliyun ?? providerCredentials?.alibaba_cloud ?? {};
   const e2bCreds = providerCredentials?.e2b ?? {};
   const vefaasSandboxCreds = providerCredentials?.vefaas_sandbox ?? {};
   const daytonaCreds = providerCredentials?.daytona ?? {};
   const vefaasSandboxConfig = asRecord(sandboxConfig.vefaas ?? sandboxConfig.vefaas_sandbox ?? sandboxConfig);
+  const aliyunSandboxConfig = asRecord(sandboxConfig.aliyun_fc ?? sandboxConfig.aliyun ?? sandboxConfig);
   const daytonaConfig = asRecord(sandboxConfig.daytona ?? sandboxConfig.daytona_sandbox ?? sandboxConfig);
   const required: Array<[string, unknown]> = [];
-  if (runtimeProvider === "vefaas") {
+  const runtimeProviders = providerSet(runtimeProvider, runtimePools);
+  const sandboxProviders = providerSet(sandboxProvider, sandboxPools);
+  if (runtimeProviders.has("vefaas") || artifactProvider === "tos") {
     required.push(
       ["VOLCENGINE_ACCESS_KEY", vefaasCreds.VOLCENGINE_ACCESS_KEY],
       ["VOLCENGINE_SECRET_KEY", vefaasCreds.VOLCENGINE_SECRET_KEY],
       ["VEFAAS_REGION", vefaasCreds.VEFAAS_REGION]
     );
   }
-  if (sandboxProvider === "e2b") required.push(["E2B_API_KEY", e2bCreds.E2B_API_KEY]);
-  if (sandboxProvider === "vefaas") {
+  if (runtimeProviders.has("aliyun_fc") || artifactProvider === "oss") {
+    required.push(
+      ["ALIYUN_ACCESS_KEY_ID", aliyunCreds.ALIYUN_ACCESS_KEY_ID ?? aliyunCreds.access_key_id ?? aliyunCreds.ak],
+      ["ALIYUN_ACCESS_KEY_SECRET", aliyunCreds.ALIYUN_ACCESS_KEY_SECRET ?? aliyunCreds.access_key_secret ?? aliyunCreds.sk],
+      ["ALIYUN_REGION", aliyunCreds.ALIYUN_REGION ?? aliyunCreds.region]
+    );
+  }
+  if (sandboxProviders.has("e2b")) required.push(["E2B_API_KEY", e2bCreds.E2B_API_KEY]);
+  if (sandboxProviders.has("vefaas")) {
     required.push(
       ["VEFAAS_SANDBOX_FUNCTION_ID", vefaasSandboxConfig.function_id ?? vefaasSandboxCreds.VEFAAS_SANDBOX_FUNCTION_ID],
       ["VEFAAS_SANDBOX_GATEWAY_URL", vefaasSandboxConfig.gateway_url ?? vefaasSandboxCreds.VEFAAS_SANDBOX_GATEWAY_URL]
     );
   }
-  if (sandboxProvider === "daytona") {
+  if (sandboxProviders.has("aliyun_fc")) {
+    required.push(
+      ["ALIYUN_ACCESS_KEY_ID", aliyunCreds.ALIYUN_ACCESS_KEY_ID ?? aliyunCreds.access_key_id ?? aliyunCreds.ak],
+      ["ALIYUN_ACCESS_KEY_SECRET", aliyunCreds.ALIYUN_ACCESS_KEY_SECRET ?? aliyunCreds.access_key_secret ?? aliyunCreds.sk],
+      ["ALIYUN_REGION", aliyunCreds.ALIYUN_REGION ?? aliyunCreds.region],
+      ["ALIYUN_FC_INVOKE_URL", aliyunSandboxConfig.invoke_url ?? aliyunCreds.ALIYUN_FC_INVOKE_URL]
+    );
+  }
+  if (sandboxProviders.has("daytona")) {
     required.push(
       ["DAYTONA_SERVER_URL", daytonaConfig.server_url ?? daytonaCreds.DAYTONA_SERVER_URL],
       ["DAYTONA_API_KEY", daytonaConfig.api_key ?? daytonaCreds.DAYTONA_API_KEY]
     );
   }
-  return required.filter(([, value]) => !String(value ?? "").trim()).map(([key]) => key);
+  return Array.from(new Set(required.filter(([, value]) => !String(value ?? "").trim()).map(([key]) => key)));
+}
+
+function providerSet(primary: string, pools: ProviderPoolInput) {
+  const providers = new Set([primary]);
+  for (const pool of pools) {
+    if (pool.provider) providers.add(String(pool.provider));
+  }
+  return providers;
 }
 
 app.delete("/v1/workspaces/:workspaceId", (request: AuthenticatedRequest, response) => {
@@ -318,11 +392,16 @@ app.get("/v1/workspaces/:workspaceId/runtime_pool", (request: AuthenticatedReque
   if (!canAccessWorkspace(currentUser(request).id, workspaceId)) return response.status(403).json({ error: "workspace_forbidden" });
   const pool = getWorkspaceRuntimePool(workspaceId);
   if (!pool) return response.status(404).json({ error: "runtime_pool_not_found" });
+  const pools = listWorkspaceRuntimePools(workspaceId);
   const { page, pageSize, status, offset } = poolMemberPageQuery(request.query as JsonRecord);
   const counts = countRuntimePoolMembersByStatus(pool.id);
   const { members: _all, ...meta } = pool;
   response.json({
     ...meta,
+    pools: pools.map((item) => {
+      const { members: _members, ...poolMeta } = item as JsonRecord;
+      return { ...poolMeta, member_status_counts: countRuntimePoolMembersByStatus(String((item as JsonRecord).id)).by_status };
+    }),
     members: listRuntimePoolMembersPage(pool.id, { limit: pageSize, offset, status }),
     member_total: poolMemberTotal(counts, status),
     member_status_counts: counts.by_status,
@@ -336,11 +415,16 @@ app.get("/v1/workspaces/:workspaceId/sandbox_pool", (request: AuthenticatedReque
   if (!canAccessWorkspace(currentUser(request).id, workspaceId)) return response.status(403).json({ error: "workspace_forbidden" });
   const pool = getWorkspaceSandboxPool(workspaceId);
   if (!pool) return response.status(404).json({ error: "sandbox_pool_not_found" });
+  const pools = listWorkspaceSandboxPools(workspaceId);
   const { page, pageSize, status, offset } = poolMemberPageQuery(request.query as JsonRecord);
   const counts = countSandboxPoolMembersByStatus(workspaceId, pool.provider);
   const { members: _all, ...meta } = pool;
   response.json({
     ...meta,
+    pools: pools.map((item) => {
+      const { members: _members, ...poolMeta } = item as JsonRecord;
+      return { ...poolMeta, member_status_counts: countSandboxPoolMembersByStatus(workspaceId, String((item as JsonRecord).provider)).by_status };
+    }),
     members: listSandboxPoolMembersPage(workspaceId, pool.provider, { limit: pageSize, offset, status }),
     member_total: poolMemberTotal(counts, status),
     member_status_counts: counts.by_status,

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { aliyunCredentials } from "../cloud/aliyunOpenApi";
 import { getSandboxDefaults } from "../sandboxConfig";
 import { ensureWorkspaceBucket } from "../files/workspaceStorage";
 import type { JsonRecord } from "../types";
@@ -9,8 +10,9 @@ const execFileAsync = promisify(execFile);
 
 async function runtimePoolMemberProvisioning(workspaceId: string, index: number, poolConfig: RuntimePoolConfig, providerCredentials?: JsonRecord) {
   const defaults = getSandboxDefaults();
-  const provider = runtimePoolProvider(workspaceId);
+  const provider = String((poolConfig as RuntimePoolConfig & { provider?: string }).provider || runtimePoolProvider(workspaceId));
   if (provider === "local_docker") return localDockerRuntimeProvisioning(workspaceId, index, poolConfig, defaults);
+  if (provider === "aliyun_fc") return directAliyunFcRuntimeProvisioning(workspaceId, index, poolConfig, defaults, providerCredentials);
   const vefaasCreds = (providerCredentials?.vefaas ?? {}) as Record<string, unknown>;
   const hasVolcengineCredentials = Boolean(
     (process.env.VOLCENGINE_ACCESS_KEY || process.env.VOLC_ACCESSKEY || vefaasCreds.VOLCENGINE_ACCESS_KEY) &&
@@ -133,6 +135,80 @@ async function directVefaasRuntimeProvisioning(workspaceId: string, index: numbe
   }
 }
 
+async function directAliyunFcRuntimeProvisioning(workspaceId: string, index: number, poolConfig: RuntimePoolConfig, defaults: ReturnType<typeof getSandboxDefaults>, providerCredentials?: JsonRecord) {
+  const functionName = `maple-ws-${workspaceId.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase().slice(0, 20)}-${index + 1}-${Date.now()}`;
+  const creds = aliyunCredentials((providerCredentials?.aliyun ?? providerCredentials?.alibaba_cloud) as JsonRecord | undefined);
+  const region = creds.region || defaults.aliyun_fc.region || "cn-hangzhou";
+  const deployScript = process.env.MAPLE_ALIYUN_FC_RUNTIME_DEPLOY_SCRIPT || "";
+  const configuredInvokeUrl = String(process.env.MAPLE_ALIYUN_FC_INVOKE_URL || defaults.aliyun_fc.invoke_url || "");
+  const configuredFunctionName = String(process.env.MAPLE_ALIYUN_FC_FUNCTION_NAME || defaults.aliyun_fc.function_name || functionName);
+  const envs = publicRuntimePoolMemberEnvs(runtimePoolMemberEnvs(defaults.aliyun_fc.envs, workspaceId, index, "managed-agents-platform-aliyun-fc"));
+  if (!deployScript) {
+    if (!configuredInvokeUrl) throw new Error("workspace runtime pool Aliyun FC provisioning requires MAPLE_ALIYUN_FC_RUNTIME_DEPLOY_SCRIPT or MAPLE_ALIYUN_FC_INVOKE_URL.");
+    return {
+      cloud_function_id: configuredFunctionName,
+      cloud_app_id: "",
+      invoke_url: configuredInvokeUrl,
+      region,
+      config: {
+        provider: "aliyun_fc",
+        workspace_path: defaults.aliyun_fc.workspace_path,
+        timeout_ms: defaults.aliyun_fc.timeout_ms,
+        envs,
+        function_name: configuredFunctionName,
+        source_type: "existing_http"
+      }
+    };
+  }
+  if (!creds.accessKeyId || !creds.accessKeySecret) throw new Error("workspace runtime pool Aliyun FC provisioning requires ALIYUN_ACCESS_KEY_ID/ALIYUN_ACCESS_KEY_SECRET.");
+  const payload = await runDeployScript(deployScript, {
+    ...process.env,
+    ALIYUN_ACCESS_KEY_ID: creds.accessKeyId,
+    ALIYUN_ACCESS_KEY_SECRET: creds.accessKeySecret,
+    ALIYUN_REGION: region,
+    MAPLE_ALIYUN_FC_FUNCTION_NAME: functionName,
+    MAPLE_ALIYUN_FC_MEMORY_MB: String(poolConfig.memory_mb),
+    MAPLE_ALIYUN_FC_RUNTIME_ENVS: JSON.stringify({
+      ...runtimePoolMemberEnvs(defaults.aliyun_fc.envs, workspaceId, index, "managed-agents-platform-aliyun-fc"),
+      MAPLE_RUNTIME_FUNCTION_MEMORY_MB: String(poolConfig.memory_mb),
+      MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
+      MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function),
+      MAPLE_RUNTIME_FUNCTION_MAX_CONCURRENCY: String(poolConfig.max_concurrency_per_instance)
+    })
+  });
+  if (!payload.invoke_url || !(payload.function_name || payload.function_id)) {
+    throw new Error(`Aliyun FC deploy script returned incomplete payload: ${JSON.stringify(payload)}`);
+  }
+  return {
+    cloud_function_id: String(payload.function_name || payload.function_id),
+    cloud_app_id: String(payload.service_name || payload.serviceName || ""),
+    invoke_url: String(payload.invoke_url || ""),
+    region: String(payload.region || region),
+    config: {
+      provider: "aliyun_fc",
+      workspace_path: defaults.aliyun_fc.workspace_path,
+      timeout_ms: defaults.aliyun_fc.timeout_ms,
+      envs,
+      function_name: String(payload.function_name || payload.function_id),
+      service_name: String(payload.service_name || payload.serviceName || ""),
+      source_type: String(payload.source_type || "deploy_script")
+    }
+  };
+}
+
+async function runDeployScript(script: string, env: NodeJS.ProcessEnv) {
+  const command = script.endsWith(".py") ? "python3" : (script.endsWith(".mjs") || script.endsWith(".js")) ? process.execPath : script;
+  const args = command === script ? [] : [script];
+  const { stdout } = await execFileAsync(command, args, {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: Number(process.env.MAPLE_ALIYUN_FC_RELEASE_TIMEOUT_MS || 5 * 60 * 1000),
+    env
+  });
+  return JSON.parse(stdout) as JsonRecord;
+}
+
 function updateRuntimePoolMember(memberId: string, fields: { cloud_function_id?: string; cloud_app_id?: string; invoke_url?: string; region?: string; status?: string; config?: JsonRecord }) {
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -161,7 +237,7 @@ export async function provisionPoolMembersBackground(workspaceId: string, member
     }
   };
   await Promise.all(Array.from({ length: concurrency }, provisionNext));
-  if (runtimePoolProvider(workspaceId) !== "local_docker") {
+  if (String((poolConfig as RuntimePoolConfig & { provider?: string }).provider || runtimePoolProvider(workspaceId)) !== "local_docker") {
     // Provision the tenant's TOS bucket alongside cloud runtime pools (best-effort; the upload path
     // re-ensures it, so a failure here is non-fatal — it just defers creation to first upload).
     await ensureWorkspaceBucket(workspaceId).catch((error) => console.warn("[provision] ensureWorkspaceBucket failed", workspaceId, error));
