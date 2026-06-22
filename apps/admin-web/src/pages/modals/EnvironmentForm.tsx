@@ -23,12 +23,13 @@ export function EnvironmentForm({ workspaceId, sandboxProvider, onClose, onCreat
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const provider = sandboxProvider === "local_docker" ? "local_docker" : sandboxProvider === "vefaas" ? "vefaas" : "e2b";
-  const providerLabel = provider === "local_docker" ? "Local Docker Sandbox" : provider === "vefaas" ? "VeFaaS Sandbox" : "E2B";
+  const provider = sandboxProvider === "local_docker" ? "local_docker" : sandboxProvider === "vefaas" ? "vefaas" : sandboxProvider === "daytona" ? "daytona" : "e2b";
+  const providerLabel = provider === "local_docker" ? "Local Docker Sandbox" : provider === "vefaas" ? "VeFaaS Sandbox" : provider === "daytona" ? "Daytona Sandbox" : "E2B";
 
   function sandboxConfig() {
     if (provider === "vefaas") return { provider: "vefaas" };
     if (provider === "local_docker") return { provider: "local_docker", local_docker: { image: "node:22-bookworm" } };
+    if (provider === "daytona") return { provider: "daytona", daytona: { workspace_path: "/workspace", timeout_ms: 3_600_000 } };
     return { provider: "e2b", e2b: { template: "base", workspace_path: "/workspace", timeout_ms: 3_600_000 } };
   }
 

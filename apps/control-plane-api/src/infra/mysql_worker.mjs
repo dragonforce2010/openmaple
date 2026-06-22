@@ -29,8 +29,8 @@ Promise.all(
 
 async function runPayload(payload) {
   const activePool = getPool();
-  if (payload.op === "transaction") {
-    // transactions need a dedicated connection (pool itself has no begin/commit)
+  if (payload.op === "transaction" || payload.op === "script") {
+    // Transactions and multi-statement scripts use one connection; only transactions call begin/commit.
     const conn = await activePool.getConnection();
     try {
       return await runOp(conn, payload);

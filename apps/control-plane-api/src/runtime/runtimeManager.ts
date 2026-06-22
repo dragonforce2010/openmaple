@@ -151,10 +151,13 @@ export function withWorkspaceRuntimeCredentials(environment: JsonRecord): JsonRe
   const vefaasCreds = asRecord(providerCredentials.vefaas);
   const vefaasSandboxCreds = asRecord(providerCredentials.vefaas_sandbox);
   const e2bCreds = asRecord(providerCredentials.e2b);
+  const daytonaCreds = asRecord(providerCredentials.daytona);
   const sandbox = asRecord(config.sandbox);
   const e2b = asRecord(sandbox.e2b ?? config.e2b);
+  const daytona = asRecord(sandbox.daytona ?? sandbox.daytona_sandbox ?? config.daytona ?? config.daytona_sandbox);
   const vefaas = asRecord(sandbox.vefaas ?? sandbox.vefaas_sandbox ?? config.vefaas_sandbox);
   const workspaceVefaas = asRecord(sandboxConfig.vefaas ?? sandboxConfig.vefaas_sandbox ?? sandboxConfig);
+  const workspaceDaytona = asRecord(sandboxConfig.daytona ?? sandboxConfig.daytona_sandbox ?? sandboxConfig);
   return {
     ...config,
     sandbox: {
@@ -162,6 +165,14 @@ export function withWorkspaceRuntimeCredentials(environment: JsonRecord): JsonRe
       e2b: {
         ...e2b,
         api_key: e2b.api_key || e2bCreds.E2B_API_KEY
+      },
+      daytona: {
+        ...daytona,
+        ...workspaceDaytona,
+        server_url: daytona.server_url || workspaceDaytona.server_url || daytonaCreds.DAYTONA_SERVER_URL,
+        api_key: daytona.api_key || workspaceDaytona.api_key || daytonaCreds.DAYTONA_API_KEY,
+        workspace_class: daytona.workspace_class || workspaceDaytona.workspace_class || daytonaCreds.DAYTONA_WORKSPACE_CLASS,
+        timeout_ms: daytona.timeout_ms || workspaceDaytona.timeout_ms || daytonaCreds.DAYTONA_TIMEOUT_MS
       },
       vefaas: {
         ...vefaas,

@@ -12,10 +12,15 @@ export function WorkspaceCreateSandboxStep(props: {
   L: LFn;
   error: string;
   setError: (value: string) => void;
-  sandboxProvider: "e2b" | "vefaas";
-  setSandboxProvider: (value: "e2b" | "vefaas") => void;
+  sandboxProvider: "e2b" | "daytona" | "vefaas";
+  setSandboxProvider: (value: "e2b" | "daytona" | "vefaas") => void;
+  volcengineConnected: boolean;
   e2bApiKey: string;
   setE2bApiKey: (value: string) => void;
+  daytonaServerUrl: string;
+  setDaytonaServerUrl: (value: string) => void;
+  daytonaApiKey: string;
+  setDaytonaApiKey: (value: string) => void;
   vefaasSandboxFunctionId: string;
   setVefaasSandboxFunctionId: (value: string) => void;
   vefaasSandboxGatewayUrl: string;
@@ -33,14 +38,25 @@ export function WorkspaceCreateSandboxStep(props: {
         <button type="button" className={`prov-card ${props.sandboxProvider === "e2b" ? "on" : ""}`} onClick={() => { props.setSandboxProvider("e2b"); clearError(); }}>
           <div className="pc-ic"><Icon name="i-server" size={18} /></div><b>E2B</b><span>{L("E2B 云沙箱", "E2B cloud sandbox")}</span>{props.sandboxProvider === "e2b" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}
         </button>
-        <button type="button" className={`prov-card ${props.sandboxProvider === "vefaas" ? "on" : ""}`} onClick={() => { props.setSandboxProvider("vefaas"); clearError(); }}>
-          <div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("火山云沙箱", "Volcengine cloud sandbox")}</span>{props.sandboxProvider === "vefaas" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}
+        <button type="button" className={`prov-card ${props.sandboxProvider === "daytona" ? "on" : ""}`} onClick={() => { props.setSandboxProvider("daytona"); clearError(); }}>
+          <div className="pc-ic"><Icon name="i-server" size={18} /></div><b>Daytona</b><span>{L("独立开发环境沙箱", "Independent development-environment sandbox")}</span>{props.sandboxProvider === "daytona" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}
         </button>
+        {props.volcengineConnected ? (
+          <button type="button" className={`prov-card ${props.sandboxProvider === "vefaas" ? "on" : ""}`} onClick={() => { props.setSandboxProvider("vefaas"); clearError(); }}>
+            <div className="pc-ic"><Icon name="i-cloud" size={18} /></div><b>VeFaaS</b><span>{L("火山云沙箱", "Volcengine cloud sandbox")}</span>{props.sandboxProvider === "vefaas" ? <span className="pc-check"><Icon name="i-check" size={15} /></span> : null}
+          </button>
+        ) : null}
       </div>
       {props.sandboxProvider === "e2b" ? (
         <div className="cred-box">
           <div className="cred-head"><Icon name="i-key" size={14} /> E2B {L("凭据", "credentials")}</div>
           <label className="form">E2B_API_KEY<input className="fld" type="password" value={props.e2bApiKey} autoComplete="off" placeholder="E2B_API_KEY" onChange={(event) => { props.setE2bApiKey(event.target.value); clearError(); }} /></label>
+        </div>
+      ) : props.sandboxProvider === "daytona" ? (
+        <div className="cred-box">
+          <div className="cred-head"><Icon name="i-key" size={14} /> Daytona</div>
+          <label className="form">DAYTONA_SERVER_URL<input className="fld" value={props.daytonaServerUrl} autoComplete="off" placeholder="https://daytona.example.com" onChange={(event) => { props.setDaytonaServerUrl(event.target.value); clearError(); }} /></label>
+          <label className="form">DAYTONA_API_KEY<input className="fld" type="password" value={props.daytonaApiKey} autoComplete="off" placeholder="DAYTONA_API_KEY" onChange={(event) => { props.setDaytonaApiKey(event.target.value); clearError(); }} /></label>
         </div>
       ) : (
         <div className="cred-box">
