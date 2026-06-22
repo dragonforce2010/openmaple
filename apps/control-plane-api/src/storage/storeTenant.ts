@@ -1,9 +1,11 @@
 import { nanoid } from "nanoid";
+import { decryptSecret, encryptSecret } from "../secrets";
 import type { JsonRecord } from "../types";
 import { db, fromJson, now, recordValue } from "./storeCore";
 import { hydrateUserRow, hydrateWorkspaceRow } from "./storeHydrators";
 import { ensureUserByEmail } from "./storeTemplatesSkillsUsers";
 import { normalizeWorkspaceSlug } from "./storeWorkspace";
+import { safeTenantCloudProvider, safeTenantCloudProviders, safeTenantMetadata } from "./tenantMetadata";
 
 export function tenantSlugFromRecord(tenant: JsonRecord) {
   const inlineMetadata = recordValue(tenant.metadata);
@@ -50,7 +52,7 @@ export function listAccessibleTenants(userId: string) {
 	    .map((row) => {
 	      const metadata = fromJson<JsonRecord>(String(row.metadata_json ?? ""), {});
 	      const { metadata_json: _metadataJson, ...tenant } = row;
-	      return { ...tenant, metadata, slug: tenantSlugFromRecord({ ...row, metadata }) };
+	      return { ...tenant, metadata: safeTenantMetadata(metadata), slug: tenantSlugFromRecord({ ...row, metadata }) };
 	    });
 }
 
@@ -199,4 +201,75 @@ export function removeTenantMember(tenantId: string, userId: string) {
     .prepare("DELETE FROM tenant_members WHERE tenant_id = ? AND user_id = ? AND role <> 'admin'")
     .run(tenantId, userId) as { changes?: number };
   return { removed: Number(result.changes || 0) > 0 };
+}
+
+export function tenantCloudProviders(tenantId: string) {
+  const tenant = db.prepare("SELECT metadata_json FROM tenants WHERE id = ?").get(tenantId) as JsonRecord | undefined;
+  const metadata = fromJson<JsonRecord>(String(tenant?.metadata_json ?? ""), {});
+  return safeTenantCloudProviders(metadata.cloud_providers);
+}
+
+export function tenantCloudProviderCredentials(tenantId: string, provider: string) {
+  if (!tenantId || !provider) return {};
+  const row = db
+    .prepare("SELECT secret_cipher FROM tenant_cloud_provider_credentials WHERE tenant_id = ? AND provider = ?")
+    .get(tenantId, provider) as JsonRecord | undefined;
+  if (row?.secret_cipher) {
+    try {
+      return fromJson<JsonRecord>(decryptSecret(String(row.secret_cipher)), {});
+    } catch {
+      return {};
+    }
+  }
+  const tenant = db.prepare("SELECT metadata_json FROM tenants WHERE id = ?").get(tenantId) as JsonRecord | undefined;
+  const metadata = fromJson<JsonRecord>(String(tenant?.metadata_json ?? ""), {});
+  return recordValue(recordValue(recordValue(metadata.cloud_providers)[provider]).credentials);
+}
+
+export function upsertTenantCloudProvider(tenantId: string, provider: string, credentials: JsonRecord) {
+  const tenant = db.prepare("SELECT metadata_json FROM tenants WHERE id = ?").get(tenantId) as JsonRecord | undefined;
+  if (!tenant) return null;
+  const metadata = fromJson<JsonRecord>(String(tenant.metadata_json ?? ""), {});
+  const providers = recordValue(metadata.cloud_providers);
+  const nowValue = now();
+  const publicProvider = {
+    provider,
+    connected: true,
+    access_key_hint: maskTenantSecretHint(String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || "")),
+    region: String(credentials.region || credentials.VEFAAS_REGION || "cn-beijing"),
+    credential_source: `tenant_cloud_provider_credentials.${provider}`,
+    updated_at: nowValue
+  };
+  providers[provider] = publicProvider;
+  metadata.cloud_providers = providers;
+  const existing = db
+    .prepare("SELECT id FROM tenant_cloud_provider_credentials WHERE tenant_id = ? AND provider = ?")
+    .get(tenantId, provider) as JsonRecord | undefined;
+  const secretCipher = encryptSecret(JSON.stringify(credentials));
+  const credentialMetadata = { provider, region: publicProvider.region, access_key_hint: publicProvider.access_key_hint };
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE tenants SET metadata_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(metadata), nowValue, tenantId);
+    if (existing) {
+      db.prepare("UPDATE tenant_cloud_provider_credentials SET secret_cipher = ?, metadata_json = ?, updated_at = ? WHERE id = ?").run(
+        secretCipher,
+        JSON.stringify(credentialMetadata),
+        nowValue,
+        existing.id
+      );
+      return;
+    }
+    db.prepare(`
+      INSERT INTO tenant_cloud_provider_credentials
+      (id, tenant_id, provider, secret_cipher, metadata_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(`tncloud_${nanoid(10)}`, tenantId, provider, secretCipher, JSON.stringify(credentialMetadata), nowValue, nowValue);
+  });
+  tx();
+  return safeTenantCloudProvider(publicProvider) as JsonRecord;
+}
+
+function maskTenantSecretHint(value: string) {
+  if (!value) return "";
+  if (value.length <= 8) return `${value[0] ?? ""}***${value[value.length - 1] ?? ""}`;
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
 }

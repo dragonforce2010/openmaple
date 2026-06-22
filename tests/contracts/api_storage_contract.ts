@@ -25,6 +25,12 @@ const seedNames = [
   "Project Memory",
   "Local Development Vault"
 ];
+const bundledDefaultModelNames = [
+  "glm-4-7-251222",
+  "doubao-seed-1-6-flash-250615",
+  "doubao-seed-2-0-lite-260428",
+  "deepseek-v4-flash-260425"
+];
 
 const server = spawn("bun", ["apps/control-plane-api/src/index.ts"], {
   cwd: process.cwd(),
@@ -66,20 +72,25 @@ try {
   userId = String(login.user.id);
 
   const configs = await getJson(`${apiBase}/v1/model_configs`, cookie);
-  const defaultModelNames = configs.data.map((item: Record<string, unknown>) => item.model_name);
+  const configItems = configs.data as Array<Record<string, unknown>>;
+  const defaultModelNames = configItems.map((item) => item.model_name);
   assert.ok(defaultModelNames.includes("glm-4-7-251222"), "model config listing must ensure GLM-4.7");
   assert.ok(defaultModelNames.includes("doubao-seed-1-6-flash-250615"), "model config listing must ensure Doubao Seed Flash");
   assert.ok(defaultModelNames.includes("doubao-seed-2-0-lite-260428"), "model config listing must ensure Doubao Seed 2.0 Lite Multimodal");
   assert.ok(defaultModelNames.includes("deepseek-v4-flash-260425"), "model config listing must ensure DeepSeek V4 Flash");
-  assert.equal(configs.data.length, 4, "model config listing must ensure four default VolcoEngine endpoints");
-  for (const config of configs.data) {
+  const bundledDefaultConfigs = bundledDefaultModelNames.map((name) => configItems.find((item) => item.model_name === name));
+  for (const config of configItems) {
     assert.equal(config.api_key_ref, undefined);
     assert.equal(config.api_key_ciphertext, undefined);
+  }
+  for (const config of bundledDefaultConfigs) {
+    assert.ok(config, "model config listing must include bundled VolcoEngine defaults");
     if (process.env.ARK_API_KEY) {
       assert.equal(config.has_api_key, true);
       assert.match(config.api_key_hint, /^[^*]{3}\.\.\./);
     }
   }
+  const selectedDefaultConfig = bundledDefaultConfigs[0]!;
 
   const workspaceResponse = await fetch(`${apiBase}/v1/workspaces`, {
     method: "POST",
@@ -95,7 +106,7 @@ try {
         memory_mb: 4096
       },
       sandbox_provider: "e2b",
-      model_config_ids: [String(configs.data[0].id)],
+      model_config_ids: [String(selectedDefaultConfig.id)],
       api_key: { display_name: "API storage workspace key", scopes: ["control_plane", "data_plane"] },
       provider_credentials: {
         vefaas: {

@@ -1,14 +1,22 @@
-import type { JsonRecord } from "../types";
 import { GLOBAL_SCOPE_ID, db, now, toJson } from "./storeCore";
 import { storeSchemaSql } from "./storeSchema";
-import { ensureTenantAdmin } from "./storeTenant";
 
 export function initDatabase() {
-  db.exec(storeSchemaSql);
+  traceInit("schema", () => db.exec(storeSchemaSql));
 
-  ensureWorkspaceColumns();
-  ensureGlobalScopeSentinel();
-  ensureTenantAdminBackfill();
+  traceInit("workspace columns", ensureWorkspaceColumns);
+  traceInit("global scope sentinel", ensureGlobalScopeSentinel);
+  traceInit("tenant admin backfill", ensureTenantAdminBackfill);
+}
+
+function traceInit<T>(label: string, fn: () => T) {
+  if (process.env.MAPLE_INIT_TRACE !== "true") return fn();
+  const started = Date.now();
+  try {
+    return fn();
+  } finally {
+    console.error(`[initDatabase] ${label} ${Date.now() - started}ms`);
+  }
 }
 
 // The "-1" GLOBAL_SCOPE_ID sentinel is used to scope global resources (e.g. shared model
@@ -192,24 +200,30 @@ function ensureDeploymentColumns() {
 }
 
 function ensureTenantAdminBackfill() {
-  const rows = db
-    .prepare(
-      `SELECT tenant_id, created_by_user_id
-       FROM workspaces
-       WHERE tenant_id IS NOT NULL AND tenant_id <> '' AND created_by_user_id IS NOT NULL AND created_by_user_id <> ''
-       ORDER BY tenant_id ASC, created_at ASC`
-    )
-    .all() as JsonRecord[];
-  const seededTenants = new Set<string>();
-  for (const row of rows) {
-    const tenantId = String(row.tenant_id);
-    const userId = String(row.created_by_user_id);
-    if (!seededTenants.has(tenantId)) {
-      db.prepare("UPDATE tenants SET created_by_user_id = ? WHERE id = ? AND (created_by_user_id IS NULL OR created_by_user_id = '')").run(userId, tenantId);
-      seededTenants.add(tenantId);
-    }
-    ensureTenantAdmin(tenantId, userId);
-  }
+  db.exec(`
+    UPDATE tenants t
+    JOIN (
+      SELECT tenant_id, SUBSTRING_INDEX(GROUP_CONCAT(created_by_user_id ORDER BY created_at ASC SEPARATOR ','), ',', 1) AS owner_user_id
+      FROM workspaces
+      WHERE tenant_id IS NOT NULL AND tenant_id <> '' AND created_by_user_id IS NOT NULL AND created_by_user_id <> ''
+      GROUP BY tenant_id
+    ) seed ON seed.tenant_id = t.id
+    SET t.created_by_user_id = seed.owner_user_id
+    WHERE t.created_by_user_id IS NULL OR t.created_by_user_id = ''
+  `);
+  db.prepare(`
+    INSERT IGNORE INTO tenant_members (id, tenant_id, user_id, role, created_at)
+    SELECT CONCAT('tnmem_', LEFT(MD5(CONCAT(w.tenant_id, ':', w.created_by_user_id, ':admin')), 10)), w.tenant_id, w.created_by_user_id, 'admin', ?
+    FROM (
+      SELECT DISTINCT tenant_id, created_by_user_id
+      FROM workspaces
+      WHERE tenant_id IS NOT NULL AND tenant_id <> '' AND created_by_user_id IS NOT NULL AND created_by_user_id <> ''
+    ) w
+    JOIN tenants t ON t.id = w.tenant_id
+    JOIN users u ON u.id = w.created_by_user_id
+    LEFT JOIN tenant_members tm ON tm.tenant_id = w.tenant_id AND tm.user_id = w.created_by_user_id
+    WHERE tm.user_id IS NULL
+  `).run(now());
 }
 
 function ensureColumn(table: string, column: string, definition: string) {

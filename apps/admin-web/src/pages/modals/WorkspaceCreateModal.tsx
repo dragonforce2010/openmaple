@@ -1,9 +1,8 @@
-import { Fragment, useState } from "react";
-import { apiPost } from "../../api";
-import type { ModelConfig, Workspace, WorkspaceApiKey } from "../../types";
+import { Fragment, useEffect, useState } from "react";
+import { apiGet, apiPost, type ApiList } from "../../api";
+import type { JsonRecord, ModelConfig, Workspace, WorkspaceApiKey } from "../../types";
 import { Icon, useToast } from "../../ui";
 import { useI18n } from "../../appConfig";
-import { Select } from "../../components/shared/forms";
 import { WS_COLORS } from "../../components/shared/labels";
 import { ModalShell } from "../../components/shared/layout";
 import { slugify } from "../../components/shared/misc";
@@ -28,11 +27,12 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
   const [description, setDescription] = useState("");
   const [slug, setSlug] = useState("");
   const [color, setColor] = useState(WS_COLORS[5] ?? WS_COLORS[0]);
-  const [vefaasAccessKey, setVefaasAccessKey] = useState("");
-  const [vefaasSecretKey, setVefaasSecretKey] = useState("");
-  const [vefaasRegion, setVefaasRegion] = useState("cn-beijing");
-  const [sandboxProvider, setSandboxProvider] = useState<"e2b" | "vefaas">("e2b");
+  const [cloudProviders, setCloudProviders] = useState<Record<string, JsonRecord>>({});
+  const [cloudProviderLoading, setCloudProviderLoading] = useState(Boolean(props.tenantId));
+  const [sandboxProvider, setSandboxProvider] = useState<"e2b" | "daytona" | "vefaas">("e2b");
   const [e2bApiKey, setE2bApiKey] = useState("");
+  const [daytonaServerUrl, setDaytonaServerUrl] = useState("");
+  const [daytonaApiKey, setDaytonaApiKey] = useState("");
   const [vefaasSandboxFunctionId, setVefaasSandboxFunctionId] = useState("");
   const [vefaasSandboxGatewayUrl, setVefaasSandboxGatewayUrl] = useState("");
   const [vefaasSandboxTimeoutMs, setVefaasSandboxTimeoutMs] = useState(3_600_000);
@@ -57,13 +57,38 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
   const normalizedSlug = slug.trim() || (name.trim() ? slugify(name.trim()) : "");
   const apiKeyPlaceholder = `${name.trim() || L("workspace 名称", "workspace-name")}-apikey`;
 
-  const runtimeCredsFilled = Boolean(vefaasAccessKey.trim() && vefaasSecretKey.trim() && vefaasRegion.trim());
+  const volcengineConnected = Boolean(cloudProviders.volcengine?.connected);
+  const runtimeCredsFilled = volcengineConnected;
   const sandboxFilled = sandboxProvider === "e2b"
     ? Boolean(e2bApiKey.trim())
-    : Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim());
+    : sandboxProvider === "daytona"
+      ? Boolean(daytonaServerUrl.trim() && daytonaApiKey.trim())
+      : volcengineConnected && Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim());
   const credsFilled = runtimeCredsFilled && sandboxFilled;
 
   const slugTooShort = Boolean(slug.trim()) && slug.trim().length < 3;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!props.tenantId) {
+      setCloudProviders({});
+      setCloudProviderLoading(false);
+      return;
+    }
+    setCloudProviderLoading(true);
+    apiGet<ApiList<JsonRecord>>(`/v1/tenants/${encodeURIComponent(props.tenantId)}/cloud_providers`)
+      .then((result) => {
+        if (cancelled) return;
+        setCloudProviders(Object.fromEntries(result.data.map((provider) => [String(provider.provider), provider])));
+      })
+      .catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason)); })
+      .finally(() => { if (!cancelled) setCloudProviderLoading(false); });
+    return () => { cancelled = true; };
+  }, [props.tenantId]);
+
+  useEffect(() => {
+    if (sandboxProvider === "vefaas" && !volcengineConnected) setSandboxProvider("e2b");
+  }, [sandboxProvider, volcengineConnected]);
 
   function isStepComplete(index: number) {
     if (index === 0) return Boolean(name.trim()) && !slugTooShort;
@@ -77,10 +102,12 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
   }
 
   function stepError(index: number) {
-    if (index === 1) return L("请填写 VeFaaS AK/SK 与 Region。", "VeFaaS AK/SK and region are required.");
+    if (index === 1) return L("请先在租户配置中接入火山引擎云厂商。", "Connect Volcengine in tenant settings first.");
     if (index === 2) return sandboxProvider === "vefaas"
-      ? L("请确认上一步 AK/SK/Region 已填写，并完成 VeFaaS sandbox 配置。", "Confirm AK/SK/Region in the previous step and complete VeFaaS sandbox configuration.")
-      : L("请完成沙箱配置。", "Sandbox configuration is required.");
+      ? L("请确认租户已接入火山引擎，并完成 VeFaaS sandbox 配置。", "Confirm Volcengine is connected for this tenant and complete VeFaaS sandbox configuration.")
+      : sandboxProvider === "daytona"
+        ? L("请填写 Daytona Server URL 与 API Key。", "Enter Daytona Server URL and API Key.")
+        : L("请完成沙箱配置。", "Sandbox configuration is required.");
     if (slugTooShort) return L("标识至少 3 个字符，或留空自动生成。", "Slug needs at least 3 characters, or leave it empty.");
     return L("请填写工作区名称。", "Workspace name is required.");
   }
@@ -138,10 +165,12 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
     }
     if (!credsFilled) {
       setError(!runtimeCredsFilled
-        ? L("请填写 VeFaaS AK/SK 与 Region。", "VeFaaS AK/SK and region are required.")
+        ? L("请先在租户配置中接入火山引擎云厂商。", "Connect Volcengine in tenant settings first.")
         : sandboxProvider === "vefaas"
-          ? L("请确认 AK/SK/Region 已填写，并完成 VeFaaS sandbox 配置。", "Confirm AK/SK/Region and complete VeFaaS sandbox configuration.")
-          : L("请完成沙箱配置。", "Sandbox configuration is required."));
+          ? L("请确认租户已接入火山引擎，并完成 VeFaaS sandbox 配置。", "Confirm Volcengine is connected for this tenant and complete VeFaaS sandbox configuration.")
+          : sandboxProvider === "daytona"
+            ? L("请填写 Daytona Server URL 与 API Key。", "Enter Daytona Server URL and API Key.")
+            : L("请完成沙箱配置。", "Sandbox configuration is required."));
       setStep(runtimeCredsFilled ? 2 : 1);
       return;
     }
@@ -166,6 +195,8 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
                 workspace_path: "/home/tiger/workspace"
               }
             }
+          : sandboxProvider === "daytona"
+            ? { daytona: { server_url: daytonaServerUrl.trim(), api_key: daytonaApiKey.trim() } }
           : {},
         sandbox_pool: { desired_size: sandboxPoolSize, standby_ttl_ms: 30 * 60 * 1000 },
         runtime_pool: {
@@ -180,8 +211,9 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
         member_emails: memberEmails,
         api_key: { display_name: apiKeyName.trim() || apiKeyPlaceholder, scopes: ["control_plane", "data_plane"] },
         provider_credentials: {
-          vefaas: { VOLCENGINE_ACCESS_KEY: vefaasAccessKey.trim(), VOLCENGINE_SECRET_KEY: vefaasSecretKey.trim(), VEFAAS_REGION: vefaasRegion.trim() },
-          e2b: sandboxProvider === "e2b" ? { E2B_API_KEY: e2bApiKey.trim() } : {}
+          vefaas: {},
+          e2b: sandboxProvider === "e2b" ? { E2B_API_KEY: e2bApiKey.trim() } : {},
+          daytona: sandboxProvider === "daytona" ? { DAYTONA_SERVER_URL: daytonaServerUrl.trim(), DAYTONA_API_KEY: daytonaApiKey.trim() } : {}
         }
       });
       toast(L("工作区已创建", "Workspace created"), "ok");
@@ -202,7 +234,7 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
       provisioningLog("info", L(`初始化 Runtime Pool：${desiredSize} 个 VeFaaS 函数，min=${minInstances}，max=${maxInstances}，concurrency=${maxConcurrency}。`, `Initializing Runtime Pool: ${desiredSize} VeFaaS functions, min=${minInstances}, max=${maxInstances}, concurrency=${maxConcurrency}.`)),
       provisioningLog("info", sandboxProvider === "vefaas"
         ? L(`初始化 Sandbox Pool：${sandboxPoolSize} 个 standby veFaaS 沙箱，TTL 30m。`, `Initializing Sandbox Pool: ${sandboxPoolSize} standby veFaaS sandboxes, TTL 30m.`)
-        : L("Sandbox Provider 为 E2B：记录配置，standby veFaaS pool 不创建。", "Sandbox Provider is E2B: storing config; standby veFaaS pool is not created.")),
+        : L(`Sandbox Provider 为 ${sandboxProvider}：记录独立沙箱配置。`, `Sandbox Provider is ${sandboxProvider}: storing independent sandbox config.`)),
       provisioningLog("info", L("创建成功后 runtime pool 和 sandbox pool 会在后台继续初始化。", "After creation, the runtime pool and sandbox pool continue provisioning in the background."))
     ];
   }
@@ -252,27 +284,20 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
 
       {step === 1 ? (
         <div className="provision-step">
-          <div className="ro-provider">
-            <span className="rop-ic"><Icon name="i-cloud" size={18} /></span>
-            <span className="rop-main"><b>VeFaaS</b><span>{L("Agent 运行时 provider", "Agent runtime provider")}</span></span>
-            <span className="ro-lock">{L("固定", "Locked")}</span>
-          </div>
+          {volcengineConnected ? (
+            <div className="ro-provider">
+              <span className="rop-ic"><Icon name="i-cloud" size={18} /></span>
+              <span className="rop-main"><b>VeFaaS</b><span>{L("Agent 运行时 provider", "Agent runtime provider")}</span></span>
+              <span className="ro-lock">{L("来自火山引擎", "From Volcengine")}</span>
+            </div>
+          ) : null}
           <div className="cred-box">
-            <div className="cred-head"><Icon name="i-key" size={14} /> VeFaaS {L("凭据", "credentials")}</div>
-            <label className="form">VOLCENGINE_ACCESS_KEY<input className="fld" value={vefaasAccessKey} autoComplete="off" placeholder="VOLCENGINE_ACCESS_KEY" onChange={(event) => { setVefaasAccessKey(event.target.value); if (error) setError(""); }} /></label>
-            <label className="form">VOLCENGINE_SECRET_KEY<input className="fld" type="password" value={vefaasSecretKey} autoComplete="off" placeholder="VOLCENGINE_SECRET_KEY" onChange={(event) => { setVefaasSecretKey(event.target.value); if (error) setError(""); }} /></label>
-            <label className="form">VEFAAS_REGION
-              <Select
-                value={vefaasRegion}
-                options={[
-                  { value: "cn-beijing", label: "cn-beijing" },
-                  { value: "cn-shanghai", label: "cn-shanghai" },
-                  { value: "cn-guangzhou", label: "cn-guangzhou" },
-                  { value: "ap-southeast-1", label: "ap-southeast-1" }
-                ]}
-                onChange={setVefaasRegion}
-              />
-            </label>
+            <div className="cred-head"><Icon name="i-key" size={14} /> {L("租户级云凭据", "Tenant-level cloud credentials")}</div>
+            {cloudProviderLoading ? <div className="panel-empty">{L("正在读取租户云厂商接入状态…", "Loading tenant cloud provider access…")}</div> : volcengineConnected ? (
+              <div className="panel-empty">{L(`已接入火山引擎 · ${String(cloudProviders.volcengine?.access_key_hint || "")}`, `Volcengine connected · ${String(cloudProviders.volcengine?.access_key_hint || "")}`)}</div>
+            ) : (
+              <div className="modal-note"><Icon name="i-alert" size={16} /> {L("租户尚未接入火山引擎，因此不能创建云端 Runtime。请先到租户页接入火山引擎。", "Volcengine is not connected for this tenant, so cloud Runtime cannot be created. Connect Volcengine from the tenant page first.")}</div>
+            )}
           </div>
           <div className="pool-grid two">
             <label className="form">{L("预热函数数", "Prewarm")}<input className="fld" type="number" min={0} value={desiredSize} onChange={(event) => setDesiredSize(Number(event.target.value))} /></label>
@@ -292,8 +317,13 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
           setError={setError}
           sandboxProvider={sandboxProvider}
           setSandboxProvider={setSandboxProvider}
+          volcengineConnected={volcengineConnected}
           e2bApiKey={e2bApiKey}
           setE2bApiKey={setE2bApiKey}
+          daytonaServerUrl={daytonaServerUrl}
+          setDaytonaServerUrl={setDaytonaServerUrl}
+          daytonaApiKey={daytonaApiKey}
+          setDaytonaApiKey={setDaytonaApiKey}
           vefaasSandboxFunctionId={vefaasSandboxFunctionId}
           setVefaasSandboxFunctionId={setVefaasSandboxFunctionId}
           vefaasSandboxGatewayUrl={vefaasSandboxGatewayUrl}
@@ -341,9 +371,9 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onCreated: (w
         <button className="btn secondary" onClick={props.onClose} disabled={busy}>{L("取消", "Cancel")}</button>
         <button className="btn secondary" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={busy || step === 0}>{L("上一步", "Back")}</button>
         {step < steps.length - 1 ? (
-          <button className="btn primary" onClick={next} disabled={busy || !canAdvance()}>{L("下一步", "Next")}</button>
+          <button className="btn primary" onClick={next} disabled={busy || cloudProviderLoading || !canAdvance()}>{L("下一步", "Next")}</button>
         ) : (
-          <button className="btn primary" onClick={submit} disabled={busy || !name.trim() || !credsFilled}>{busy ? L("创建中…", "Creating…") : L("创建工作区", "Create workspace")}</button>
+          <button className="btn primary" onClick={submit} disabled={busy || cloudProviderLoading || !name.trim() || !credsFilled}>{busy ? L("创建中…", "Creating…") : L("创建工作区", "Create workspace")}</button>
         )}
       </div>
     </ModalShell>

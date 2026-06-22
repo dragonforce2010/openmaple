@@ -37,7 +37,7 @@ export function createMysqlDatabase(): MysqlDatabase {
         transactionQueries.push(...queries);
         return { changes: 0 };
       }
-      return traceSync(perfTraceDbEnabled(), "db.transaction", { statements: queries.length }, () => callMysql({ op: "transaction", queries }));
+      return traceSync(perfTraceDbEnabled(), "db.script", { statements: queries.length }, () => callMysql({ op: "script", queries }));
     },
     prepare(sql: string) {
       const statementSql = sql.trim();

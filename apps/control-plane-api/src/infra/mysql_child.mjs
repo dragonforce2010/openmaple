@@ -17,6 +17,13 @@ export function mysqlConnectionConfig() {
 // executor is a mysql2 connection OR pool — both expose .execute(); transactions must pass a dedicated connection
 export async function runOp(executor, input) {
   if (input.op === "query") return execute(executor, input.mode, input.sql, input.params || []);
+  if (input.op === "script") {
+    const results = [];
+    for (const query of input.queries || []) {
+      results.push(await execute(executor, query.mode || "run", query.sql, query.params || []));
+    }
+    return results.at(-1) ?? { changes: 0 };
+  }
   if (input.op === "transaction") {
     await executor.beginTransaction();
     try {
@@ -60,7 +67,9 @@ async function execute(connection, mode, sql, params) {
       insertId: rows?.insertId ?? undefined
     };
   } catch (error) {
-    if (isIgnorableDdlError(translated.sql, error)) return { changes: 0 };
+    if (isIgnorableDdlError(translated.sql, error)) {
+      return { changes: 0 };
+    }
     throw error;
   }
 }
