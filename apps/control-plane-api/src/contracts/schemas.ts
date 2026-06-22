@@ -97,6 +97,37 @@ export const modelConfigTestSchema = z
     message: "custom model tests require base_url and model_name"
   });
 
+const runtimeProviderSchema = z.enum(["vefaas", "local_docker", "aliyun_fc"]);
+const sandboxProviderSchema = z.enum(["e2b", "vefaas", "local_docker", "daytona", "aliyun_fc"]);
+const artifactProviderSchema = z.enum(["tos", "oss"]);
+const poolRoleSchema = z.enum(["primary", "standby"]).default("primary");
+const runtimePoolSchema = z.object({
+  desired_size: z.coerce.number().int().nonnegative().default(3),
+  min_instances_per_function: z.coerce.number().int().nonnegative().default(1),
+  max_instances_per_function: z.coerce.number().int().positive().default(100),
+  max_concurrency_per_instance: z.coerce.number().int().positive().default(1000),
+  cpu_milli: z.coerce.number().int().positive().default(2000),
+  memory_mb: z.coerce.number().int().positive().default(4096)
+});
+const runtimeProviderPoolSchema = runtimePoolSchema.extend({
+  provider: runtimeProviderSchema,
+  role: poolRoleSchema,
+  priority: z.coerce.number().int().default(0),
+  name: z.string().optional(),
+  config: z.record(z.string(), z.unknown()).default({})
+});
+const sandboxPoolSchema = z.object({
+  desired_size: z.coerce.number().int().min(1).max(100).default(1),
+  standby_ttl_ms: z.coerce.number().int().min(60_000).default(30 * 60 * 1000)
+});
+const sandboxProviderPoolSchema = sandboxPoolSchema.extend({
+  provider: sandboxProviderSchema,
+  role: poolRoleSchema,
+  priority: z.coerce.number().int().default(0),
+  name: z.string().optional(),
+  config: z.record(z.string(), z.unknown()).default({})
+});
+
 const workspaceOnboardingBaseSchema = z.object({
   tenant: z.object({
     name: z.string().min(1),
@@ -107,23 +138,15 @@ const workspaceOnboardingBaseSchema = z.object({
     description: z.string().default(""),
     slug: z.string().min(3, "workspace slug must be 3-30 characters (leave empty to auto-generate)").max(30).optional()
   }),
-  runtime_provider: z.enum(["vefaas", "local_docker"]).default("vefaas"),
-  runtime_pool: z.object({
-    desired_size: z.coerce.number().int().nonnegative().default(3),
-    min_instances_per_function: z.coerce.number().int().nonnegative().default(1),
-    max_instances_per_function: z.coerce.number().int().positive().default(100),
-    max_concurrency_per_instance: z.coerce.number().int().positive().default(1000),
-    cpu_milli: z.coerce.number().int().positive().default(2000),
-    memory_mb: z.coerce.number().int().positive().default(4096)
-  }),
-  sandbox_provider: z.enum(["e2b", "vefaas", "local_docker", "daytona"]).default("e2b"),
+  runtime_provider: runtimeProviderSchema.default("vefaas"),
+  runtime_pool: runtimePoolSchema,
+  runtime_pools: z.array(runtimeProviderPoolSchema).default([]),
+  sandbox_provider: sandboxProviderSchema.default("e2b"),
   sandbox_config: z.record(z.string(), z.unknown()).default({}),
-  sandbox_pool: z
-    .object({
-      desired_size: z.coerce.number().int().min(1).max(100).default(1),
-      standby_ttl_ms: z.coerce.number().int().min(60_000).default(30 * 60 * 1000)
-    })
-    .default({ desired_size: 1, standby_ttl_ms: 30 * 60 * 1000 }),
+  sandbox_pool: sandboxPoolSchema.default({ desired_size: 1, standby_ttl_ms: 30 * 60 * 1000 }),
+  sandbox_pools: z.array(sandboxProviderPoolSchema).default([]),
+  artifact_provider: artifactProviderSchema.optional(),
+  object_storage: z.record(z.string(), z.unknown()).default({}),
   model_config_ids: z.array(z.string().min(1)).default([]),
   custom_model_configs: z.array(modelConfigSchema).default([]),
   api_key: z

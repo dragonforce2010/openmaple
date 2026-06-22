@@ -265,11 +265,14 @@ export function workspaceIncludesModelConfig(workspaceId: string, modelConfigId:
 }
 
 export function getWorkspaceRuntimePool(workspaceId: string) {
-  const pool = db
-    .prepare("SELECT * FROM workspace_runtime_pools WHERE workspace_id = ? ORDER BY created_at ASC LIMIT 1")
-    .get(workspaceId) as JsonRecord | undefined;
-  if (!pool) return null;
-  return hydrateRuntimePoolRow(pool);
+  return listWorkspaceRuntimePools(workspaceId)[0] ?? null;
+}
+
+export function listWorkspaceRuntimePools(workspaceId: string) {
+  const pools = (db
+    .prepare("SELECT * FROM workspace_runtime_pools WHERE workspace_id = ? ORDER BY created_at ASC")
+    .all(workspaceId) as JsonRecord[]).map(hydrateRuntimePoolRow);
+  return pools.sort((a, b) => poolRank(a) - poolRank(b));
 }
 
 export function listRuntimePoolMembersPage(
@@ -296,4 +299,10 @@ export function countRuntimePoolMembersByStatus(runtimePoolId: string) {
     .prepare("SELECT status, COUNT(*) AS count FROM workspace_runtime_pool_members WHERE runtime_pool_id = ? GROUP BY status")
     .all(runtimePoolId) as JsonRecord[];
   return countRowsToSummary(rows);
+}
+
+function poolRank(pool: JsonRecord) {
+  const config = typeof pool.config === "object" && pool.config !== null ? pool.config as JsonRecord : {};
+  const roleRank = String(config.role || "primary") === "standby" ? 10_000 : 0;
+  return roleRank + Number(config.priority || 0);
 }

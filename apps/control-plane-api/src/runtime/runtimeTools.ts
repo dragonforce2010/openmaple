@@ -15,6 +15,7 @@ import { readE2BFile, runE2BCommand, syncE2BWorkspaceToHost, writeE2BFile } from
 import { assertSafeWorkspacePath, isSandboxAbsolutePath, safeSandboxReadPath } from "./runtimeCommon";
 import { ensureSessionRuntime, ensureSessionSandboxRuntime } from "./runtimeManager";
 import type { RuntimeInfo } from "./runtimeTypes";
+import { invokeAliyunFc } from "./aliyunFcRuntime";
 import { invokeVefaas } from "./vefaasAgentRuntime";
 import {
   listVefaasSandboxFiles,
@@ -83,6 +84,7 @@ function shouldRetryVefaasSandboxTool(runtime: RuntimeInfo, error: unknown) {
 async function runBash(runtime: RuntimeInfo, command: string) {
   if (!command.trim()) throw new Error("Missing bash command");
   if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "bash", input: { command } });
+  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "bash", input: { command } });
   if (runtime.type === "vefaas_sandbox") {
     const result = await runVefaasSandboxCommand(runtime, command, 120_000);
     await syncVefaasSandboxWorkspaceToHost(runtime);
@@ -111,6 +113,7 @@ function isReadOnlyBashCommand(command: string) {
 
 async function readWorkspaceFile(workspacePath: string, path: string, runtime?: RuntimeInfo) {
   if (runtime?.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "read_file", input: { path } });
+  if (runtime?.type === "aliyun_fc" || runtime?.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "read_file", input: { path } });
   if (runtime?.type === "vefaas_sandbox") {
     try {
       const content = await readVefaasSandboxFile(runtime, path);
@@ -148,6 +151,7 @@ async function writeWorkspaceFile(workspacePath: string, path: string, content: 
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, content, "utf8");
   if (runtime?.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "write_file", input: { path, content } });
+  if (runtime?.type === "aliyun_fc" || runtime?.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "write_file", input: { path, content } });
   if (runtime?.type === "vefaas_sandbox") {
     await writeVefaasSandboxFile(runtime, path, content);
     return { path, bytes: Buffer.byteLength(content), basename: basename(path) };
@@ -158,6 +162,7 @@ async function writeWorkspaceFile(workspacePath: string, path: string, content: 
 
 async function listFiles(_workspacePath: string, runtime: RuntimeInfo, path: string) {
   if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "list_files", input: { path } });
+  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "list_files", input: { path } });
   if (runtime.type === "vefaas_sandbox") {
     const safePath = toVefaasSandboxMountedPath(runtime, safeSandboxReadPath(runtime, path));
     const sandboxPath = isSandboxAbsolutePath(safePath) ? safePath : `${runtime.sandbox_workspace_path}/${safePath === "." ? "" : safePath}`.replace(/\/$/, "");
@@ -175,6 +180,7 @@ async function listFiles(_workspacePath: string, runtime: RuntimeInfo, path: str
 async function grep(_workspacePath: string, runtime: RuntimeInfo, pattern: string, path: string) {
   if (!pattern.trim()) throw new Error("Missing grep pattern");
   if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "grep", input: { pattern, path } });
+  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "grep", input: { pattern, path } });
   const quotedPattern = pattern.replace(/'/g, "'\\''");
   if (runtime.type === "vefaas_sandbox") {
     const quotedPath = toVefaasSandboxMountedPath(runtime, safeSandboxReadPath(runtime, path)).replace(/'/g, "'\\''");

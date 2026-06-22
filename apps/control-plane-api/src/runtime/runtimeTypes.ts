@@ -31,6 +31,21 @@ export type VefaasRuntimeInfo = {
   api_key?: string;
 };
 
+export type AliyunFcRuntimeInfo = {
+  type: "aliyun_fc";
+  provider: "aliyun_fc";
+  invoke_url: string;
+  function_name: string;
+  region: string;
+  workspace_path: string;
+  sandbox_workspace_path: string;
+  timeout_ms: number;
+  envs: Record<string, string>;
+  api_key?: string;
+  runtime_pool_id?: string;
+  runtime_pool_member_id?: string;
+};
+
 export type VefaasSandboxRuntimeInfo = {
   type: "vefaas_sandbox";
   provider: "vefaas";
@@ -52,7 +67,26 @@ export type VefaasSandboxRuntimeInfo = {
   lifecycle?: JsonRecord;
 };
 
-export type RuntimeInfo = DockerRuntimeInfo | E2BRuntimeInfo | VefaasRuntimeInfo | VefaasSandboxRuntimeInfo;
+export type AliyunFcSandboxRuntimeInfo = {
+  type: "aliyun_fc_sandbox";
+  provider: "aliyun_fc";
+  sandbox_id: string;
+  function_name: string;
+  region: string;
+  invoke_url: string;
+  api_key?: string;
+  workspace_path: string;
+  sandbox_workspace_path: string;
+  timeout_ms: number;
+  envs: Record<string, string>;
+  metadata: Record<string, string>;
+  pool_member_id?: string;
+  pooled?: boolean;
+  expires_at?: string;
+  lifecycle?: JsonRecord;
+};
+
+export type RuntimeInfo = DockerRuntimeInfo | E2BRuntimeInfo | VefaasRuntimeInfo | AliyunFcRuntimeInfo | VefaasSandboxRuntimeInfo | AliyunFcSandboxRuntimeInfo;
 
 export type E2BSandbox = {
   sandboxId: string;

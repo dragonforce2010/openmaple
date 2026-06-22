@@ -210,7 +210,7 @@ export function tenantCloudProviders(tenantId: string) {
   for (const [provider, publicProvider] of Object.entries(providers)) {
     if (!publicProvider.connected) continue;
     const credentials = tenantCloudProviderCredentials(tenantId, provider);
-    const accessKey = String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || "");
+    const accessKey = String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || credentials.ALIYUN_ACCESS_KEY_ID || credentials.access_key_id || credentials.ak || "");
     if (accessKey) publicProvider.access_key = accessKey;
     publicProvider.secret_key_masked = true;
   }
@@ -243,9 +243,9 @@ export function upsertTenantCloudProvider(tenantId: string, provider: string, cr
   const publicProvider = {
     provider,
     connected: true,
-    access_key: String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || ""),
-    access_key_hint: maskTenantSecretHint(String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || "")),
-    region: String(credentials.region || credentials.VEFAAS_REGION || "cn-beijing"),
+    access_key: String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || credentials.ALIYUN_ACCESS_KEY_ID || credentials.access_key_id || credentials.ak || ""),
+    access_key_hint: maskTenantSecretHint(String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || credentials.ALIYUN_ACCESS_KEY_ID || credentials.access_key_id || credentials.ak || "")),
+    region: String(credentials.region || credentials.VEFAAS_REGION || credentials.ALIYUN_REGION || "cn-beijing"),
     secret_key_masked: true,
     credential_source: `tenant_cloud_provider_credentials.${provider}`,
     updated_at: nowValue

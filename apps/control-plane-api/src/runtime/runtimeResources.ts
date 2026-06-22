@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getManagedFile, readManagedFile } from "../files";
-import { presignedObjectUrl, type TosCreds } from "../files/objectStorage";
+import { presignedObjectUrl, type ObjectStorageCreds } from "../files/objectStorage";
 import { objectStorageEnabled, workspaceObjectStorage } from "../files/workspaceStorage";
 import type { JsonRecord } from "../types";
 import { assertSafeWorkspacePath, listHostFiles, safeWorkspaceRelativePath } from "./runtimeCommon";
@@ -38,7 +38,7 @@ export async function sessionResourceManifest(session: JsonRecord & { workspace_
   return base64ResourceManifest(String(session.workspace_path));
 }
 
-function presignedResourceManifest(resources: JsonRecord[], creds: TosCreds): JsonRecord[] {
+async function presignedResourceManifest(resources: JsonRecord[], creds: ObjectStorageCreds): Promise<JsonRecord[]> {
   const manifest: JsonRecord[] = [];
   for (const resource of resources) {
     if (resource.type !== "file" || !resource.file_id) continue;
@@ -48,7 +48,7 @@ function presignedResourceManifest(resources: JsonRecord[], creds: TosCreds): Js
     manifest.push({
       type: "file",
       mount_path: `/mnt/session/uploads/${mountPath}`,
-      presigned_url: presignedObjectUrl({ ...creds, bucket: file.bucket }, file.object_key, PRESIGN_TTL_SECONDS),
+      presigned_url: await presignedObjectUrl({ ...creds, bucket: file.bucket }, file.object_key, PRESIGN_TTL_SECONDS),
       media_type: file.media_type,
       sha256: file.sha256
     });

@@ -33,7 +33,9 @@ server = spawn("bun", ["apps/control-plane-api/src/index.ts"], {
     MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript,
     MAPLE_DISABLE_SESSION_BOOTSTRAP: "1",
     MAPLE_DEV_LOGIN: "true",
-    ARK_API_KEY: "contract-ark-key"
+    ARK_API_KEY: "contract-ark-key",
+    MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off",
+    MAPLE_ALIYUN_CREDENTIAL_VALIDATION: "off"
   },
   stdio: ["ignore", "pipe", "pipe"]
 });

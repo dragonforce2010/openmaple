@@ -1,0 +1,11 @@
+env:
+  MAPLE_WEB_PORT: "8080"
+  MAPLE_API_PORT: "27951"
+  MAPLE_WEB_BASE_URL: http://127.0.0.1:8080
+  MAPLE_LOCAL_DOCKER_MODE: "true"
+  MAPLE_AGENT_RUNTIME_PROVIDER: local_docker
+  MAPLE_SANDBOX_PROVIDER: local_docker
+  MAPLE_SANDBOX_CONFIG: sandbox.config.yaml
+  MAPLE_DEV_LOGIN: "true"
+  MAPLE_DEV_API_KEY: maple_dev_key
+  MAPLE_SEED_DEMO_DATA: "false"

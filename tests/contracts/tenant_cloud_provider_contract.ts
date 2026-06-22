@@ -18,7 +18,7 @@ const customModelConfigs = [{ kind: "custom", name: "Contract model", protocol: 
 
 const server = spawn("bun", ["apps/control-plane-api/src/index.ts"], {
   cwd: process.cwd(),
-  env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", MAPLE_DATA_DIR: dataDir, MAPLE_MYSQL_HELPER_TIMEOUT_MS: String(requestTimeoutMs), MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript, MAPLE_DEV_LOGIN: "true", MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off" },
+    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", MAPLE_DATA_DIR: dataDir, MAPLE_MYSQL_HELPER_TIMEOUT_MS: String(requestTimeoutMs), MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript, MAPLE_ALIYUN_FC_INVOKE_URL: "https://example.invalid/aliyun-runtime", MAPLE_DEV_LOGIN: "true", MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off", MAPLE_ALIYUN_CREDENTIAL_VALIDATION: "off" },
   stdio: ["ignore", "pipe", "pipe"]
 });
 let serverOutput = "";
@@ -54,15 +54,25 @@ try {
 
   const updatedWithoutSecret = await postJson(`/v1/tenants/${tenantId}/cloud_providers/volcengine`, user.cookie, { access_key: "tenant-ak-1234", region: "cn-beijing" });
   assert.equal(updatedWithoutSecret.region, "cn-beijing", "tenant cloud provider update should preserve the existing secret key when it is not resubmitted");
+  const savedAliyun = await postJson(`/v1/tenants/${tenantId}/cloud_providers/aliyun`, user.cookie, { access_key: "aliyun-ak-1234", secret_key: "aliyun-sk-5678", region: "cn-hangzhou" });
+  assert.equal(savedAliyun.provider, "aliyun");
+  assert.equal(savedAliyun.connected, true);
+  assert.equal(savedAliyun.region, "cn-hangzhou");
+  assert.equal(savedAliyun.access_key, "aliyun-ak-1234");
+  assert.equal(savedAliyun.secret_key, undefined);
 
   const providers = await getJson(`/v1/tenants/${tenantId}/cloud_providers`, user.cookie);
-  assert.equal(providers.data.length, 1);
-  assert.equal(providers.data[0].provider, "volcengine");
-  assert.equal(providers.data[0].access_key, "tenant-ak-1234", "tenant cloud provider listing should return access key for admin editing");
-  assert.equal(providers.data[0].secret_key, undefined, "tenant cloud provider listing must not leak plaintext secret key");
-  assert.equal(providers.data[0].credentials, undefined, "tenant cloud provider listing must not leak raw credential bundles");
+  assert.equal(providers.data.length, 2);
+  const volcengineProvider = providers.data.find((item: Record<string, unknown>) => item.provider === "volcengine");
+  const aliyunProvider = providers.data.find((item: Record<string, unknown>) => item.provider === "aliyun");
+  assert.equal(volcengineProvider.access_key, "tenant-ak-1234", "tenant cloud provider listing should return access key for admin editing");
+  assert.equal(volcengineProvider.secret_key, undefined, "tenant cloud provider listing must not leak plaintext secret key");
+  assert.equal(volcengineProvider.credentials, undefined, "tenant cloud provider listing must not leak raw credential bundles");
+  assert.equal(aliyunProvider.access_key, "aliyun-ak-1234");
+  assert.equal(aliyunProvider.secret_key, undefined);
   const providerListingText = await getText(`/v1/tenants/${tenantId}/cloud_providers`, user.cookie);
   assert.equal(providerListingText.includes("tenant-sk-5678"), false, "tenant cloud provider listing must not include plaintext secret");
+  assert.equal(providerListingText.includes("aliyun-sk-5678"), false, "tenant cloud provider listing must not include plaintext Aliyun secret");
   assert.equal(providerListingText.includes("aes-256-gcm"), false, "tenant cloud provider listing must not include encrypted secret payloads");
   const onboardingStatusText = await getText("/v1/workspace_onboarding/status", user.cookie);
   assert.equal(onboardingStatusText.includes("tenant-sk-5678"), false, "tenant metadata response must not include plaintext cloud secret");
@@ -83,6 +93,41 @@ try {
   });
   assert.equal(created.workspace.runtime_provider, "vefaas", "workspace creation should reuse tenant-level Volcengine credentials");
   assert.equal(created.workspace.sandbox_provider, "daytona", "Daytona sandbox provider should be accepted as an independent provider");
+
+  const mixed = await postJson("/v1/workspaces", user.cookie, {
+    tenant_id: tenantId,
+    workspace: { name: `Mixed ${stamp}`, slug: `cloud-${stamp}-mixed` },
+    runtime_provider: "vefaas",
+    runtime_pools: [
+      { provider: "vefaas", role: "primary", priority: 0, desired_size: 1, min_instances_per_function: 0, max_instances_per_function: 1, max_concurrency_per_instance: 1, cpu_milli: 250, memory_mb: 512 },
+      { provider: "aliyun_fc", role: "standby", priority: 10, desired_size: 1, min_instances_per_function: 0, max_instances_per_function: 1, max_concurrency_per_instance: 1, cpu_milli: 250, memory_mb: 512 }
+    ],
+    runtime_pool: { desired_size: 1, min_instances_per_function: 0, max_instances_per_function: 1, max_concurrency_per_instance: 1, cpu_milli: 250, memory_mb: 512 },
+    sandbox_provider: "aliyun_fc",
+    sandbox_pools: [
+      { provider: "aliyun_fc", role: "primary", priority: 0, desired_size: 1, standby_ttl_ms: 60_000, config: { invoke_url: "https://example.invalid/aliyun-sandbox", function_name: "maple-contract-sandbox" } },
+      { provider: "e2b", role: "standby", priority: 10, desired_size: 1, standby_ttl_ms: 60_000 }
+    ],
+    sandbox_config: { aliyun_fc: { invoke_url: "https://example.invalid/aliyun-sandbox", function_name: "maple-contract-sandbox" } },
+    sandbox_pool: { desired_size: 1, standby_ttl_ms: 60_000 },
+    artifact_provider: "oss",
+    model_config_ids: [],
+    custom_model_configs: customModelConfigs,
+    api_key: { display_name: "mixed", scopes: ["control_plane"] },
+    provider_credentials: { e2b: { E2B_API_KEY: "e2b-key" } }
+  });
+  assert.equal(mixed.workspace.config.runtime_pools.length, 2);
+  assert.equal(mixed.workspace.config.sandbox_pools.length, 2);
+  assert.equal(mixed.workspace.config.artifact_provider, "oss");
+  assert.deepEqual(mixed.workspace.config.cloud_provider_identities.aliyun.services, ["runtime:aliyun_fc", "sandbox:aliyun_fc", "storage:oss"]);
+  const mixedRuntimePool = await getJson(`/v1/workspaces/${mixed.workspace.id}/runtime_pool`, user.cookie);
+  assert.equal(mixedRuntimePool.pools.length, 2);
+  assert.equal(mixedRuntimePool.pools[0].provider, "vefaas");
+  assert.equal(mixedRuntimePool.pools[1].provider, "aliyun_fc");
+  const mixedSandboxPool = await getJson(`/v1/workspaces/${mixed.workspace.id}/sandbox_pool`, user.cookie);
+  assert.equal(mixedSandboxPool.pools.length, 2);
+  assert.equal(mixedSandboxPool.pools[0].provider, "aliyun_fc");
+  assert.equal(mixedSandboxPool.pools[1].provider, "e2b");
 
   const localUser = await login(`local-cloud-${stamp}@example.com`);
   const localTenant = await postJson("/v1/workspace_onboarding", localUser.cookie, {

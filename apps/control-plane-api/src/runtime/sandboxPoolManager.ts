@@ -7,6 +7,7 @@ import {
   expireSandboxPoolMembers,
   getWorkspace,
   getWorkspaceSandboxPool,
+  listWorkspaceSandboxPools,
   markSandboxPoolMemberClaimed,
   markSandboxPoolMemberFailed,
   markSandboxPoolMemberReady,
@@ -14,8 +15,9 @@ import {
 } from "../store";
 import type { JsonRecord } from "../types";
 import { createDockerRuntimeContainer } from "./dockerRuntime";
+import { aliyunFcSandboxRuntime } from "./aliyunFcRuntime";
 import { asRecord } from "./runtimeCommon";
-import type { VefaasSandboxRuntimeInfo } from "./runtimeTypes";
+import type { AliyunFcSandboxRuntimeInfo, VefaasSandboxRuntimeInfo } from "./runtimeTypes";
 import { normalizeSandboxConfig, type NormalizedSandboxRuntimeConfig } from "./sandboxConfig";
 import {
   createVefaasSandbox,
@@ -26,28 +28,55 @@ import {
 
 type VefaasSandboxConfig = Extract<NormalizedSandboxRuntimeConfig, { provider: "vefaas" }>;
 type LocalDockerSandboxConfig = Extract<NormalizedSandboxRuntimeConfig, { provider: "local_docker" }>;
+type AliyunFcSandboxConfig = Extract<NormalizedSandboxRuntimeConfig, { provider: "aliyun_fc" }>;
 
 export async function replenishWorkspaceSandboxPool(workspaceId: string) {
-  const pool = getWorkspaceSandboxPool(workspaceId);
-  if (!pool) return { workspace_id: workspaceId, created: 0, reason: "workspace_not_found" };
-  expireSandboxPoolMembers(workspaceId, pool.provider);
-  if (pool.provider === "local_docker") return replenishLocalDockerSandboxPool(workspaceId, pool.desired_size, pool.standby_ttl_ms);
-  if (pool.provider !== "vefaas") return { workspace_id: workspaceId, provider: pool.provider, created: 0, reason: "provider_not_implemented" };
-  const config = workspaceSandboxRuntimeConfig(workspaceId);
-  if (config.provider !== "vefaas") return { workspace_id: workspaceId, provider: pool.provider, created: 0, reason: "provider_config_missing" };
-  const current = countSandboxPoolStandbyCapacity(workspaceId, "vefaas");
-  const missing = Math.max(0, pool.desired_size - current);
-  const created = await runLimited(Array.from({ length: missing }), 5, () => provisionVefaasStandby(workspaceId, config, pool.standby_ttl_ms));
-  return { workspace_id: workspaceId, provider: "vefaas", desired_size: pool.desired_size, created: created.filter(Boolean).length };
+  const pools = listWorkspaceSandboxPools(workspaceId);
+  if (!pools.length) return { workspace_id: workspaceId, created: 0, reason: "workspace_not_found" };
+  const results = [];
+  for (const pool of pools) {
+    expireSandboxPoolMembers(workspaceId, pool.provider);
+    if (pool.provider === "local_docker") {
+      results.push(await replenishLocalDockerSandboxPool(workspaceId, pool.desired_size, pool.standby_ttl_ms));
+      continue;
+    }
+    if (pool.provider === "aliyun_fc") {
+      results.push(await replenishAliyunFcSandboxPool(workspaceId, pool.desired_size, pool.standby_ttl_ms));
+      continue;
+    }
+    if (pool.provider !== "vefaas") {
+      results.push({ workspace_id: workspaceId, provider: pool.provider, created: 0, reason: "provider_not_implemented" });
+      continue;
+    }
+    const config = workspaceSandboxRuntimeConfig(workspaceId, "vefaas");
+    if (config.provider !== "vefaas") {
+      results.push({ workspace_id: workspaceId, provider: pool.provider, created: 0, reason: "provider_config_missing" });
+      continue;
+    }
+    const current = countSandboxPoolStandbyCapacity(workspaceId, "vefaas");
+    const missing = Math.max(0, pool.desired_size - current);
+    const created = await runLimited(Array.from({ length: missing }), 5, () => provisionVefaasStandby(workspaceId, config, pool.standby_ttl_ms));
+    results.push({ workspace_id: workspaceId, provider: "vefaas", desired_size: pool.desired_size, created: created.filter(Boolean).length });
+  }
+  return { workspace_id: workspaceId, pools: results, created: results.reduce((sum, item) => sum + Number((item as JsonRecord).created || 0), 0) };
 }
 
 async function replenishLocalDockerSandboxPool(workspaceId: string, desiredSize: number, ttlMs: number) {
-  const config = workspaceSandboxRuntimeConfig(workspaceId);
+  const config = workspaceSandboxRuntimeConfig(workspaceId, "local_docker");
   if (config.provider !== "local_docker") return { workspace_id: workspaceId, provider: "local_docker", created: 0, reason: "provider_config_missing" };
   const current = countSandboxPoolStandbyCapacity(workspaceId, "local_docker");
   const missing = Math.max(0, desiredSize - current);
   const created = await runLimited(Array.from({ length: missing }), 10, () => provisionLocalDockerStandby(workspaceId, config, ttlMs));
   return { workspace_id: workspaceId, provider: "local_docker", desired_size: desiredSize, created: created.filter(Boolean).length };
+}
+
+async function replenishAliyunFcSandboxPool(workspaceId: string, desiredSize: number, ttlMs: number) {
+  const config = workspaceSandboxRuntimeConfig(workspaceId, "aliyun_fc");
+  if (config.provider !== "aliyun_fc") return { workspace_id: workspaceId, provider: "aliyun_fc", created: 0, reason: "provider_config_missing" };
+  const current = countSandboxPoolStandbyCapacity(workspaceId, "aliyun_fc");
+  const missing = Math.max(0, desiredSize - current);
+  const created = await runLimited(Array.from({ length: missing }), 10, () => provisionAliyunFcStandby(workspaceId, config, ttlMs));
+  return { workspace_id: workspaceId, provider: "aliyun_fc", desired_size: desiredSize, created: created.filter(Boolean).length };
 }
 
 export async function claimPooledDockerRuntime(
@@ -56,8 +85,8 @@ export async function claimPooledDockerRuntime(
 ) {
   const workspaceId = String(session.workspace_id || asRecord(session.metadata).workspace_id || "");
   if (!workspaceId) return null;
-  const pool = getWorkspaceSandboxPool(workspaceId);
-  if (!pool || pool.provider !== "local_docker") return null;
+  const pool = sandboxPoolForProvider(workspaceId, "local_docker");
+  if (!pool) return null;
   expireSandboxPoolMembers(workspaceId, "local_docker");
   const expiresAt = expiresIn(pool.standby_ttl_ms);
   const member = markSandboxPoolMemberClaimed({
@@ -97,8 +126,8 @@ export async function claimPooledSandboxRuntime(
 ) {
   const workspaceId = String(session.workspace_id || asRecord(session.metadata).workspace_id || "");
   if (!workspaceId) return null;
-  const pool = getWorkspaceSandboxPool(workspaceId);
-  if (!pool || pool.provider !== "vefaas") return null;
+  const pool = sandboxPoolForProvider(workspaceId, "vefaas");
+  if (!pool) return null;
   expireSandboxPoolMembers(workspaceId, "vefaas");
   const expiresAt = expiresIn(pool.standby_ttl_ms);
   const member = markSandboxPoolMemberClaimed({
@@ -132,32 +161,78 @@ export async function claimPooledSandboxRuntime(
   return runtime;
 }
 
-function workspaceSandboxRuntimeConfig(workspaceId: string): NormalizedSandboxRuntimeConfig {
+export async function claimPooledAliyunFcSandboxRuntime(
+  session: JsonRecord & { id: string; workspace_path: string },
+  config: AliyunFcSandboxConfig
+) {
+  const workspaceId = String(session.workspace_id || asRecord(session.metadata).workspace_id || "");
+  if (!workspaceId) return null;
+  const pool = sandboxPoolForProvider(workspaceId, "aliyun_fc");
+  if (!pool) return null;
+  expireSandboxPoolMembers(workspaceId, "aliyun_fc");
+  const expiresAt = expiresIn(pool.standby_ttl_ms);
+  const member = markSandboxPoolMemberClaimed({
+    workspace_id: workspaceId,
+    provider: "aliyun_fc",
+    session_id: session.id,
+    agent_id: String(session.agent_id || ""),
+    expires_at: expiresAt
+  });
+  if (!member) {
+    void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
+    return null;
+  }
+  const runtime = aliyunFcSandboxRuntime(config, session.workspace_path, {
+    sandbox_id: member.sandbox_id || config.function_name || config.invoke_url,
+    pool_member_id: member.id,
+    session_id: session.id,
+    expires_at: expiresAt,
+    pooled: true
+  });
+  void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
+  return runtime;
+}
+
+function workspaceSandboxRuntimeConfig(workspaceId: string, requestedProvider?: string): NormalizedSandboxRuntimeConfig {
   const workspace = getWorkspace(workspaceId) as JsonRecord | null;
   const workspaceConfig = asRecord(workspace?.config);
   const providerCredentials = asRecord(workspaceConfig.provider_credentials);
   const sandboxConfig = asRecord(workspaceConfig.sandbox_config);
-  const provider = String(workspace?.sandbox_provider || workspaceConfig.sandbox_provider || "e2b");
+  const poolConfig = requestedProvider ? asRecord(listWorkspaceSandboxPools(workspaceId).find((pool) => pool.provider === requestedProvider)?.config) : {};
+  const provider = String(requestedProvider || workspace?.sandbox_provider || workspaceConfig.sandbox_provider || "e2b");
   const vefaasCreds = asRecord(providerCredentials.vefaas);
   const vefaasSandboxCreds = asRecord(providerCredentials.vefaas_sandbox);
   const e2bCreds = asRecord(providerCredentials.e2b);
+  const aliyunCreds = asRecord(providerCredentials.aliyun ?? providerCredentials.alibaba_cloud);
   const workspaceVefaas = asRecord(sandboxConfig.vefaas ?? sandboxConfig.vefaas_sandbox ?? sandboxConfig);
   const workspaceE2b = asRecord(sandboxConfig.e2b ?? sandboxConfig);
   const localDocker = asRecord(sandboxConfig.local_docker ?? sandboxConfig.docker ?? sandboxConfig);
+  const workspaceAliyun = asRecord(sandboxConfig.aliyun_fc ?? sandboxConfig.aliyun ?? sandboxConfig);
   return normalizeSandboxConfig({
     sandbox_provider: provider,
     sandbox: {
       provider,
-      local_docker: localDocker,
-      e2b: { ...workspaceE2b, api_key: workspaceE2b.api_key || e2bCreds.E2B_API_KEY },
+      local_docker: { ...localDocker, ...poolConfig },
+      e2b: { ...workspaceE2b, ...poolConfig, api_key: workspaceE2b.api_key || poolConfig.api_key || e2bCreds.E2B_API_KEY },
       vefaas: {
         ...workspaceVefaas,
-        access_key: workspaceVefaas.access_key || vefaasSandboxCreds.VOLCENGINE_ACCESS_KEY || vefaasCreds.VOLCENGINE_ACCESS_KEY,
-        secret_key: workspaceVefaas.secret_key || vefaasSandboxCreds.VOLCENGINE_SECRET_KEY || vefaasCreds.VOLCENGINE_SECRET_KEY,
-        region: workspaceVefaas.region || vefaasSandboxCreds.VEFAAS_REGION || vefaasCreds.VEFAAS_REGION,
-        function_id: workspaceVefaas.function_id || vefaasSandboxCreds.VEFAAS_SANDBOX_FUNCTION_ID,
-        gateway_url: workspaceVefaas.gateway_url || vefaasSandboxCreds.VEFAAS_SANDBOX_GATEWAY_URL,
-        api_token: workspaceVefaas.api_token || vefaasSandboxCreds.VEFAAS_SANDBOX_API_TOKEN
+        ...poolConfig,
+        access_key: workspaceVefaas.access_key || poolConfig.access_key || vefaasSandboxCreds.VOLCENGINE_ACCESS_KEY || vefaasCreds.VOLCENGINE_ACCESS_KEY,
+        secret_key: workspaceVefaas.secret_key || poolConfig.secret_key || vefaasSandboxCreds.VOLCENGINE_SECRET_KEY || vefaasCreds.VOLCENGINE_SECRET_KEY,
+        region: workspaceVefaas.region || poolConfig.region || vefaasSandboxCreds.VEFAAS_REGION || vefaasCreds.VEFAAS_REGION,
+        function_id: workspaceVefaas.function_id || poolConfig.function_id || vefaasSandboxCreds.VEFAAS_SANDBOX_FUNCTION_ID,
+        gateway_url: workspaceVefaas.gateway_url || poolConfig.gateway_url || vefaasSandboxCreds.VEFAAS_SANDBOX_GATEWAY_URL,
+        api_token: workspaceVefaas.api_token || poolConfig.api_token || vefaasSandboxCreds.VEFAAS_SANDBOX_API_TOKEN
+      },
+      aliyun_fc: {
+        ...workspaceAliyun,
+        ...poolConfig,
+        access_key_id: workspaceAliyun.access_key_id || poolConfig.access_key_id || aliyunCreds.ALIYUN_ACCESS_KEY_ID || aliyunCreds.access_key_id || aliyunCreds.ak,
+        access_key_secret: workspaceAliyun.access_key_secret || poolConfig.access_key_secret || aliyunCreds.ALIYUN_ACCESS_KEY_SECRET || aliyunCreds.access_key_secret || aliyunCreds.sk,
+        region: workspaceAliyun.region || poolConfig.region || aliyunCreds.ALIYUN_REGION || aliyunCreds.region,
+        function_name: workspaceAliyun.function_name || poolConfig.function_name || aliyunCreds.ALIYUN_FC_FUNCTION_NAME,
+        invoke_url: workspaceAliyun.invoke_url || poolConfig.invoke_url || aliyunCreds.ALIYUN_FC_INVOKE_URL,
+        api_key: workspaceAliyun.api_key || poolConfig.api_key || aliyunCreds.ALIYUN_FC_API_KEY
       }
     }
   }).sandbox;
@@ -199,6 +274,16 @@ async function provisionVefaasStandby(workspaceId: string, config: VefaasSandbox
     markSandboxPoolMemberFailed(member.id, error);
     return null;
   }
+}
+
+async function provisionAliyunFcStandby(workspaceId: string, config: AliyunFcSandboxConfig, ttlMs: number) {
+  const member = createSandboxPoolMember({ workspace_id: workspaceId, provider: "aliyun_fc", config: poolMemberConfig(config, ttlMs) });
+  if (!member) return null;
+  return markSandboxPoolMemberReady(member.id, {
+    sandbox_id: `aliyun_fc:${config.function_name || member.id}`,
+    expires_at: expiresIn(ttlMs),
+    config: poolMemberConfig(config, ttlMs)
+  });
 }
 
 function vefaasRuntimeFromSandbox(
@@ -250,11 +335,24 @@ async function runLimited<T>(items: unknown[], limit: number, task: () => Promis
   return results;
 }
 
-function poolMemberConfig(config: VefaasSandboxConfig | LocalDockerSandboxConfig, ttlMs: number) {
+function sandboxPoolForProvider(workspaceId: string, provider: string) {
+  return listWorkspaceSandboxPools(workspaceId).find((pool) => pool.provider === provider) ?? null;
+}
+
+function poolMemberConfig(config: VefaasSandboxConfig | LocalDockerSandboxConfig | AliyunFcSandboxConfig, ttlMs: number) {
   if (config.provider === "local_docker") {
     return {
       image: config.image,
       networking: config.networking,
+      standby_ttl_ms: ttlMs
+    };
+  }
+  if (config.provider === "aliyun_fc") {
+    return {
+      function_name: config.function_name,
+      invoke_url: config.invoke_url,
+      region: config.region,
+      workspace_path: config.workspace_path,
       standby_ttl_ms: ttlMs
     };
   }

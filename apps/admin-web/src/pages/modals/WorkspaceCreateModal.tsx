@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Fragment, useEffect, useState } from "react";
 import { apiGet, apiPost, type ApiList } from "../../api";
 import type { JsonRecord, ModelConfig, Workspace, WorkspaceApiKey } from "../../types";
@@ -34,12 +35,19 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onOpenTenantC
   const [color, setColor] = useState(WS_COLORS[5] ?? WS_COLORS[0]);
   const [cloudProviders, setCloudProviders] = useState<Record<string, JsonRecord>>({});
   const [cloudProviderLoading, setCloudProviderLoading] = useState(Boolean(props.tenantId));
-  const [sandboxProvider, setSandboxProvider] = useState<"e2b" | "daytona" | "vefaas">("e2b");
+  const [runtimeProvider, setRuntimeProvider] = useState<"vefaas" | "aliyun_fc">("vefaas");
+  const [standbyRuntimeProvider, setStandbyRuntimeProvider] = useState<"" | "vefaas" | "aliyun_fc">("");
+  const [artifactProvider, setArtifactProvider] = useState<"tos" | "oss">("tos");
+  const [sandboxProvider, setSandboxProvider] = useState<"e2b" | "daytona" | "vefaas" | "aliyun_fc">("e2b");
+  const [standbySandboxProvider, setStandbySandboxProvider] = useState<"" | "e2b" | "daytona" | "vefaas" | "aliyun_fc">("");
   const [e2bApiKey, setE2bApiKey] = useState("");
   const [daytonaServerUrl, setDaytonaServerUrl] = useState("");
   const [daytonaApiKey, setDaytonaApiKey] = useState("");
   const [vefaasSandboxFunctionId, setVefaasSandboxFunctionId] = useState("");
   const [vefaasSandboxGatewayUrl, setVefaasSandboxGatewayUrl] = useState("");
+  const [aliyunFcFunctionName, setAliyunFcFunctionName] = useState("");
+  const [aliyunFcInvokeUrl, setAliyunFcInvokeUrl] = useState("");
+  const [aliyunFcApiKey, setAliyunFcApiKey] = useState("");
   const [vefaasSandboxTimeoutInput, setVefaasSandboxTimeoutInput] = useState("3600000");
   const [sandboxPoolSizeInput, setSandboxPoolSizeInput] = useState("1");
   const [desiredSizeInput, setDesiredSizeInput] = useState("3");
@@ -71,12 +79,19 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onOpenTenantC
   const sandboxPoolSize = readInt(sandboxPoolSizeInput, 1, 1, MAX_SANDBOX_POOL_SIZE);
 
   const volcengineConnected = Boolean(cloudProviders.volcengine?.connected);
-  const runtimeCredsFilled = volcengineConnected;
-  const sandboxFilled = sandboxProvider === "e2b"
+  const aliyunConnected = Boolean(cloudProviders.aliyun?.connected);
+  const runtimeProviderReady = (provider: "" | "vefaas" | "aliyun_fc") => !provider || (provider === "vefaas" ? volcengineConnected : aliyunConnected);
+  const runtimeCredsFilled = runtimeProviderReady(runtimeProvider) && runtimeProviderReady(standbyRuntimeProvider);
+  const sandboxProviderReady = (provider: "" | "e2b" | "daytona" | "vefaas" | "aliyun_fc") => !provider
+    ? true
+    : provider === "e2b"
     ? Boolean(e2bApiKey.trim())
-    : sandboxProvider === "daytona"
+    : provider === "daytona"
       ? Boolean(daytonaServerUrl.trim() && daytonaApiKey.trim())
-      : volcengineConnected && Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim());
+      : provider === "vefaas"
+        ? volcengineConnected && Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim())
+        : aliyunConnected && Boolean(aliyunFcInvokeUrl.trim());
+  const sandboxFilled = sandboxProviderReady(sandboxProvider) && sandboxProviderReady(standbySandboxProvider);
   const credsFilled = runtimeCredsFilled && sandboxFilled;
 
   const slugTooShort = Boolean(slug.trim()) && slug.trim().length < 3;
@@ -101,7 +116,10 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onOpenTenantC
 
   useEffect(() => {
     if (sandboxProvider === "vefaas" && !volcengineConnected) setSandboxProvider("e2b");
-  }, [sandboxProvider, volcengineConnected]);
+    if (sandboxProvider === "aliyun_fc" && !aliyunConnected) setSandboxProvider("e2b");
+    if (runtimeProvider === "vefaas" && !volcengineConnected && aliyunConnected) setRuntimeProvider("aliyun_fc");
+    if (runtimeProvider === "aliyun_fc" && !aliyunConnected && volcengineConnected) setRuntimeProvider("vefaas");
+  }, [sandboxProvider, volcengineConnected, aliyunConnected, runtimeProvider]);
 
   function isStepComplete(index: number) {
     if (index === 0) return Boolean(name.trim()) && !slugTooShort;
@@ -200,6 +218,15 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onOpenTenantC
     setBusy(true);
     setError("");
     setProvisionLogs(provisioningPlan());
+    const runtimePoolBase = {
+      desired_size: desiredSize,
+      min_instances_per_function: minInstances,
+      max_instances_per_function: maxInstances,
+      max_concurrency_per_instance: maxConcurrency,
+      cpu_milli: cpuMilli,
+      memory_mb: memoryMb
+    };
+    const sandboxPoolBase = { desired_size: sandboxPoolSize, standby_ttl_ms: 30 * 60 * 1000 };
     const heartbeat = window.setInterval(() => {
       setProvisionLogs((current) => [...current, provisioningLog("info", L("仍在提交云端初始化请求。", "Still submitting cloud provisioning request."))]);
     }, 8000);
@@ -207,36 +234,32 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onOpenTenantC
       const result = await apiPost<{ workspace: Workspace; api_key: WorkspaceApiKey; provisioning_logs?: ProvisioningLog[] }>("/v1/workspaces", {
         tenant_id: props.tenantId || undefined,
         workspace: { name: trimmed, description: description.trim(), slug: slug.trim() ? normalizedSlug : undefined },
-        runtime_provider: "vefaas",
+        runtime_provider: runtimeProvider,
+        runtime_pools: [
+          { ...runtimePoolBase, provider: runtimeProvider, role: "primary", priority: 0 },
+          ...(standbyRuntimeProvider ? [{ ...runtimePoolBase, provider: standbyRuntimeProvider, role: "standby", priority: 10 }] : [])
+        ],
         sandbox_provider: sandboxProvider,
-        sandbox_config: sandboxProvider === "vefaas"
-          ? {
-              vefaas: {
-                function_id: vefaasSandboxFunctionId.trim(),
-                gateway_url: vefaasSandboxGatewayUrl.trim(),
-                timeout_ms: vefaasSandboxTimeoutMs,
-                workspace_path: "/home/tiger/workspace"
-              }
-            }
-          : sandboxProvider === "daytona"
-            ? { daytona: { server_url: daytonaServerUrl.trim(), api_key: daytonaApiKey.trim() } }
-          : {},
-        sandbox_pool: { desired_size: sandboxPoolSize, standby_ttl_ms: 30 * 60 * 1000 },
-        runtime_pool: {
-          desired_size: desiredSize,
-          min_instances_per_function: minInstances,
-          max_instances_per_function: maxInstances,
-          max_concurrency_per_instance: maxConcurrency,
-          cpu_milli: cpuMilli,
-          memory_mb: memoryMb
+        sandbox_config: {
+          vefaas: { function_id: vefaasSandboxFunctionId.trim(), gateway_url: vefaasSandboxGatewayUrl.trim(), timeout_ms: vefaasSandboxTimeoutMs, workspace_path: "/home/tiger/workspace" },
+          aliyun_fc: { function_name: aliyunFcFunctionName.trim(), invoke_url: aliyunFcInvokeUrl.trim(), api_key: aliyunFcApiKey.trim(), workspace_path: "/workspace" },
+          daytona: { server_url: daytonaServerUrl.trim(), api_key: daytonaApiKey.trim() }
         },
+        sandbox_pool: sandboxPoolBase,
+        sandbox_pools: [
+          { ...sandboxPoolBase, provider: sandboxProvider, role: "primary", priority: 0 },
+          ...(standbySandboxProvider ? [{ ...sandboxPoolBase, provider: standbySandboxProvider, role: "standby", priority: 10 }] : [])
+        ],
+        artifact_provider: artifactProvider,
+        runtime_pool: runtimePoolBase,
         model_config_ids: selectedModelIds,
         member_emails: memberEmails,
         api_key: { display_name: apiKeyName.trim() || apiKeyPlaceholder, scopes: ["control_plane", "data_plane"] },
         provider_credentials: {
           vefaas: {},
-          e2b: sandboxProvider === "e2b" ? { E2B_API_KEY: e2bApiKey.trim() } : {},
-          daytona: sandboxProvider === "daytona" ? { DAYTONA_SERVER_URL: daytonaServerUrl.trim(), DAYTONA_API_KEY: daytonaApiKey.trim() } : {}
+          aliyun: {},
+          e2b: sandboxProvider === "e2b" || standbySandboxProvider === "e2b" ? { E2B_API_KEY: e2bApiKey.trim() } : {},
+          daytona: sandboxProvider === "daytona" || standbySandboxProvider === "daytona" ? { DAYTONA_SERVER_URL: daytonaServerUrl.trim(), DAYTONA_API_KEY: daytonaApiKey.trim() } : {}
         }
       });
       const backendLogs = normalizeProvisioningLogs(result.provisioning_logs);
@@ -300,22 +323,37 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onOpenTenantC
 
       {step === 1 ? (
         <div className="provision-step">
-          {volcengineConnected ? (
+          <div className="pool-grid two">
+            <label className="form">{L("Runtime 主池", "Runtime primary pool")}<select className="fld" value={runtimeProvider} onChange={(event) => setRuntimeProvider(event.target.value as "vefaas" | "aliyun_fc")}><option value="vefaas" disabled={!volcengineConnected}>VeFaaS</option><option value="aliyun_fc" disabled={!aliyunConnected}>Aliyun FC</option></select></label>
+            <label className="form">{L("Runtime 备池", "Runtime standby pool")}<select className="fld" value={standbyRuntimeProvider} onChange={(event) => setStandbyRuntimeProvider(event.target.value as "" | "vefaas" | "aliyun_fc")}><option value="">{L("不启用", "Disabled")}</option><option value="vefaas" disabled={!volcengineConnected || runtimeProvider === "vefaas"}>VeFaaS</option><option value="aliyun_fc" disabled={!aliyunConnected || runtimeProvider === "aliyun_fc"}>Aliyun FC</option></select></label>
+            <label className="form">Artifact Provider<select className="fld" value={artifactProvider} onChange={(event) => setArtifactProvider(event.target.value as "tos" | "oss")}><option value="tos" disabled={!volcengineConnected}>TOS</option><option value="oss" disabled={!aliyunConnected}>OSS</option></select></label>
+          </div>
+          {runtimeProvider === "vefaas" && volcengineConnected ? (
             <div className="ro-provider">
               <span className="rop-ic"><Icon name="i-cloud" size={18} /></span>
               <span className="rop-main"><b>VeFaaS</b><span>{L("Agent 运行时 provider", "Agent runtime provider")}</span></span>
               <span className="ro-lock">{L("来自火山引擎", "From Volcengine")}</span>
             </div>
           ) : null}
+          {runtimeProvider === "aliyun_fc" && aliyunConnected ? (
+            <div className="ro-provider">
+              <span className="rop-ic"><Icon name="i-cloud" size={18} /></span>
+              <span className="rop-main"><b>Aliyun FC</b><span>{L("Agent 运行时 provider", "Agent runtime provider")}</span></span>
+              <span className="ro-lock">{L("来自阿里云", "From Aliyun")}</span>
+            </div>
+          ) : null}
           <div className="cred-box">
             <div className="cred-head"><Icon name="i-key" size={14} /> {L("租户级云凭据", "Tenant-level cloud credentials")}</div>
-            {cloudProviderLoading ? <div className="panel-empty">{L("正在读取租户云厂商接入状态…", "Loading tenant cloud provider access…")}</div> : volcengineConnected ? (
-              <div className="panel-empty">{L(`已接入火山引擎 · ${String(cloudProviders.volcengine?.access_key_hint || "")}`, `Volcengine connected · ${String(cloudProviders.volcengine?.access_key_hint || "")}`)}</div>
+            {cloudProviderLoading ? <div className="panel-empty">{L("正在读取租户云厂商接入状态…", "Loading tenant cloud provider access…")}</div> : runtimeCredsFilled ? (
+              <div className="panel-empty">{[
+                volcengineConnected ? L(`已接入火山引擎 · ${String(cloudProviders.volcengine?.access_key_hint || "")}`, `Volcengine connected · ${String(cloudProviders.volcengine?.access_key_hint || "")}`) : "",
+                aliyunConnected ? L(`已接入阿里云 · ${String(cloudProviders.aliyun?.access_key_hint || "")}`, `Aliyun connected · ${String(cloudProviders.aliyun?.access_key_hint || "")}`) : ""
+              ].filter(Boolean).join(" / ")}</div>
             ) : (
               <div className="modal-note cloud-action-note">
                 <Icon name="i-alert" size={16} />
                 <span>
-                  {L("租户尚未接入火山引擎，因此不能创建云端 Runtime。", "Volcengine is not connected for this tenant, so cloud Runtime cannot be created.")}
+                  {L("租户尚未接入所选 Runtime 云厂商。", "The selected runtime cloud provider is not connected for this tenant.")}
                   {props.onOpenTenantCloudAccess ? (
                     <button type="button" className="inline-action" onClick={props.onOpenTenantCloudAccess}>
                       {L("前往租户页接入火山引擎", "Open tenant cloud access")}
@@ -338,12 +376,13 @@ export function WorkspaceCreateModal(props: { onClose: () => void; onOpenTenantC
       ) : null}
 
       {step === 2 ? (
-        <WorkspaceCreateSandboxStep
-          L={L} error={error} setError={setError}
-          sandboxProvider={sandboxProvider} setSandboxProvider={setSandboxProvider} volcengineConnected={volcengineConnected}
+          <WorkspaceCreateSandboxStep
+            L={L} error={error} setError={setError}
+          sandboxProvider={sandboxProvider} setSandboxProvider={setSandboxProvider} standbySandboxProvider={standbySandboxProvider} setStandbySandboxProvider={setStandbySandboxProvider} volcengineConnected={volcengineConnected} aliyunConnected={aliyunConnected}
           e2bApiKey={e2bApiKey} setE2bApiKey={setE2bApiKey}
           daytonaServerUrl={daytonaServerUrl} setDaytonaServerUrl={setDaytonaServerUrl} daytonaApiKey={daytonaApiKey} setDaytonaApiKey={setDaytonaApiKey}
           vefaasSandboxFunctionId={vefaasSandboxFunctionId} setVefaasSandboxFunctionId={setVefaasSandboxFunctionId} vefaasSandboxGatewayUrl={vefaasSandboxGatewayUrl} setVefaasSandboxGatewayUrl={setVefaasSandboxGatewayUrl}
+          aliyunFcFunctionName={aliyunFcFunctionName} setAliyunFcFunctionName={setAliyunFcFunctionName} aliyunFcInvokeUrl={aliyunFcInvokeUrl} setAliyunFcInvokeUrl={setAliyunFcInvokeUrl} aliyunFcApiKey={aliyunFcApiKey} setAliyunFcApiKey={setAliyunFcApiKey}
           vefaasSandboxTimeoutInput={vefaasSandboxTimeoutInput} setVefaasSandboxTimeoutInput={setVefaasSandboxTimeoutInput} sandboxPoolSizeInput={sandboxPoolSizeInput} setSandboxPoolSizeInput={setSandboxPoolSizeInput}
         />
       ) : null}

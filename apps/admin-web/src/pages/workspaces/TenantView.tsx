@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useEffect, useState, type FormEvent } from "react";
 import { apiDelete, apiGet, apiPost, type ApiList } from "../../api";
 import { useEntityNav, useI18n, type View } from "../../appConfig";
@@ -110,7 +111,14 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
     }
   }
 
-  function openCloudProviderModal(providerId: string) { const current = cloudProviders[providerId] ?? {}; setCloudAccessKey(String(current.access_key || current.access_key_hint || "")); setCloudSecretKey(current.connected ? MASKED_CLOUD_SECRET : ""); setCloudRegion(String(current.region || "cn-beijing")); setCloudModal(providerId); }
+  const activeCloudProvider = CLOUD_PROVIDERS.find((provider) => provider.id === cloudModal);
+  function openCloudProviderModal(providerId: string) {
+    const current = cloudProviders[providerId] ?? {};
+    setCloudAccessKey(String(current.access_key || current.access_key_hint || ""));
+    setCloudSecretKey(current.connected ? MASKED_CLOUD_SECRET : "");
+    setCloudRegion(String(current.region || (providerId === "aliyun" ? "cn-hangzhou" : "cn-beijing")));
+    setCloudModal(providerId);
+  }
 
   function memberName(member: User) {
     return member.name?.trim() || member.email.split("@")[0] || member.email;
@@ -339,13 +347,13 @@ export function TenantView(props: { workspace: Workspace | null; workspaces: Wor
       {cloudModal ? (
         <ModalLayer onClose={() => !cloudSaving && setCloudModal("")}>
           <div className="modal" role="dialog" aria-modal="true" aria-label={L("接入云厂商", "Connect cloud provider")} onClick={(event) => event.stopPropagation()}>
-            <div className="modal-head"><b>{L("接入火山引擎", "Connect Volcengine")}</b><button className="x" onClick={() => setCloudModal("")} aria-label={L("关闭", "Close")}><Icon name="i-x" size={18} /></button></div>
+            <div className="modal-head"><b>{L(`接入${activeCloudProvider?.name ?? "云厂商"}`, `Connect ${activeCloudProvider?.name ?? "cloud provider"}`)}</b><button className="x" onClick={() => setCloudModal("")} aria-label={L("关闭", "Close")}><Icon name="i-x" size={18} /></button></div>
             <form onSubmit={saveCloudProvider}>
               <div className="modal-body">
-                <div className="modal-note"><Icon name="i-alert" size={16} /> {L("AK/SK 将保存在租户级别，后续开通空间选择火山引擎 Runtime/Sandbox/Artifact Provider 时无需重复输入。", "AK/SK is saved at tenant level, so workspace provisioning does not ask again for Volcengine Runtime/Sandbox/Artifact providers.")}</div>
+                <div className="modal-note"><Icon name="i-alert" size={16} /> {L(`AK/SK 将保存在租户级别，后续开通空间选择 ${activeCloudProvider?.name ?? "该云厂商"} Runtime/Sandbox/Artifact Provider 时无需重复输入。`, `AK/SK is saved at tenant level, so workspace provisioning does not ask again for ${activeCloudProvider?.name ?? "this cloud provider"} Runtime/Sandbox/Artifact providers.`)}</div>
                 <label className="form">Access Key<input className="fld" value={cloudAccessKey} onChange={(event) => setCloudAccessKey(event.target.value)} autoComplete="off" autoFocus /></label>
                 <label className="form">SecretKey<input className="fld" type="password" value={cloudSecretKey} onChange={(event) => setCloudSecretKey(event.target.value)} autoComplete="off" /></label>
-                <label className="form">Region<select className="fld" value={cloudRegion} onChange={(event) => setCloudRegion(event.target.value)}><option>cn-beijing</option><option>cn-shanghai</option><option>cn-guangzhou</option><option>ap-southeast-1</option></select></label>
+                <label className="form">Region<select className="fld" value={cloudRegion} onChange={(event) => setCloudRegion(event.target.value)}><option>cn-beijing</option><option>cn-hangzhou</option><option>cn-shanghai</option><option>cn-guangzhou</option><option>ap-southeast-1</option></select></label>
                 {tenantError ? <div className="modal-note"><Icon name="i-alert" size={16} /> {tenantError}</div> : null}
               </div>
               <div className="modal-foot"><button className="btn secondary" type="button" onClick={() => setCloudModal("")} disabled={cloudSaving}>{L("取消", "Cancel")}</button><button className="btn primary" type="submit" disabled={cloudSaving || !cloudAccessKey.trim() || !cloudSecretKey.trim()}>{cloudSaving ? L("保存中…", "Saving…") : L("保存接入", "Save access")}</button></div>

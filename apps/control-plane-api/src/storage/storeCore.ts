@@ -57,12 +57,34 @@ export type SandboxPoolConfig = {
   standby_ttl_ms: number;
 };
 
+export type PoolRole = "primary" | "standby";
+
+export type RuntimeProviderPoolConfig = RuntimePoolConfig & {
+  provider: string;
+  role: PoolRole;
+  priority: number;
+  name: string;
+  config: JsonRecord;
+};
+
+export type SandboxProviderPoolConfig = SandboxPoolConfig & {
+  provider: string;
+  role: PoolRole;
+  priority: number;
+  name: string;
+  config: JsonRecord;
+};
+
 export type WorkspaceOnboardingInput = {
   user_id: string;
   tenant: { name: string; description?: string };
   workspace: { name: string; description?: string; slug?: string };
-  runtime_provider: "vefaas" | "local_docker";
-  sandbox_provider: "e2b" | "vefaas" | "local_docker" | "daytona";
+  runtime_provider: "vefaas" | "local_docker" | "aliyun_fc";
+  runtime_pools?: Array<Partial<RuntimePoolConfig> & { provider?: string; role?: string; priority?: number; name?: string; config?: JsonRecord }>;
+  sandbox_provider: "e2b" | "vefaas" | "local_docker" | "daytona" | "aliyun_fc";
+  sandbox_pools?: Array<Partial<SandboxPoolConfig> & { provider?: string; role?: string; priority?: number; name?: string; config?: JsonRecord }>;
+  artifact_provider?: "tos" | "oss";
+  object_storage?: JsonRecord;
   sandbox_config?: JsonRecord;
   sandbox_pool?: SandboxPoolConfig;
   runtime_pool: RuntimePoolConfig;
@@ -113,6 +135,25 @@ export function runtimePoolConfig(input: RuntimePoolConfig) {
   };
 }
 
+export function runtimeProviderPoolConfigs(
+  inputs: WorkspaceOnboardingInput["runtime_pools"] | undefined,
+  fallbackProvider: string,
+  fallbackPool: RuntimePoolConfig
+): RuntimeProviderPoolConfig[] {
+  const source = inputs?.length ? inputs : [{ provider: fallbackProvider, role: "primary", priority: 0, ...fallbackPool }];
+  return source.map((item, index) => {
+    const base = runtimePoolConfig({ ...fallbackPool, ...recordValue(item) } as RuntimePoolConfig);
+    return {
+      ...base,
+      provider: String(item.provider || fallbackProvider),
+      role: normalizePoolRole(item.role),
+      priority: Number.isFinite(Number(item.priority)) ? Math.floor(Number(item.priority)) : index,
+      name: String(item.name || `${normalizePoolRole(item.role)}-${item.provider || fallbackProvider}-${index + 1}`),
+      config: recordValue(item.config)
+    };
+  });
+}
+
 export function sandboxPoolConfig(input?: SandboxPoolConfig | JsonRecord | null): SandboxPoolConfig {
   const raw = recordValue(input);
   const desired = Number(raw.desired_size ?? raw.size ?? 1);
@@ -121,6 +162,29 @@ export function sandboxPoolConfig(input?: SandboxPoolConfig | JsonRecord | null)
     desired_size: Math.min(100, Math.max(1, Math.floor(Number.isFinite(desired) ? desired : 1))),
     standby_ttl_ms: Math.max(60_000, Math.floor(Number.isFinite(ttl) ? ttl : 30 * 60 * 1000))
   };
+}
+
+export function sandboxProviderPoolConfigs(
+  inputs: WorkspaceOnboardingInput["sandbox_pools"] | undefined,
+  fallbackProvider: string,
+  fallbackPool?: SandboxPoolConfig | JsonRecord | null
+): SandboxProviderPoolConfig[] {
+  const source = inputs?.length ? inputs : [{ provider: fallbackProvider, role: "primary", priority: 0, ...recordValue(fallbackPool) }];
+  return source.map((item, index) => {
+    const base = sandboxPoolConfig({ ...recordValue(fallbackPool), ...recordValue(item) });
+    return {
+      ...base,
+      provider: String(item.provider || fallbackProvider),
+      role: normalizePoolRole(item.role),
+      priority: Number.isFinite(Number(item.priority)) ? Math.floor(Number(item.priority)) : index,
+      name: String(item.name || `${normalizePoolRole(item.role)}-${item.provider || fallbackProvider}-${index + 1}`),
+      config: recordValue(item.config)
+    };
+  });
+}
+
+function normalizePoolRole(value: unknown): PoolRole {
+  return String(value || "").toLowerCase() === "standby" ? "standby" : "primary";
 }
 
 export const reservedWorkspaceSlugs = new Set([

@@ -96,9 +96,9 @@ export function createSession(input: { agent_id: string; environment_id: string;
 
 function workspaceRuntimePoolRequiresMember(workspaceId: string) {
   const row = db
-    .prepare("SELECT desired_size, status FROM workspace_runtime_pools WHERE workspace_id = ? ORDER BY created_at ASC LIMIT 1")
+    .prepare("SELECT SUM(desired_size) AS desired_size, MAX(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active FROM workspace_runtime_pools WHERE workspace_id = ?")
     .get(workspaceId) as { desired_size?: unknown; status?: unknown } | undefined;
-  return String(row?.status || "") === "active" && Number(row?.desired_size || 0) > 0;
+  return Number((row as { active?: unknown } | undefined)?.active || 0) > 0 && Number(row?.desired_size || 0) > 0;
 }
 
 export function listSessions() {

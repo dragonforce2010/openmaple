@@ -242,6 +242,27 @@ export function ensureDefaultEnvironments(workspaceId: string) {
     });
     return;
   }
+  if (sandboxProvider === "aliyun_fc") {
+    const aliyun = recordValue(sandboxConfig.aliyun_fc ?? sandboxConfig.aliyun ?? sandboxConfig);
+    createEnvironment({
+      name: "Aliyun FC Sandbox",
+      config: {
+        type: "aliyun_fc",
+        sandbox: {
+          provider: "aliyun_fc",
+          aliyun_fc: {
+            function_name: String(aliyun.function_name || aliyun.functionName || process.env.ALIYUN_FC_FUNCTION_NAME || process.env.MAPLE_ALIYUN_FC_FUNCTION_NAME || ""),
+            invoke_url: String(aliyun.invoke_url || aliyun.invokeUrl || process.env.ALIYUN_FC_INVOKE_URL || process.env.MAPLE_ALIYUN_FC_INVOKE_URL || ""),
+            workspace_path: String(aliyun.workspace_path || process.env.ALIYUN_FC_WORKSPACE_PATH || process.env.MAPLE_ALIYUN_FC_WORKSPACE_PATH || "/workspace"),
+            timeout_ms: Number(aliyun.timeout_ms || process.env.ALIYUN_FC_TIMEOUT_MS || process.env.MAPLE_ALIYUN_FC_TIMEOUT_MS || 3_600_000)
+          }
+        },
+        networking: { mode: "cloud_limited", allow_internet_access: true }
+      },
+      workspace_id: workspaceId
+    });
+    return;
+  }
   createEnvironment({
     name: "E2B Cloud Sandbox",
     config: {
@@ -286,9 +307,10 @@ export function getEnvironment(id: string) {
 }
 
 export function selectRuntimePoolMember(workspaceId: string) {
-  return db
+  const rows = db
     .prepare(
       `SELECT workspace_runtime_pool_members.*, workspace_runtime_pools.id AS runtime_pool_id
+              , workspace_runtime_pools.config_json AS runtime_pool_config_json
        FROM workspace_runtime_pool_members
        JOIN workspace_runtime_pools ON workspace_runtime_pools.id = workspace_runtime_pool_members.runtime_pool_id
        WHERE workspace_runtime_pool_members.workspace_id = ?
@@ -297,9 +319,10 @@ export function selectRuntimePoolMember(workspaceId: string) {
        ORDER BY workspace_runtime_pool_members.active_session_count ASC,
                 workspace_runtime_pool_members.weight DESC,
                 workspace_runtime_pool_members.created_at ASC
-       LIMIT 1`
+       `
     )
-    .get(workspaceId) as JsonRecord | undefined;
+    .all(workspaceId) as JsonRecord[];
+  return rows.sort(runtimePoolMemberRank)[0] as JsonRecord | undefined;
 }
 
 export function runtimePoolMemberAgentRuntime(member: JsonRecord) {
@@ -311,6 +334,20 @@ export function runtimePoolMemberAgentRuntime(member: JsonRecord) {
       runtime_pool_id: member.runtime_pool_id,
       runtime_pool_member_id: member.id,
       image: String(config.image || process.env.MAPLE_DOCKER_IMAGE || "node:22-bookworm"),
+      workspace_path: String(config.workspace_path || "/workspace"),
+      timeout_ms: Number(config.timeout_ms || 120_000),
+      envs: fromJson<Record<string, string>>(toJson(config.envs), {})
+    };
+  }
+  if (String(member.provider) === "aliyun_fc" || String(config.provider) === "aliyun_fc") {
+    return {
+      type: "aliyun_fc",
+      provider: "aliyun_fc",
+      runtime_pool_id: member.runtime_pool_id,
+      runtime_pool_member_id: member.id,
+      function_name: member.cloud_function_id,
+      invoke_url: member.invoke_url,
+      region: member.region,
       workspace_path: String(config.workspace_path || "/workspace"),
       timeout_ms: Number(config.timeout_ms || 120_000),
       envs: fromJson<Record<string, string>>(toJson(config.envs), {})
@@ -330,4 +367,13 @@ export function runtimePoolMemberAgentRuntime(member: JsonRecord) {
     timeout_ms: Number(config.timeout_ms || 120_000),
     envs: fromJson<Record<string, string>>(toJson(config.envs), {})
   };
+}
+
+function runtimePoolMemberRank(member: JsonRecord) {
+  const poolConfig = fromJson<JsonRecord>(String(member.runtime_pool_config_json || "{}"), {});
+  const memberConfig = fromJson<JsonRecord>(String(member.config_json || "{}"), {});
+  const role = String(poolConfig.role || memberConfig.role || "primary");
+  const roleRank = role === "standby" ? 10_000 : 0;
+  const priority = Number(poolConfig.priority ?? memberConfig.priority ?? 0);
+  return roleRank + (Number.isFinite(priority) ? priority : 0);
 }

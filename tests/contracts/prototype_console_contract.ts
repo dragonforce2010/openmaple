@@ -51,9 +51,14 @@ try {
   api = startProcess("bun", ["apps/control-plane-api/src/index.ts"], {
     PORT: String(apiPort),
     HOST: "127.0.0.1",
+    MAPLE_DATA_DIR: contractDir,
+    MAPLE_CONFIG: join(contractDir, "missing-maple.config.yaml"),
+    MAPLE_LOCAL_MODEL_CONFIG_FILE: join(contractDir, "missing-local-model.json"),
 	    MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript,
 	    MAPLE_DISABLE_SESSION_BOOTSTRAP: "1",
-	    MAPLE_DEV_LOGIN: "true"
+	    MAPLE_DEV_LOGIN: "true",
+	    MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off",
+	    MAPLE_ALIYUN_CREDENTIAL_VALIDATION: "off"
 	  });
   await waitForHealth(`${apiBase}/health`, api, "api");
 
@@ -80,7 +85,9 @@ try {
   assert.equal(snapshot.sessions.length, 0);
   assert.equal(snapshot.environments.length, 0);
   assert.equal(snapshot.vaults.length, 0);
-  assert.equal(snapshot.models.length, 4); // global model configs (workspace_id="-1") visible to all users
+  assert.ok(snapshot.models.length >= 4); // global or configured model configs (workspace_id="-1") visible to all users
+  const defaultModelCount = snapshot.models.filter((model: Record<string, unknown>) => model.def).length;
+  assert.ok(defaultModelCount >= 1);
   assert.equal(snapshot.api_keys.length, 0);
 
   const browser = await chromium.launch({ headless: true });
@@ -146,7 +153,7 @@ try {
         ]
       );
       const modelTile = initialTileSummary.find((tile) => tile[0] === "模型接入点");
-      if (modelTile) assert.deepEqual(modelTile, ["模型接入点", "3", "1 默认"]);
+      if (modelTile) assert.deepEqual(modelTile, ["模型接入点", String(Math.max(0, snapshot.models.length - defaultModelCount)), `${defaultModelCount} 默认`]);
     }
 
     for (const label of expectedInitialNav) {

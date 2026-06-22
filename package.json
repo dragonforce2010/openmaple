@@ -37,6 +37,7 @@
     "test:vefaas-runner-pool": "python3 tests/contracts/vefaas_runner_pool_contract.py",
     "test:vefaas-sandbox": "bun tests/contracts/vefaas_sandbox_contract.ts",
     "test:onboarding-sandbox-pool": "bun tests/contracts/workspace_onboarding_sandbox_pool_contract.ts",
+    "test:aliyun-provider-orchestration": "bun tests/contracts/aliyun_provider_orchestration_contract.ts",
     "test:local-docker-provider": "bun tests/contracts/local_docker_provider_contract.ts",
     "test:local-docker-compose": "bun tests/contracts/local_docker_compose_contract.ts",
     "test:vefaas-sandbox-perf": "bun tests/e2e/vefaas_sandbox_perf_e2e.ts",
@@ -65,16 +66,17 @@
     "test:volcengine-credentials": "bun tests/contracts/volcengine_credential_validation_contract.ts",
     "test:ci-wrapper": "bun tests/contracts/ci_wrapper_contract.ts",
     "test:cloud-min-story": "bun tests/e2e/cloud_min_user_story.mjs",
-    "ci:contracts": "bun scripts/ci/run-contract-tests.mjs test:bun-runtime test:project-env test:real-agent-loop-driver test:vefaas-provisioner test:vefaas-contract test:vefaas-runner-pool test:vefaas-sandbox test:onboarding-sandbox-pool test:local-docker-provider test:local-docker-compose test:workspace-runtime-pool test:deployment test:mysql-adapter test:agent-builder test:platform-sdk-cli test:api-storage test:prototype-console test:auth-tenant-flow test:maple-ui-interaction test:session-tool-calls test:environment-lifecycle test:environment-packages test:vault-mcp test:codebase-hygiene test:public-hygiene test:session-file-upload test:maple-docs test:npm-sdk test:maple-branding test:ui-overlay test:admin-web-i18n test:tenant-cloud-provider test:volcengine-credentials test:ci-wrapper",
+    "ci:contracts": "bun scripts/ci/run-contract-tests.mjs test:bun-runtime test:project-env test:real-agent-loop-driver test:vefaas-provisioner test:vefaas-contract test:vefaas-runner-pool test:vefaas-sandbox test:onboarding-sandbox-pool test:aliyun-provider-orchestration test:local-docker-provider test:local-docker-compose test:workspace-runtime-pool test:deployment test:mysql-adapter test:agent-builder test:platform-sdk-cli test:api-storage test:prototype-console test:auth-tenant-flow test:maple-ui-interaction test:session-tool-calls test:environment-lifecycle test:environment-packages test:vault-mcp test:codebase-hygiene test:public-hygiene test:session-file-upload test:maple-docs test:npm-sdk test:maple-branding test:ui-overlay test:admin-web-i18n test:tenant-cloud-provider test:volcengine-credentials test:ci-wrapper",
     "deploy:vefaas:stable": "python3 infra/vefaas/deploy_vefaas_stable.py deploy",
     "status:vefaas:stable": "python3 infra/vefaas/deploy_vefaas_stable.py status",
     "test:e2e": "E2E_ISOLATED=1 E2E_SANDBOX_PROVIDER=e2b MAPLE_SANDBOX_PROVIDER=e2b MAPLE_AGENT_RUNTIME_PROVIDER=local MAPLE_AGENT_LOOP_EXECUTION=provider bun tests/e2e/e2e.mjs",
     "test:e2e:local-docker": "E2E_ISOLATED=1 E2E_SANDBOX_PROVIDER=local_docker MAPLE_LOCAL_DOCKER_MODE=true MAPLE_SANDBOX_PROVIDER=local_docker MAPLE_AGENT_RUNTIME_PROVIDER=local_docker MAPLE_AGENT_LOOP_EXECUTION=provider MAPLE_ASK_PROVIDER_TIMEOUT_MS=180000 E2E_ASK_TIMEOUT_MS=180000 bun tests/e2e/e2e.mjs",
-    "test:all": "bun run test:bun-runtime && bun run test:project-env && bun run test:real-agent-loop-driver && bun run test:vefaas-provisioner && bun run test:vefaas-contract && bun run test:vefaas-runner-pool && bun run test:vefaas-sandbox && bun run test:onboarding-sandbox-pool && bun run test:local-docker-provider && bun run test:local-docker-compose && bun run test:workspace-runtime-pool && bun run test:deployment && bun run test:agent-builder && bun run test:platform-sdk-cli && bun run test:api-storage && bun run test:prototype-console && bun run test:auth-tenant-flow && bun run test:maple-ui-interaction && bun run test:session-tool-calls && bun run test:environment-lifecycle && bun run test:environment-packages && bun run test:vault-mcp && bun run test:codebase-hygiene && bun run test:session-file-upload && bun run test:ui-overlay && bun run test:admin-web-i18n && bun run test:tenant-cloud-provider && bun run test:volcengine-credentials && bun run typecheck && bun run build && bun run test:e2e"
+    "test:all": "bun run test:bun-runtime && bun run test:project-env && bun run test:real-agent-loop-driver && bun run test:vefaas-provisioner && bun run test:vefaas-contract && bun run test:vefaas-runner-pool && bun run test:vefaas-sandbox && bun run test:onboarding-sandbox-pool && bun run test:aliyun-provider-orchestration && bun run test:local-docker-provider && bun run test:local-docker-compose && bun run test:workspace-runtime-pool && bun run test:deployment && bun run test:mysql-adapter && bun run test:agent-builder && bun run test:platform-sdk-cli && bun run test:api-storage && bun run test:prototype-console && bun run test:auth-tenant-flow && bun run test:maple-ui-interaction && bun run test:session-tool-calls && bun run test:environment-lifecycle && bun run test:environment-packages && bun run test:vault-mcp && bun run test:codebase-hygiene && bun run test:session-file-upload && bun run test:ui-overlay && bun run test:admin-web-i18n && bun run test:tenant-cloud-provider && bun run test:volcengine-credentials && bun run typecheck && bun run build && bun run test:e2e"
   },
   "dependencies": {
     "@e2b/desktop": "^2.2.3",
     "@volcengine/tos-sdk": "^2.9.1",
+    "ali-oss": "^6.23.0",
     "concurrently": "^9.2.1",
     "cors": "^2.8.5",
     "e2b": "^2.27.0",
@@ -85,6 +87,7 @@
     "nanoid": "^5.1.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "yaml": "^2.9.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {

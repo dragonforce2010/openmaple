@@ -74,7 +74,9 @@ const server = spawn(bunBin, ["apps/control-plane-api/src/index.ts"], {
     MAPLE_MYSQL_FORCE_HELPER: "true",
     MAPLE_DEV_LOGIN: "true",
     MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript,
-    HOME: dataDir
+    HOME: dataDir,
+    MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off",
+    MAPLE_ALIYUN_CREDENTIAL_VALIDATION: "off"
   },
   stdio: ["ignore", "pipe", "pipe"]
 });

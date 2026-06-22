@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { apiGet } from "../../api";
 import { useL, type OnboardingCustomModelConfig } from "../../appConfig";
@@ -8,6 +9,7 @@ import {
   MAX_RUNTIME_CONCURRENCY,
   MAX_RUNTIME_INSTANCES,
   MAX_SANDBOX_POOL_SIZE,
+  type OnboardingArtifactProvider,
   type OnboardingRuntimeProvider,
   type OnboardingSandboxProvider,
   type WorkspaceOnboardingSubmitInput
@@ -47,18 +49,27 @@ export function WorkspaceOnboardingView(props: {
   const [modelConfigIds, setModelConfigIds] = useState<string[]>(Array.isArray(draft0.modelConfigIds) ? (draft0.modelConfigIds as string[]) : []);
   const [customModelConfigs, setCustomModelConfigs] = useState<OnboardingCustomModelConfig[]>([]);
   const [connectedCloudProviders, setConnectedCloudProviders] = useState<string[]>(Array.isArray(draft0.connectedCloudProviders) ? draft0.connectedCloudProviders as string[] : []);
-  const [runtimeProvider, setRuntimeProvider] = useState<OnboardingRuntimeProvider>(draft0.runtimeProvider === "vefaas" ? "vefaas" : "local_docker");
+  const [runtimeProvider, setRuntimeProvider] = useState<OnboardingRuntimeProvider>(draft0.runtimeProvider === "aliyun_fc" ? "aliyun_fc" : draft0.runtimeProvider === "vefaas" ? "vefaas" : "local_docker");
+  const [standbyRuntimeProvider, setStandbyRuntimeProvider] = useState<OnboardingRuntimeProvider | "">(draft0.standbyRuntimeProvider === "aliyun_fc" ? "aliyun_fc" : draft0.standbyRuntimeProvider === "vefaas" ? "vefaas" : "");
+  const [artifactProvider, setArtifactProvider] = useState<OnboardingArtifactProvider>(draft0.artifactProvider === "oss" ? "oss" : "tos");
   const [vefaasAccessKey, setVefaasAccessKey] = useState("");
   const [vefaasSecretKey, setVefaasSecretKey] = useState("");
   const [vefaasRegion, setVefaasRegion] = useState(typeof draft0.vefaasRegion === "string" ? draft0.vefaasRegion : "cn-beijing");
+  const [aliyunAccessKeyId, setAliyunAccessKeyId] = useState("");
+  const [aliyunAccessKeySecret, setAliyunAccessKeySecret] = useState("");
+  const [aliyunRegion, setAliyunRegion] = useState(typeof draft0.aliyunRegion === "string" ? draft0.aliyunRegion : "cn-hangzhou");
   const [sandboxProvider, setSandboxProvider] = useState<OnboardingSandboxProvider>(
-    draft0.sandboxProvider === "vefaas" ? "vefaas" : draft0.sandboxProvider === "daytona" ? "daytona" : draft0.sandboxProvider === "e2b" ? "e2b" : "local_docker"
+    draft0.sandboxProvider === "aliyun_fc" ? "aliyun_fc" : draft0.sandboxProvider === "vefaas" ? "vefaas" : draft0.sandboxProvider === "daytona" ? "daytona" : draft0.sandboxProvider === "e2b" ? "e2b" : "local_docker"
   );
+  const [standbySandboxProvider, setStandbySandboxProvider] = useState<OnboardingSandboxProvider | "">(draft0.standbySandboxProvider === "aliyun_fc" ? "aliyun_fc" : draft0.standbySandboxProvider === "vefaas" ? "vefaas" : draft0.standbySandboxProvider === "e2b" ? "e2b" : "");
   const [e2bApiKey, setE2bApiKey] = useState("");
   const [daytonaServerUrl, setDaytonaServerUrl] = useState("");
   const [daytonaApiKey, setDaytonaApiKey] = useState("");
   const [vefaasSandboxFunctionId, setVefaasSandboxFunctionId] = useState("");
   const [vefaasSandboxGatewayUrl, setVefaasSandboxGatewayUrl] = useState("");
+  const [aliyunFcFunctionName, setAliyunFcFunctionName] = useState("");
+  const [aliyunFcInvokeUrl, setAliyunFcInvokeUrl] = useState("");
+  const [aliyunFcApiKey, setAliyunFcApiKey] = useState("");
   const [vefaasSandboxTimeoutInput, setVefaasSandboxTimeoutInput] = useState(numString("vefaasSandboxTimeoutMs", 3_600_000));
   const [sandboxPoolSizeInput, setSandboxPoolSizeInput] = useState(numString("sandboxPoolSize", 1));
   const [saving, setSaving] = useState(false);
@@ -80,23 +91,28 @@ export function WorkspaceOnboardingView(props: {
   const peakQps = desiredSize * maxInstances * maxConcurrency;
   const localDockerSelected = connectedCloudProviders.includes("local_docker") || runtimeProvider === "local_docker";
   const volcengineReady = connectedCloudProviders.includes("volcengine") && Boolean(vefaasAccessKey.trim() && vefaasSecretKey.trim() && vefaasRegion.trim());
-  const cloudProviderFilled = localDockerSelected || volcengineReady;
-  const runtimeCredsFilled = runtimeProvider === "local_docker" || volcengineReady;
-  const sandboxFilled = sandboxProvider === "local_docker"
+  const aliyunReady = connectedCloudProviders.includes("aliyun") && Boolean(aliyunAccessKeyId.trim() && aliyunAccessKeySecret.trim() && aliyunRegion.trim());
+  const cloudProviderFilled = localDockerSelected || volcengineReady || aliyunReady;
+  const runtimeReady = (provider: OnboardingRuntimeProvider | "") => !provider || provider === "local_docker" || (provider === "vefaas" ? volcengineReady : aliyunReady);
+  const sandboxReady = (provider: OnboardingSandboxProvider | "") => !provider || provider === "local_docker"
     ? true
-    : sandboxProvider === "e2b"
+    : provider === "e2b"
     ? Boolean(e2bApiKey.trim())
-    : sandboxProvider === "daytona"
+    : provider === "daytona"
     ? Boolean(daytonaServerUrl.trim() && daytonaApiKey.trim())
-    : volcengineReady && Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim());
+    : provider === "vefaas"
+    ? volcengineReady && Boolean(vefaasSandboxFunctionId.trim() && vefaasSandboxGatewayUrl.trim())
+    : aliyunReady && Boolean(aliyunFcInvokeUrl.trim());
+  const runtimeCredsFilled = runtimeReady(runtimeProvider) && runtimeReady(standbyRuntimeProvider);
+  const sandboxFilled = sandboxReady(sandboxProvider) && sandboxReady(standbySandboxProvider);
   const workspaceSlugReady = Boolean(derivedWorkspaceSlug.trim() && slugStatus?.available === true);
   // Persist non-sensitive runtime choices only; text fields stay placeholder-only on reload.
   // secrets (AK/SK, e2b key) are intentionally NOT persisted and must be re-entered
   useEffect(() => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, modelConfigIds: validModelConfigIds, connectedCloudProviders, runtimeProvider, vefaasRegion, sandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize }));
+      localStorage.setItem(draftKey, JSON.stringify({ desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, modelConfigIds: validModelConfigIds, connectedCloudProviders, runtimeProvider, standbyRuntimeProvider, artifactProvider, vefaasRegion, aliyunRegion, sandboxProvider, standbySandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize }));
     } catch { /* ignore storage quota */ }
-  }, [desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, validModelConfigIds, connectedCloudProviders, runtimeProvider, vefaasRegion, sandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize, draftKey]);
+  }, [desiredSize, minInstances, maxInstances, maxConcurrency, cpuMilli, memoryMb, validModelConfigIds, connectedCloudProviders, runtimeProvider, standbyRuntimeProvider, artifactProvider, vefaasRegion, aliyunRegion, sandboxProvider, standbySandboxProvider, vefaasSandboxTimeoutMs, sandboxPoolSize, draftKey]);
   useEffect(() => {
     if (!props.modelConfigs.length) return;
     const validIds = new Set(props.modelConfigs.map((config) => config.id));
@@ -216,16 +232,25 @@ export function WorkspaceOnboardingView(props: {
         apiKeyName: apiKeyName.trim() || workspaceApiKeyPlaceholder,
         connectedCloudProviders,
         runtimeProvider,
+        standbyRuntimeProvider,
+        artifactProvider,
         vefaasAccessKey,
         vefaasSecretKey,
         vefaasRegion,
+        aliyunAccessKeyId,
+        aliyunAccessKeySecret,
+        aliyunRegion,
         sandboxProvider,
+        standbySandboxProvider,
         e2bApiKey,
         daytonaServerUrl,
         daytonaApiKey,
         vefaasSandboxFunctionId,
         vefaasSandboxGatewayUrl,
         vefaasSandboxTimeoutMs,
+        aliyunFcFunctionName,
+        aliyunFcInvokeUrl,
+        aliyunFcApiKey,
         sandboxPoolSize
       });
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
@@ -242,7 +267,7 @@ export function WorkspaceOnboardingView(props: {
       provisioningLog("info", L("创建 tenant、workspace、workspace members 和 Workspace API key。", "Creating tenant, workspace, workspace members, and workspace API key.")),
       provisioningLog("info", runtimeProvider === "local_docker"
         ? L(`初始化 Runtime Pool：${desiredSize} 个本机 Docker runtime member。`, `Initializing Runtime Pool: ${desiredSize} local Docker runtime members.`)
-        : L(`初始化 Runtime Pool：${desiredSize} 个 VeFaaS 函数，min=${minInstances}，max=${maxInstances}，concurrency=${maxConcurrency}。`, `Initializing Runtime Pool: ${desiredSize} VeFaaS functions, min=${minInstances}, max=${maxInstances}, concurrency=${maxConcurrency}.`)),
+        : L(`初始化 Runtime Pool：主池 ${runtimeProvider}${standbyRuntimeProvider ? `，备池 ${standbyRuntimeProvider}` : ""}。`, `Initializing Runtime Pool: primary ${runtimeProvider}${standbyRuntimeProvider ? `, standby ${standbyRuntimeProvider}` : ""}.`)),
       provisioningLog("info", sandboxProvider === "local_docker"
         ? L(`初始化 Sandbox Pool：${sandboxPoolSize} 个本机 Docker 沙箱。`, `Initializing Sandbox Pool: ${sandboxPoolSize} local Docker sandboxes.`)
         : sandboxProvider === "vefaas"
@@ -319,6 +344,12 @@ export function WorkspaceOnboardingView(props: {
             derivedWorkspaceSlug={derivedWorkspaceSlug}
             connectedCloudProviders={connectedCloudProviders}
             setConnectedCloudProviders={setConnectedCloudProviders}
+            aliyunAccessKeyId={aliyunAccessKeyId}
+            setAliyunAccessKeyId={setAliyunAccessKeyId}
+            aliyunAccessKeySecret={aliyunAccessKeySecret}
+            setAliyunAccessKeySecret={setAliyunAccessKeySecret}
+            aliyunRegion={aliyunRegion}
+            setAliyunRegion={setAliyunRegion}
             vefaasAccessKey={vefaasAccessKey}
             setVefaasAccessKey={setVefaasAccessKey}
             vefaasSecretKey={vefaasSecretKey}
@@ -345,8 +376,14 @@ export function WorkspaceOnboardingView(props: {
             peakQps={peakQps}
             runtimeProvider={runtimeProvider}
             setRuntimeProvider={setRuntimeProvider}
+            standbyRuntimeProvider={standbyRuntimeProvider}
+            setStandbyRuntimeProvider={setStandbyRuntimeProvider}
+            artifactProvider={artifactProvider}
+            setArtifactProvider={setArtifactProvider}
             sandboxProvider={sandboxProvider}
             setSandboxProvider={setSandboxProvider}
+            standbySandboxProvider={standbySandboxProvider}
+            setStandbySandboxProvider={setStandbySandboxProvider}
             e2bApiKey={e2bApiKey}
             setE2bApiKey={setE2bApiKey}
             daytonaServerUrl={daytonaServerUrl}
@@ -357,6 +394,12 @@ export function WorkspaceOnboardingView(props: {
             setVefaasSandboxFunctionId={setVefaasSandboxFunctionId}
             vefaasSandboxGatewayUrl={vefaasSandboxGatewayUrl}
             setVefaasSandboxGatewayUrl={setVefaasSandboxGatewayUrl}
+            aliyunFcFunctionName={aliyunFcFunctionName}
+            setAliyunFcFunctionName={setAliyunFcFunctionName}
+            aliyunFcInvokeUrl={aliyunFcInvokeUrl}
+            setAliyunFcInvokeUrl={setAliyunFcInvokeUrl}
+            aliyunFcApiKey={aliyunFcApiKey}
+            setAliyunFcApiKey={setAliyunFcApiKey}
             vefaasSandboxTimeoutInput={vefaasSandboxTimeoutInput}
             setVefaasSandboxTimeoutInput={setVefaasSandboxTimeoutInput}
             sandboxPoolSizeInput={sandboxPoolSizeInput}

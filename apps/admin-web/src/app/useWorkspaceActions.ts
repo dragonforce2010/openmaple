@@ -90,48 +90,74 @@ export function useWorkspaceActions(input: {
     customModelConfigs: OnboardingCustomModelConfig[];
     apiKeyName: string;
     connectedCloudProviders: string[];
-    runtimeProvider: "local_docker" | "vefaas";
+    runtimeProvider: "local_docker" | "vefaas" | "aliyun_fc";
+    standbyRuntimeProvider: "local_docker" | "vefaas" | "aliyun_fc" | "";
+    artifactProvider: "tos" | "oss";
     vefaasAccessKey: string;
     vefaasSecretKey: string;
     vefaasRegion: string;
-    sandboxProvider: "local_docker" | "e2b" | "daytona" | "vefaas";
+    aliyunAccessKeyId: string;
+    aliyunAccessKeySecret: string;
+    aliyunRegion: string;
+    sandboxProvider: "local_docker" | "e2b" | "daytona" | "vefaas" | "aliyun_fc";
+    standbySandboxProvider: "local_docker" | "e2b" | "daytona" | "vefaas" | "aliyun_fc" | "";
     e2bApiKey: string;
     daytonaServerUrl: string;
     daytonaApiKey: string;
     vefaasSandboxFunctionId: string;
     vefaasSandboxGatewayUrl: string;
     vefaasSandboxTimeoutMs: number;
+    aliyunFcFunctionName: string;
+    aliyunFcInvokeUrl: string;
+    aliyunFcApiKey: string;
     sandboxPoolSize: number;
   }) {
+    const runtimePoolBase = {
+      desired_size: onboarding.desiredSize,
+      min_instances_per_function: onboarding.minInstances,
+      max_instances_per_function: onboarding.maxInstances,
+      max_concurrency_per_instance: onboarding.maxConcurrency,
+      cpu_milli: onboarding.cpuMilli,
+      memory_mb: onboarding.memoryMb
+    };
+    const runtimePools = [
+      { ...runtimePoolBase, provider: onboarding.runtimeProvider, role: "primary", priority: 0, name: `${onboarding.runtimeProvider} primary` },
+      ...(onboarding.standbyRuntimeProvider ? [{ ...runtimePoolBase, provider: onboarding.standbyRuntimeProvider, role: "standby", priority: 10, name: `${onboarding.standbyRuntimeProvider} standby` }] : [])
+    ];
+    const sandboxPoolBase = { desired_size: onboarding.sandboxPoolSize, standby_ttl_ms: 30 * 60 * 1000 };
+    const sandboxPools = [
+      { ...sandboxPoolBase, provider: onboarding.sandboxProvider, role: "primary", priority: 0, name: `${onboarding.sandboxProvider} primary` },
+      ...(onboarding.standbySandboxProvider ? [{ ...sandboxPoolBase, provider: onboarding.standbySandboxProvider, role: "standby", priority: 10, name: `${onboarding.standbySandboxProvider} standby` }] : [])
+    ];
+    const needsVolcengine = [onboarding.runtimeProvider, onboarding.standbyRuntimeProvider, onboarding.sandboxProvider, onboarding.standbySandboxProvider].includes("vefaas") || onboarding.artifactProvider === "tos";
+    const needsAliyun = [onboarding.runtimeProvider, onboarding.standbyRuntimeProvider, onboarding.sandboxProvider, onboarding.standbySandboxProvider].includes("aliyun_fc") || onboarding.artifactProvider === "oss";
+    const needsE2b = onboarding.sandboxProvider === "e2b" || onboarding.standbySandboxProvider === "e2b";
+    const needsDaytona = onboarding.sandboxProvider === "daytona" || onboarding.standbySandboxProvider === "daytona";
     const result = await apiPost<{ workspace: Workspace; api_key: WorkspaceApiKey }>("/v1/workspace_onboarding", {
       tenant: { name: onboarding.tenantName, description: onboarding.tenantDescription },
       workspace: { name: onboarding.workspaceName, description: onboarding.workspaceDescription, slug: onboarding.workspaceSlug || undefined },
       runtime_provider: onboarding.runtimeProvider,
-      runtime_pool: {
-        desired_size: onboarding.desiredSize,
-        min_instances_per_function: onboarding.minInstances,
-        max_instances_per_function: onboarding.maxInstances,
-        max_concurrency_per_instance: onboarding.maxConcurrency,
-        cpu_milli: onboarding.cpuMilli,
-        memory_mb: onboarding.memoryMb
-      },
+      runtime_pool: runtimePoolBase,
+      runtime_pools: runtimePools,
       sandbox_provider: onboarding.sandboxProvider,
-      sandbox_config: onboarding.sandboxProvider === "vefaas"
-        ? { vefaas: { function_id: onboarding.vefaasSandboxFunctionId, gateway_url: onboarding.vefaasSandboxGatewayUrl, timeout_ms: onboarding.vefaasSandboxTimeoutMs, workspace_path: "/home/tiger/workspace" } }
-        : onboarding.sandboxProvider === "local_docker"
-          ? { local_docker: { image: "node:22-bookworm", networking: { mode: "limited", allow_mcp_servers: true, allow_package_managers: true } } }
-        : onboarding.sandboxProvider === "daytona"
-          ? { daytona: { server_url: onboarding.daytonaServerUrl, api_key: onboarding.daytonaApiKey } }
-        : {},
-      sandbox_pool: { desired_size: onboarding.sandboxPoolSize, standby_ttl_ms: 30 * 60 * 1000 },
+      sandbox_config: {
+        vefaas: { function_id: onboarding.vefaasSandboxFunctionId, gateway_url: onboarding.vefaasSandboxGatewayUrl, timeout_ms: onboarding.vefaasSandboxTimeoutMs, workspace_path: "/home/tiger/workspace" },
+        aliyun_fc: { function_name: onboarding.aliyunFcFunctionName, invoke_url: onboarding.aliyunFcInvokeUrl, api_key: onboarding.aliyunFcApiKey, timeout_ms: onboarding.vefaasSandboxTimeoutMs, workspace_path: "/workspace" },
+        local_docker: { image: "node:22-bookworm", networking: { mode: "limited", allow_mcp_servers: true, allow_package_managers: true } },
+        daytona: { server_url: onboarding.daytonaServerUrl, api_key: onboarding.daytonaApiKey }
+      },
+      sandbox_pool: sandboxPoolBase,
+      sandbox_pools: sandboxPools,
+      artifact_provider: onboarding.artifactProvider,
       model_config_ids: onboarding.modelConfigIds,
       custom_model_configs: onboarding.customModelConfigs.map(({ local_id: _localId, ...config }) => config),
       api_key: { display_name: onboarding.apiKeyName, scopes: ["control_plane", "data_plane"] },
       admin: { email: input.currentUser?.email, name: input.currentUser?.name },
       provider_credentials: {
-        vefaas: (onboarding.runtimeProvider === "vefaas" || onboarding.sandboxProvider === "vefaas") && onboarding.connectedCloudProviders.includes("volcengine") ? { VOLCENGINE_ACCESS_KEY: onboarding.vefaasAccessKey, VOLCENGINE_SECRET_KEY: onboarding.vefaasSecretKey, VEFAAS_REGION: onboarding.vefaasRegion } : {},
-        e2b: onboarding.sandboxProvider === "e2b" ? { E2B_API_KEY: onboarding.e2bApiKey } : {},
-        daytona: onboarding.sandboxProvider === "daytona" ? { DAYTONA_SERVER_URL: onboarding.daytonaServerUrl, DAYTONA_API_KEY: onboarding.daytonaApiKey } : {}
+        vefaas: needsVolcengine && onboarding.connectedCloudProviders.includes("volcengine") ? { VOLCENGINE_ACCESS_KEY: onboarding.vefaasAccessKey, VOLCENGINE_SECRET_KEY: onboarding.vefaasSecretKey, VEFAAS_REGION: onboarding.vefaasRegion } : {},
+        aliyun: needsAliyun && onboarding.connectedCloudProviders.includes("aliyun") ? { ALIYUN_ACCESS_KEY_ID: onboarding.aliyunAccessKeyId, ALIYUN_ACCESS_KEY_SECRET: onboarding.aliyunAccessKeySecret, ALIYUN_REGION: onboarding.aliyunRegion, ALIYUN_FC_FUNCTION_NAME: onboarding.aliyunFcFunctionName, ALIYUN_FC_INVOKE_URL: onboarding.aliyunFcInvokeUrl, ALIYUN_FC_API_KEY: onboarding.aliyunFcApiKey } : {},
+        e2b: needsE2b ? { E2B_API_KEY: onboarding.e2bApiKey } : {},
+        daytona: needsDaytona ? { DAYTONA_SERVER_URL: onboarding.daytonaServerUrl, DAYTONA_API_KEY: onboarding.daytonaApiKey } : {}
       }
     });
     const issuedKey = result.api_key.key ?? "";

@@ -19,17 +19,31 @@ export function hydrateSandboxPoolMemberRow(row: JsonRecord): SandboxPoolMember 
 }
 
 export function getWorkspaceSandboxPool(workspaceId: string) {
+  return listWorkspaceSandboxPools(workspaceId)[0] ?? null;
+}
+
+export function listWorkspaceSandboxPools(workspaceId: string) {
   const workspace = db.prepare("SELECT * FROM workspaces WHERE id = ?").get(workspaceId) as JsonRecord | undefined;
-  if (!workspace) return null;
+  if (!workspace) return [];
   const workspaceConfig = fromJson(String(workspace.config_json), {}) as JsonRecord;
-  const config = sandboxPoolConfig(recordValue(workspaceConfig.sandbox_pool));
-  const provider = String(workspace.sandbox_provider || workspaceConfig.sandbox_provider || "e2b");
-  return {
-    workspace_id: workspaceId,
-    provider,
-    ...config,
-    members: listWorkspaceSandboxPoolMembers(workspaceId, provider)
-  };
+  const fallbackProvider = String(workspace.sandbox_provider || workspaceConfig.sandbox_provider || "e2b");
+  const fallbackPool = sandboxPoolConfig(recordValue(workspaceConfig.sandbox_pool));
+  const rawPools = Array.isArray(workspaceConfig.sandbox_pools) && workspaceConfig.sandbox_pools.length
+    ? workspaceConfig.sandbox_pools as JsonRecord[]
+    : [{ provider: fallbackProvider, role: "primary", priority: 0, ...fallbackPool }];
+  return rawPools.map((pool, index) => {
+    const provider = String(pool.provider || fallbackProvider);
+    return {
+      workspace_id: workspaceId,
+      provider,
+      role: String(pool.role || "primary") === "standby" ? "standby" : "primary",
+      priority: Number.isFinite(Number(pool.priority)) ? Math.floor(Number(pool.priority)) : index,
+      name: String(pool.name || `${String(pool.role || "primary")}-${provider}-${index + 1}`),
+      config: recordValue(pool.config),
+      ...sandboxPoolConfig(pool),
+      members: listWorkspaceSandboxPoolMembers(workspaceId, provider)
+    };
+  }).sort((a, b) => poolRank(a) - poolRank(b));
 }
 
 export function listWorkspaceSandboxPoolMembers(workspaceId: string, provider?: string) {
@@ -65,6 +79,10 @@ export function countSandboxPoolMembersByStatus(workspaceId: string, provider: s
     .prepare("SELECT status, COUNT(*) AS count FROM workspace_sandbox_pool_members WHERE workspace_id = ? AND provider = ? GROUP BY status")
     .all(workspaceId, provider) as JsonRecord[];
   return countRowsToSummary(rows);
+}
+
+function poolRank(pool: { role?: string; priority?: number }) {
+  return (pool.role === "standby" ? 10_000 : 0) + (Number.isFinite(Number(pool.priority)) ? Number(pool.priority) : 0);
 }
 
 export function expireSandboxPoolMembers(workspaceId: string, provider: string) {

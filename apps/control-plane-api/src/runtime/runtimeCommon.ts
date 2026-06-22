@@ -27,6 +27,17 @@ export function runtimePublicMetadata(runtime: RuntimeInfo): JsonRecord {
       lifecycle: runtime.lifecycle
     };
   }
+  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") {
+    return {
+      type: runtime.type,
+      provider: runtime.provider,
+      function_name: runtime.function_name,
+      region: runtime.region,
+      workspace_path: runtime.workspace_path,
+      sandbox_workspace_path: runtime.sandbox_workspace_path,
+      lifecycle: "lifecycle" in runtime ? runtime.lifecycle : undefined
+    };
+  }
   return runtime as unknown as JsonRecord;
 }
 
@@ -78,7 +89,7 @@ export function safeSandboxReadPath(runtime: RuntimeInfo, requestedPath: string)
   if (runtime.type === "docker") {
     if (isWithinSandboxRoot(normalized, "/workspace") || isWithinSandboxRoot(normalized, "/mnt/session/uploads")) return normalized;
   }
-  if (runtime.type === "e2b" || runtime.type === "vefaas" || runtime.type === "vefaas_sandbox") {
+  if (runtime.type === "e2b" || runtime.type === "vefaas" || runtime.type === "vefaas_sandbox" || runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") {
     if (isWithinSandboxRoot(normalized, runtime.sandbox_workspace_path) || isWithinSandboxRoot(normalized, "/mnt/session/uploads")) return normalized;
   }
   throw new Error(`Path escapes workspace: ${requestedPath}`);

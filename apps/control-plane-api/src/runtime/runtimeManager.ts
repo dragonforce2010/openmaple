@@ -1,18 +1,20 @@
+/* eslint-disable max-lines */
 import { traceAsync } from "../perfTrace";
-import { getEnvironment, getSession, getWorkspace } from "../store";
+import { getEnvironment, getSession, getWorkspace, listWorkspaceSandboxPools } from "../store";
 import type { JsonRecord } from "../types";
 import { ensureDockerRuntime } from "./dockerRuntime";
 import { ensureE2BRuntime } from "./e2bRuntime";
 import { asRecord, runtimePublicMetadata, stringifyRecord } from "./runtimeCommon";
 import { prepareSessionResources } from "./runtimeResources";
-import type { RuntimeInfo, VefaasRuntimeInfo, VefaasSandboxRuntimeInfo } from "./runtimeTypes";
+import type { AliyunFcRuntimeInfo, RuntimeInfo, VefaasRuntimeInfo, VefaasSandboxRuntimeInfo } from "./runtimeTypes";
 import {
   normalizeSandboxConfig,
   type NormalizedAgentRuntimeConfig,
   type NormalizedSandboxRuntimeConfig
 } from "./sandboxConfig";
 import { installSessionPackages } from "./sandboxPackageInstall";
-import { claimPooledDockerRuntime, claimPooledSandboxRuntime, replenishWorkspaceSandboxPool } from "./sandboxPoolManager";
+import { ensureAliyunFcRuntime, ensureAliyunFcSandboxRuntime, invokeAliyunFc, aliyunFcLoopAgentEnv } from "./aliyunFcRuntime";
+import { claimPooledAliyunFcSandboxRuntime, claimPooledDockerRuntime, claimPooledSandboxRuntime, replenishWorkspaceSandboxPool } from "./sandboxPoolManager";
 import { ensureVefaasRuntime, invokeVefaas, vefaasLoopAgentConfig, vefaasLoopAgentEnv } from "./vefaasAgentRuntime";
 import { ensureVefaasSandboxRuntime, killVefaasSandbox } from "./vefaasSandboxRuntime";
 
@@ -33,6 +35,13 @@ export async function ensureSessionRuntime(sessionId: string): Promise<RuntimeIn
       // sandbox claim+resume that a simple turn never touches.
       const runtime = await ensureVefaasRuntime(session, agentRuntime);
       if (config.sandbox.provider === "e2b" || config.sandbox.provider === "vefaas") {
+        void ensureConfiguredSandboxRuntime(session, config.sandbox).catch((error) => console.warn("sandbox prewarm failed", error));
+      }
+      return runtime;
+    }
+    if (agentRuntime.provider === "aliyun_fc") {
+      const runtime = await ensureAliyunFcRuntime(session, agentRuntime);
+      if (config.sandbox.provider === "e2b" || config.sandbox.provider === "vefaas" || config.sandbox.provider === "aliyun_fc") {
         void ensureConfiguredSandboxRuntime(session, config.sandbox).catch((error) => console.warn("sandbox prewarm failed", error));
       }
       return runtime;
@@ -64,6 +73,17 @@ export function sessionUsesVefaasAgentRuntime(sessionId: string) {
   if (!environment) return false;
   const config = normalizeSandboxConfig(withWorkspaceRuntimeCredentials(environment as JsonRecord));
   return (sessionAgentRuntimeConfig(session, config.agent_runtime) ?? config.agent_runtime).provider === "vefaas";
+}
+
+export function sessionUsesAliyunFcAgentRuntime(sessionId: string) {
+  const session = getSession(sessionId);
+  if (!session) return false;
+  const metadataRuntime = asRecord(asRecord(session.metadata).agent_runtime);
+  if (String(metadataRuntime.provider || metadataRuntime.type || "") === "aliyun_fc") return true;
+  const environment = getEnvironment(String(session.environment_id));
+  if (!environment) return false;
+  const config = normalizeSandboxConfig(withWorkspaceRuntimeCredentials(environment as JsonRecord));
+  return (sessionAgentRuntimeConfig(session, config.agent_runtime) ?? config.agent_runtime).provider === "aliyun_fc";
 }
 
 export async function runAgentLoopOnVefaas(sessionId: string, text: string) {
@@ -107,6 +127,47 @@ export async function runAgentLoopOnVefaas(sessionId: string, text: string) {
   });
 }
 
+export async function runAgentLoopOnAliyunFc(sessionId: string, text: string) {
+  return traceAsync("runtime.aliyun_fc_agent_run", { session_id: sessionId, input_length: text.length }, async () => {
+    const startedAt = Date.now();
+    const session = getSession(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+    await ensureSessionRuntime(sessionId);
+    const readySession = getSession(sessionId);
+    if (!readySession) throw new Error(`Session not found after runtime bootstrap: ${sessionId}`);
+    const agentRuntime = asRecord(asRecord(readySession.metadata).agent_runtime);
+    if (String(agentRuntime.type || agentRuntime.provider || "") !== "aliyun_fc") {
+      throw new Error(`Session ${sessionId} is not bound to an Aliyun FC agent runtime.`);
+    }
+    const runtime = agentRuntime as unknown as AliyunFcRuntimeInfo;
+    const agentConfig = vefaasLoopAgentConfig(readySession as JsonRecord);
+    const token = String(asRecord(readySession.metadata).runtime_tool_bridge_token || "");
+    if (!token) throw new Error(`Session ${sessionId} is missing runtime_tool_bridge_token.`);
+    const sandboxRuntime = asRecord(asRecord(readySession.metadata).sandbox_runtime ?? asRecord(readySession.metadata).runtime);
+    const hasSandboxRuntime = Object.keys(sandboxRuntime).length > 0;
+    const controlPlanePrepareMs = Date.now() - startedAt;
+    const result = await invokeAliyunFc(runtime, "run", {
+      session_id: sessionId,
+      input: { type: "user.message", text },
+      agent_config: agentConfig,
+      agent_env: aliyunFcLoopAgentEnv(runtime, sessionId, agentConfig),
+      tool_bridge: {
+        url: runtimeToolBridgeUrl(sessionId),
+        token
+      },
+      event_callback: {
+        url: runtimeLoopEventsUrl(sessionId),
+        token
+      },
+      sandbox_runtime: hasSandboxRuntime ? runtimePublicMetadata(sandboxRuntime as unknown as RuntimeInfo) : undefined
+    });
+    return withControlPlaneTiming(result, {
+      control_plane_prepare_ms: controlPlanePrepareMs,
+      sandbox_runtime_snapshot: hasSandboxRuntime
+    });
+  });
+}
+
 function withControlPlaneTiming(result: JsonRecord, timings: JsonRecord): JsonRecord {
   const existing = asRecord(result.timings);
   return { ...result, timings: { ...existing, ...timings } };
@@ -126,6 +187,20 @@ export async function killSessionSandboxRuntime(sessionId: string) {
 }
 
 async function ensureConfiguredSandboxRuntime(session: JsonRecord & { id: string; workspace_path: string; environment_id: string }, config: NormalizedSandboxRuntimeConfig): Promise<RuntimeInfo> {
+  const configs = [config, ...workspaceSandboxFallbackConfigs(session, config.provider)];
+  let lastError: unknown;
+  for (const candidate of configs) {
+    try {
+      return await ensureSingleConfiguredSandboxRuntime(session, candidate);
+    } catch (error) {
+      lastError = error;
+      console.warn("[runtime] sandbox provider failed, trying fallback if available", { session_id: session.id, provider: candidate.provider, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError || "sandbox_runtime_unavailable"));
+}
+
+async function ensureSingleConfiguredSandboxRuntime(session: JsonRecord & { id: string; workspace_path: string; environment_id: string }, config: NormalizedSandboxRuntimeConfig): Promise<RuntimeInfo> {
   if (config.provider === "e2b") return ensureE2BRuntime(session, config);
   if (config.provider === "daytona") return ensureDaytonaSandboxRuntime(config);
   if (config.provider === "vercel") return ensureVercelSandboxRuntime(config);
@@ -137,7 +212,49 @@ async function ensureConfiguredSandboxRuntime(session: JsonRecord & { id: string
     if (workspaceId && process.env.MAPLE_SANDBOX_POOL_AUTOREPLENISH !== "false") void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
     return runtime;
   }
+  if (config.provider === "aliyun_fc") {
+    const canClaimPool = process.env.MAPLE_SANDBOX_POOL_CLAIM !== "false";
+    const runtime = await ensureAliyunFcSandboxRuntime(session, config, { acquireRuntime: canClaimPool ? () => claimPooledAliyunFcSandboxRuntime(session, config) : undefined });
+    if (config.packages.length) console.warn("[runtime] Aliyun FC sandbox package installation is not implemented; packages are expected in the FC image.", { session_id: session.id });
+    const workspaceId = String(session.workspace_id || asRecord(session.metadata).workspace_id || "");
+    if (workspaceId && process.env.MAPLE_SANDBOX_POOL_AUTOREPLENISH !== "false") void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
+    return runtime;
+  }
   return ensureDockerRuntime(session, config, { acquireRuntime: () => claimPooledDockerRuntime(session, config) });
+}
+
+function workspaceSandboxFallbackConfigs(session: JsonRecord, currentProvider: string): NormalizedSandboxRuntimeConfig[] {
+  const workspaceId = String(session.workspace_id || asRecord(session.metadata).workspace_id || "");
+  if (!workspaceId) return [];
+  const workspace = getWorkspace(workspaceId) as JsonRecord | null;
+  const workspaceConfig = asRecord(workspace?.config);
+  const sandboxConfig = asRecord(workspaceConfig.sandbox_config);
+  const pools = listWorkspaceSandboxPools(workspaceId)
+    .filter((pool) => pool.provider !== currentProvider)
+    .sort((a, b) => poolRank(a) - poolRank(b));
+  return pools.map((pool) => {
+    const poolConfig = asRecord(pool.config);
+    const provider = String(pool.provider);
+    const normalized = normalizeSandboxConfig(withWorkspaceRuntimeCredentials({
+      workspace_id: workspaceId,
+      config: {
+        sandbox_provider: provider,
+        sandbox: {
+          provider,
+          e2b: { ...asRecord(sandboxConfig.e2b ?? sandboxConfig), ...poolConfig },
+          daytona: { ...asRecord(sandboxConfig.daytona ?? sandboxConfig.daytona_sandbox ?? sandboxConfig), ...poolConfig },
+          local_docker: { ...asRecord(sandboxConfig.local_docker ?? sandboxConfig.docker ?? sandboxConfig), ...poolConfig },
+          vefaas: { ...asRecord(sandboxConfig.vefaas ?? sandboxConfig.vefaas_sandbox ?? sandboxConfig), ...poolConfig },
+          aliyun_fc: { ...asRecord(sandboxConfig.aliyun_fc ?? sandboxConfig.aliyun ?? sandboxConfig), ...poolConfig }
+        }
+      }
+    } as JsonRecord));
+    return normalized.sandbox;
+  });
+}
+
+function poolRank(pool: { role?: string; priority?: number }) {
+  return (pool.role === "standby" ? 10_000 : 0) + (Number.isFinite(Number(pool.priority)) ? Number(pool.priority) : 0);
 }
 
 export function withWorkspaceRuntimeCredentials(environment: JsonRecord): JsonRecord {
@@ -152,14 +269,28 @@ export function withWorkspaceRuntimeCredentials(environment: JsonRecord): JsonRe
   const vefaasSandboxCreds = asRecord(providerCredentials.vefaas_sandbox);
   const e2bCreds = asRecord(providerCredentials.e2b);
   const daytonaCreds = asRecord(providerCredentials.daytona);
+  const aliyunCreds = asRecord(providerCredentials.aliyun ?? providerCredentials.alibaba_cloud);
   const sandbox = asRecord(config.sandbox);
+  const agentRuntime = asRecord(config.agent_runtime ?? config.agentRuntime);
   const e2b = asRecord(sandbox.e2b ?? config.e2b);
   const daytona = asRecord(sandbox.daytona ?? sandbox.daytona_sandbox ?? config.daytona ?? config.daytona_sandbox);
   const vefaas = asRecord(sandbox.vefaas ?? sandbox.vefaas_sandbox ?? config.vefaas_sandbox);
+  const aliyun = asRecord(sandbox.aliyun_fc ?? sandbox.aliyun ?? config.aliyun_fc ?? config.aliyun);
+  const agentAliyun = asRecord(agentRuntime.aliyun_fc ?? agentRuntime.aliyun);
   const workspaceVefaas = asRecord(sandboxConfig.vefaas ?? sandboxConfig.vefaas_sandbox ?? sandboxConfig);
   const workspaceDaytona = asRecord(sandboxConfig.daytona ?? sandboxConfig.daytona_sandbox ?? sandboxConfig);
+  const workspaceAliyun = asRecord(sandboxConfig.aliyun_fc ?? sandboxConfig.aliyun ?? sandboxConfig);
   return {
     ...config,
+    agent_runtime: {
+      ...agentRuntime,
+      aliyun_fc: {
+        ...agentAliyun,
+        access_key_id: agentAliyun.access_key_id || agentAliyun.accessKeyId || aliyunCreds.ALIYUN_ACCESS_KEY_ID || aliyunCreds.access_key_id || aliyunCreds.ak,
+        access_key_secret: agentAliyun.access_key_secret || agentAliyun.accessKeySecret || aliyunCreds.ALIYUN_ACCESS_KEY_SECRET || aliyunCreds.access_key_secret || aliyunCreds.sk,
+        region: agentAliyun.region || aliyunCreds.ALIYUN_REGION || aliyunCreds.region
+      }
+    },
     sandbox: {
       ...sandbox,
       e2b: {
@@ -183,6 +314,16 @@ export function withWorkspaceRuntimeCredentials(environment: JsonRecord): JsonRe
         function_id: vefaas.function_id || workspaceVefaas.function_id || vefaasSandboxCreds.VEFAAS_SANDBOX_FUNCTION_ID,
         gateway_url: vefaas.gateway_url || workspaceVefaas.gateway_url || vefaasSandboxCreds.VEFAAS_SANDBOX_GATEWAY_URL,
         api_token: vefaas.api_token || workspaceVefaas.api_token || vefaasSandboxCreds.VEFAAS_SANDBOX_API_TOKEN
+      },
+      aliyun_fc: {
+        ...aliyun,
+        ...workspaceAliyun,
+        access_key_id: aliyun.access_key_id || workspaceAliyun.access_key_id || aliyunCreds.ALIYUN_ACCESS_KEY_ID || aliyunCreds.access_key_id || aliyunCreds.ak,
+        access_key_secret: aliyun.access_key_secret || workspaceAliyun.access_key_secret || aliyunCreds.ALIYUN_ACCESS_KEY_SECRET || aliyunCreds.access_key_secret || aliyunCreds.sk,
+        region: aliyun.region || workspaceAliyun.region || aliyunCreds.ALIYUN_REGION || aliyunCreds.region,
+        function_name: aliyun.function_name || workspaceAliyun.function_name || aliyunCreds.ALIYUN_FC_FUNCTION_NAME,
+        invoke_url: aliyun.invoke_url || workspaceAliyun.invoke_url || aliyunCreds.ALIYUN_FC_INVOKE_URL,
+        api_key: aliyun.api_key || workspaceAliyun.api_key || aliyunCreds.ALIYUN_FC_API_KEY
       }
     }
   };
@@ -210,6 +351,20 @@ function sessionAgentRuntimeConfig(session: JsonRecord, fallback: NormalizedAgen
       qualifier: String(agentRuntime.qualifier || (fallback.provider === "aws_lambda" ? fallback.qualifier : "")),
       timeout_ms: Number(agentRuntime.timeout_ms || (fallback.provider === "aws_lambda" ? fallback.timeout_ms : 120_000)),
       envs: stringifyRecord({ ...(fallback.provider === "aws_lambda" ? fallback.envs : {}), ...asRecord(agentRuntime.envs) })
+    };
+  }
+  if (provider === "aliyun_fc") {
+    return {
+      provider: "aliyun_fc",
+      access_key_id: String(agentRuntime.access_key_id || agentRuntime.accessKeyId || (fallback.provider === "aliyun_fc" ? fallback.access_key_id : "")),
+      access_key_secret: String(agentRuntime.access_key_secret || agentRuntime.accessKeySecret || (fallback.provider === "aliyun_fc" ? fallback.access_key_secret : "")),
+      region: String(agentRuntime.region || (fallback.provider === "aliyun_fc" ? fallback.region : "cn-hangzhou")),
+      function_name: String(agentRuntime.function_name || agentRuntime.functionName || (fallback.provider === "aliyun_fc" ? fallback.function_name : "")),
+      invoke_url: String(agentRuntime.invoke_url || agentRuntime.invokeUrl || (fallback.provider === "aliyun_fc" ? fallback.invoke_url : "")),
+      api_key: String(agentRuntime.api_key || agentRuntime.apiKey || (fallback.provider === "aliyun_fc" ? fallback.api_key : "")),
+      workspace_path: String(agentRuntime.sandbox_workspace_path || agentRuntime.workspace_path || (fallback.provider === "aliyun_fc" ? fallback.workspace_path : "/workspace")),
+      timeout_ms: Number(agentRuntime.timeout_ms || (fallback.provider === "aliyun_fc" ? fallback.timeout_ms : 120_000)),
+      envs: stringifyRecord({ ...(fallback.provider === "aliyun_fc" ? fallback.envs : {}), ...asRecord(agentRuntime.envs) })
     };
   }
   if (provider !== "vefaas") return null;

@@ -46,7 +46,7 @@ func ValidLoop(loop string) bool {
 }
 
 func ValidRuntime(runtime string) bool {
-	return runtime == "e2b" || runtime == "local_docker" || runtime == "vefaas"
+	return runtime == "e2b" || runtime == "local_docker" || runtime == "vefaas" || runtime == "aliyun_fc"
 }
 
 func environment(name string, runtime string) map[string]any {
@@ -71,6 +71,23 @@ func environment(name string, runtime string) map[string]any {
 					"vefaas": map[string]any{
 						"function_id":    firstEnv("VEFAAS_SANDBOX_FUNCTION_ID", "MAPLE_VEFAAS_SANDBOX_FUNCTION_ID"),
 						"gateway_url":    firstEnv("VEFAAS_SANDBOX_GATEWAY_URL", "MAPLE_VEFAAS_SANDBOX_GATEWAY_URL"),
+						"workspace_path": "/workspace",
+						"timeout_ms":     3600000,
+					},
+				},
+			},
+		}
+	}
+	if runtime == "aliyun_fc" {
+		return map[string]any{
+			"name": name + "-aliyun-fc",
+			"config": map[string]any{
+				"type": "aliyun_fc",
+				"sandbox": map[string]any{
+					"provider": "aliyun_fc",
+					"aliyun_fc": map[string]any{
+						"function_name":  firstEnv("ALIYUN_FC_FUNCTION_NAME", "MAPLE_ALIYUN_FC_FUNCTION_NAME"),
+						"invoke_url":     firstEnv("ALIYUN_FC_INVOKE_URL", "MAPLE_ALIYUN_FC_INVOKE_URL"),
 						"workspace_path": "/workspace",
 						"timeout_ms":     3600000,
 					},

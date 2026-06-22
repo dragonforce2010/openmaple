@@ -36,7 +36,9 @@ const server = spawn(process.execPath, ["apps/control-plane-api/src/index.ts"], 
     MAPLE_DISABLE_SESSION_BOOTSTRAP: "true",
     MAPLE_DEPLOYMENT_SCHEDULER_INTERVAL_MS: "1000",
     MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript,
-    ARK_API_KEY: "deployment-contract-ark-key"
+    ARK_API_KEY: "deployment-contract-ark-key",
+    MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off",
+    MAPLE_ALIYUN_CREDENTIAL_VALIDATION: "off"
   },
   stdio: ["ignore", "pipe", "pipe"]
 });

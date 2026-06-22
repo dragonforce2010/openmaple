@@ -12,7 +12,7 @@ import {
 } from "../store";
 import type { JsonRecord } from "../types";
 import { objectKey, presignedObjectUrl, putObject } from "./objectStorage";
-import { objectStorageEnabled, workspaceObjectStorage, workspaceTosCreds } from "./workspaceStorage";
+import { objectStorageEnabled, workspaceObjectStorage, workspaceObjectStorageCreds } from "./workspaceStorage";
 
 const ignoredDirectories = new Set(["node_modules", ".git", ".session"]);
 const maxArtifacts = 500;
@@ -51,13 +51,13 @@ export async function downloadArtifact(request: Request, response: Response) {
   await syncSessionArtifacts(session);
   const artifact = getSessionArtifactRecord(sessionId, String(path ?? ""));
   if (!artifact) return response.status(404).json({ error: "artifact_not_found" });
-  if (artifact.storage_provider !== "tos") {
+  if (artifact.storage_provider !== "tos" && artifact.storage_provider !== "oss") {
     return response.sendFile(resolveArtifactPath(String(session.workspace_path), String(artifact.object_key || artifact.path)));
   }
   const workspaceId = String(session.workspace_id || asRecord(session.metadata).workspace_id || "");
-  const creds = workspaceId ? workspaceTosCreds(workspaceId) : null;
+  const creds = workspaceId ? workspaceObjectStorageCreds(workspaceId, String(artifact.storage_provider)) : null;
   if (!creds) return response.status(409).json({ error: "workspace_storage_unavailable" });
-  response.redirect(presignedObjectUrl({ ...creds, bucket: String(artifact.bucket) }, String(artifact.object_key)));
+  response.redirect(await presignedObjectUrl({ ...creds, bucket: String(artifact.bucket) }, String(artifact.object_key)));
 }
 
 export async function syncSessionArtifacts(session: JsonRecord) {
@@ -116,7 +116,7 @@ async function tryPutArtifact(
       metadata: { session_id: String(session.id), sha256 }
     });
   } catch (error) {
-    console.warn("[artifacts] TOS artifact upload failed, using local artifact record", error);
+    console.warn("[artifacts] object storage artifact upload failed, using local artifact record", error);
     return null;
   }
 }
