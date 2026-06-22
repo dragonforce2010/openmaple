@@ -19,7 +19,15 @@ import json
 import threading
 import urllib.parse
 
-from claude_agent_sdk import create_sdk_mcp_server, tool
+try:
+    from claude_agent_sdk import create_sdk_mcp_server, tool
+except ModuleNotFoundError:
+    create_sdk_mcp_server = None
+
+    def tool(*_args, **_kwargs):
+        def decorator(fn):
+            return fn
+        return decorator
 
 
 SERVER_NAME = "maple_sandbox"
@@ -162,4 +170,6 @@ async def list_files(args):
 
 
 def build_sandbox_mcp_server():
+    if create_sdk_mcp_server is None:
+        raise RuntimeError("claude_agent_sdk is required to build the Maple sandbox MCP server.")
     return create_sdk_mcp_server(name=SERVER_NAME, version="1.0.0", tools=[bash, read_file, write_file, grep, list_files])

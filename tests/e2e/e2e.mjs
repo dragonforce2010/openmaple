@@ -327,6 +327,12 @@ async function cleanupSpawnedProcesses() {
   if (spawnedProcesses.length) await wait(500);
 }
 
+function trackE2BSandboxId(sandboxId) {
+  const value = String(sandboxId || "");
+  if (!value || value.startsWith("host_")) return;
+  e2bSandboxIds.add(value);
+}
+
 function isMapleHealth(text) {
   return text.includes('"ok":true') && text.includes('"service":"maple"');
 }
@@ -1155,7 +1161,7 @@ await step("Maple CLI skill deploy-run creates skill-backed agent session and sa
     const row = dbAll("SELECT metadata_json FROM sessions WHERE id = ?", [deployed.session_id])[0];
     const metadata = row?.metadata_json ? JSON.parse(String(row.metadata_json)) : {};
     deployedRuntimeId ||= metadata.runtime?.sandbox_id ?? metadata.sandbox_runtime?.sandbox_id ?? null;
-    if (deployedRuntimeId) e2bSandboxIds.add(String(deployedRuntimeId));
+    trackE2BSandboxId(deployedRuntimeId);
   }
   if (!deployed.tool_calls?.some((call) => call.name === "write_file" && call.status === "completed")) {
     throw new Error(`CLI skill deploy-run did not complete write_file: ${stdout}`);
@@ -1188,7 +1194,7 @@ const e2bSession = await step(useE2BSandbox ? "Create real E2B sandbox session w
     const value = await request(`/v1/sessions/${body.id}/detail`);
     const runtime = value.session.metadata?.runtime;
     const sandboxId = runtime?.sandbox_id;
-    if (sandboxId) e2bSandboxIds.add(String(sandboxId));
+    trackE2BSandboxId(sandboxId);
     if (value.session.status === "failed") {
       const failed = value.events.find((event) => event.type === "session.status_failed");
       const error = String(failed?.payload?.error || "");
@@ -1199,7 +1205,7 @@ const e2bSession = await step(useE2BSandbox ? "Create real E2B sandbox session w
     return value.session.status === "idle" && (deferred || runtimeReady) ? value : null;
   }, 180_000, "sandbox session idle or deferred runtime");
   const sandboxId = detail.session.metadata?.runtime?.sandbox_id ?? null;
-  if (sandboxId) e2bSandboxIds.add(String(sandboxId));
+  trackE2BSandboxId(sandboxId);
   return { ...body, sandbox_id: sandboxId, status: detail.session.status };
 });
 
@@ -1231,14 +1237,14 @@ await step(useE2BSandbox ? "Real E2B provider/tool loop writes and lists workspa
     const listCall = value.tool_calls.find((call) => call.tool_name === "list_files" && call.status === "completed");
     const runtime = value.session.metadata?.runtime;
     const sandboxId = runtime?.sandbox_id;
-    if (sandboxId) e2bSandboxIds.add(String(sandboxId));
+    trackE2BSandboxId(sandboxId);
     process.stderr.write(`[E2E step51] status=${value.session.status} runtime=${runtime?.type} tools=${JSON.stringify(value.tool_calls.map((c) => c.tool_name + ":" + c.status))} write=${!!writeCall} bashWrite=${!!bashWriteCall} list=${!!listCall}\n`);
     return value.session.status === "idle" && runtime?.type === expectedRuntimeType && (writeCall || bashWriteCall) && listCall ? value : null;
   }, 240_000, "completed sandbox provider tool loop");
   const runtime = detail.session.metadata?.runtime;
   const runtimeId = runtime?.sandbox_id ?? runtime?.container_id ?? null;
   if (useE2BSandbox && !runtimeId) throw new Error(`E2B runtime missing sandbox_id after tool loop: ${JSON.stringify(runtime)}`);
-  if (useE2BSandbox) e2bSandboxIds.add(String(runtimeId));
+  if (useE2BSandbox) trackE2BSandboxId(runtimeId);
   if (cloudTarget) {
     return {
       session: e2bSession.id,

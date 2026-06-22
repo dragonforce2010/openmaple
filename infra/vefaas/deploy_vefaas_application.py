@@ -39,7 +39,7 @@ BUN_VERSION = os.environ.get("MAPLE_VEFAAS_WEB_BUN_VERSION") or "1.3.14"
 BUN_URL = f"https://github.com/oven-sh/bun/releases/download/bun-v{BUN_VERSION}/bun-linux-x64.zip"
 BUN = shutil.which("bun") or "bun"
 METHODS = ["POST", "GET", "PUT", "DELETE", "HEAD", "OPTIONS", "CONNECT"]
-WEB_RUNTIME = os.environ.get("MAPLE_VEFAAS_WEB_RUNTIME") or os.environ.get("MAPLE_VEFAAS_RUNTIME") or "node20/v1"
+WEB_RUNTIME = os.environ.get("MAPLE_VEFAAS_WEB_RUNTIME") or os.environ.get("MAPLE_VEFAAS_RUNTIME") or "native-python3.12/v1"
 BACKEND_ENV_SKIP_KEYS = {"MAPLE_MYSQL_HOST", "MYSQL_HOST"}
 
 
@@ -179,7 +179,7 @@ def build_frontend_package(app_name: str) -> FunctionPackage:
     shutil.copytree(ROOT / "dist", package_dir / "dist")
     copy_frontend_source(package_dir / "source")
     (package_dir / "server.mjs").write_text(frontend_server_source(), encoding="utf-8")
-    (package_dir / "package.json").write_text(json.dumps({"name": f"{app_name}-frontend", "private": True}), encoding="utf-8")
+    (package_dir / "package.json").write_text(json.dumps({"name": f"{app_name}-frontend", "private": True, "type": "module"}), encoding="utf-8")
     write_frontend_run_script(package_dir / "run.sh")
     return FunctionPackage(
         role="frontend",
@@ -200,7 +200,7 @@ def build_backend_package(app_name: str) -> FunctionPackage:
     copy_source_dir(ROOT / "infra/vefaas", package_dir / "infra/vefaas")
     if (ROOT / "sandbox.config.json").exists():
         shutil.copy2(ROOT / "sandbox.config.json", package_dir / "sandbox.config.json")
-    (package_dir / "package.json").write_text(json.dumps({"name": f"{app_name}-backend", "private": True}), encoding="utf-8")
+    (package_dir / "package.json").write_text(json.dumps({"name": f"{app_name}-backend", "private": True, "type": "module"}), encoding="utf-8")
     write_backend_run_script(package_dir / "run.sh")
     return FunctionPackage(
         role="backend",
