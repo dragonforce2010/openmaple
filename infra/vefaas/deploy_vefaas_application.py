@@ -193,9 +193,10 @@ def build_frontend_package(app_name: str) -> FunctionPackage:
 def build_backend_package(app_name: str) -> FunctionPackage:
     package_dir = OUTPUT_ROOT / f"{app_name}-backend-{timestamp()}"
     package_dir.mkdir(parents=True, exist_ok=False)
-    run([BUN, "build", "--target=node", "--packages=bundle", "--outfile", str(package_dir / "app.js"), str(ROOT / "apps/control-plane-api/src/index.ts")])
-    run([BUN, "build", "--target=node", "--packages=bundle", "--outfile", str(package_dir / "mysql_child.mjs"), str(ROOT / "apps/control-plane-api/src/infra/mysql_child.mjs")])
-    run([BUN, "build", "--target=node", "--packages=bundle", "--outfile", str(package_dir / "mysql_worker.mjs"), str(ROOT / "apps/control-plane-api/src/infra/mysql_worker.mjs")])
+    backend_build = [BUN, "build", "--target=node", "--packages=bundle", "--external=proxy-agent"]
+    run([*backend_build, "--outfile", str(package_dir / "app.js"), str(ROOT / "apps/control-plane-api/src/index.ts")])
+    run([*backend_build, "--outfile", str(package_dir / "mysql_child.mjs"), str(ROOT / "apps/control-plane-api/src/infra/mysql_child.mjs")])
+    run([*backend_build, "--outfile", str(package_dir / "mysql_worker.mjs"), str(ROOT / "apps/control-plane-api/src/infra/mysql_worker.mjs")])
     copy_backend_source(package_dir / "source")
     copy_source_dir(ROOT / "infra/vefaas", package_dir / "infra/vefaas")
     if (ROOT / "sandbox.config.json").exists():
