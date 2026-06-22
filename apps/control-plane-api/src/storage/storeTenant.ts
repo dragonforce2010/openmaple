@@ -206,7 +206,15 @@ export function removeTenantMember(tenantId: string, userId: string) {
 export function tenantCloudProviders(tenantId: string) {
   const tenant = db.prepare("SELECT metadata_json FROM tenants WHERE id = ?").get(tenantId) as JsonRecord | undefined;
   const metadata = fromJson<JsonRecord>(String(tenant?.metadata_json ?? ""), {});
-  return safeTenantCloudProviders(metadata.cloud_providers);
+  const providers = safeTenantCloudProviders(metadata.cloud_providers) as Record<string, JsonRecord>;
+  for (const [provider, publicProvider] of Object.entries(providers)) {
+    if (!publicProvider.connected) continue;
+    const credentials = tenantCloudProviderCredentials(tenantId, provider);
+    const accessKey = String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || "");
+    if (accessKey) publicProvider.access_key = accessKey;
+    publicProvider.secret_key_masked = true;
+  }
+  return providers;
 }
 
 export function tenantCloudProviderCredentials(tenantId: string, provider: string) {
@@ -235,8 +243,10 @@ export function upsertTenantCloudProvider(tenantId: string, provider: string, cr
   const publicProvider = {
     provider,
     connected: true,
+    access_key: String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || ""),
     access_key_hint: maskTenantSecretHint(String(credentials.access_key || credentials.AccessKey || credentials.VOLCENGINE_ACCESS_KEY || "")),
     region: String(credentials.region || credentials.VEFAAS_REGION || "cn-beijing"),
+    secret_key_masked: true,
     credential_source: `tenant_cloud_provider_credentials.${provider}`,
     updated_at: nowValue
   };

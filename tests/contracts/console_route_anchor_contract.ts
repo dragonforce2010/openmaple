@@ -26,6 +26,7 @@ const path = consolePathForState({
   eventMode: "debug",
   modal: "credential",
   modalVaultId: "vault_1",
+  modalMcpServer: "",
   sessionAgentLock: "",
   askMapleOpen: true,
   settingsOpen: false,
@@ -48,6 +49,7 @@ assert.equal(parsed.selectedEventId, "evt_1");
 assert.equal(parsed.eventMode, "debug");
 assert.equal(parsed.modal, "credential");
 assert.equal(parsed.modalVaultId, "vault_1");
+assert.equal(parsed.modalMcpServer, "");
 assert.deepEqual(parsed.drawers, [{ kind: "agent", id: "agent_1" }, { kind: "session", id: "sess_1" }]);
 
 const credentialPath = consolePathForState({
@@ -60,6 +62,7 @@ const credentialPath = consolePathForState({
   eventMode: "transcript",
   modal: null,
   modalVaultId: "",
+  modalMcpServer: "",
   sessionAgentLock: "",
   askMapleOpen: false,
   settingsOpen: false,
@@ -82,11 +85,33 @@ assert.equal(parsedCredential.routeId, "vault_1/vcred_secret_1");
 assert.equal(currentConsoleReturnPath(), "/t/acme/w/platform/vault/vault_1?modal=credential&modal_vault=vault_1");
 assert.equal(currentCredentialDetailReturnPath("vault_1", "vcred_secret_1"), "/t/acme/w/platform/vault/vault_1/credentials/vcred_secret_1");
 assert.equal(currentQuickstartReturnPath(), "/t/acme/w/platform/quickstart?quickstart_restore=1");
+window.location.search = "?modal=credential&modal_vault=vault_1&mcp_server=github";
+const parsedCredentialModal = consoleRouteFromLocation({ pathname: "/t/acme/w/platform/vaults", search: window.location.search });
+assert.equal(parsedCredentialModal.modalMcpServer, "github");
+const credentialModalPath = consolePathForState({
+  workspace,
+  view: "vaults",
+  routeId: "",
+  routeEdit: false,
+  selectedSession: "",
+  selectedEventId: "",
+  eventMode: "transcript",
+  modal: "credential",
+  modalVaultId: "vault_1",
+  modalMcpServer: "github",
+  sessionAgentLock: "",
+  askMapleOpen: false,
+  settingsOpen: false,
+  metric: null,
+  drawers: []
+});
+assert.equal(new URL(credentialModalPath, "https://maple.local").searchParams.get("mcp_server"), "github");
 
 const auth = readFileSync("apps/control-plane-api/src/auth/auth.ts", "utf8");
 const returnPath = readFileSync("apps/control-plane-api/src/auth/returnPath.ts", "utf8");
 const publicRoutes = readFileSync("apps/control-plane-api/src/routes/publicRoutes.ts", "utf8");
 const mcpRoutes = readFileSync("apps/control-plane-api/src/routes/mcpRoutes.ts", "utf8");
+const vaultRoutes = readFileSync("apps/control-plane-api/src/routes/vaultRoutes.ts", "utf8");
 const appFrame = readFileSync("apps/admin-web/src/AppFrame.tsx", "utf8");
 const ui = readFileSync("apps/admin-web/src/ui.tsx", "utf8");
 
@@ -95,6 +120,8 @@ assert.match(auth, /returnTo\?: string/, "login OAuth state cookie must store re
 assert.match(publicRoutes, /return_to/, "login OAuth start must read return_to");
 assert.match(mcpRoutes, /return_to/, "MCP OAuth start must read return_to");
 assert.match(mcpRoutes, /mcpRedirect\(session\.returnTo/, "MCP OAuth callback must redirect to stored returnTo");
+assert.match(mcpRoutes, /credentialOAuthClient/, "Credential OAuth start must support custom OAuth clients");
+assert.match(vaultRoutes, /oauth_client/, "Vault credential create must accept custom OAuth clients");
 assert.equal(mcpRoutes.includes("MAPLE_WEB_BASE_URL ||"), false, "MCP OAuth callback must not hardcode root web redirect");
 assert.match(appFrame, /<ConsoleRouteSync \{\.\.\.props\} \/>/, "AppFrame must mount console route sync");
 assert.match(ui, /replace: \(entries: DrawerEntry\[\]\) => void/, "Drawer stack must expose replace for URL restore");

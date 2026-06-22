@@ -18,7 +18,7 @@ const customModelConfigs = [{ kind: "custom", name: "Contract model", protocol: 
 
 const server = spawn("bun", ["apps/control-plane-api/src/index.ts"], {
   cwd: process.cwd(),
-  env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", MAPLE_DATA_DIR: dataDir, MAPLE_MYSQL_HELPER_TIMEOUT_MS: String(requestTimeoutMs), MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript, MAPLE_DEV_LOGIN: "true" },
+  env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", MAPLE_DATA_DIR: dataDir, MAPLE_MYSQL_HELPER_TIMEOUT_MS: String(requestTimeoutMs), MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT: deployScript, MAPLE_DEV_LOGIN: "true", MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off" },
   stdio: ["ignore", "pipe", "pipe"]
 });
 let serverOutput = "";
@@ -47,12 +47,20 @@ try {
   assert.equal(saved.provider, "volcengine");
   assert.equal(saved.connected, true);
   assert.equal(saved.region, "cn-shanghai");
-  assert.equal(saved.credentials, undefined, "tenant cloud provider response must not leak AK/SK");
+  assert.equal(saved.access_key, "tenant-ak-1234", "tenant cloud provider response should return the access key for admin editing");
+  assert.equal(saved.secret_key, undefined, "tenant cloud provider response must not leak plaintext secret key");
+  assert.equal(saved.secret_key_masked, true, "tenant cloud provider response should mark the secret key as masked");
+  assert.equal(saved.credentials, undefined, "tenant cloud provider response must not leak raw credential bundles");
+
+  const updatedWithoutSecret = await postJson(`/v1/tenants/${tenantId}/cloud_providers/volcengine`, user.cookie, { access_key: "tenant-ak-1234", region: "cn-beijing" });
+  assert.equal(updatedWithoutSecret.region, "cn-beijing", "tenant cloud provider update should preserve the existing secret key when it is not resubmitted");
 
   const providers = await getJson(`/v1/tenants/${tenantId}/cloud_providers`, user.cookie);
   assert.equal(providers.data.length, 1);
   assert.equal(providers.data[0].provider, "volcengine");
-  assert.equal(providers.data[0].credentials, undefined, "tenant cloud provider listing must not leak AK/SK");
+  assert.equal(providers.data[0].access_key, "tenant-ak-1234", "tenant cloud provider listing should return access key for admin editing");
+  assert.equal(providers.data[0].secret_key, undefined, "tenant cloud provider listing must not leak plaintext secret key");
+  assert.equal(providers.data[0].credentials, undefined, "tenant cloud provider listing must not leak raw credential bundles");
   const providerListingText = await getText(`/v1/tenants/${tenantId}/cloud_providers`, user.cookie);
   assert.equal(providerListingText.includes("tenant-sk-5678"), false, "tenant cloud provider listing must not include plaintext secret");
   assert.equal(providerListingText.includes("aes-256-gcm"), false, "tenant cloud provider listing must not include encrypted secret payloads");

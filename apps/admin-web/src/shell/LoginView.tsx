@@ -15,10 +15,11 @@ export function LoginView(props: { providers: AuthProvider[]; error: string; onL
   const autoLocalLoginStarted = useRef(false);
   const localProvider = props.providers.find((item) => item.id === "local");
   const larkProvider = props.providers.find((item) => item.id === "lark_sso");
-  const loginProvider = localProvider ?? larkProvider;
   const autoLocalLogin =
     new URLSearchParams(window.location.search).get("dev_login") === "1" ||
     window.localStorage.getItem("maple.dev_login") === "1";
+  const loginProvider = autoLocalLogin && localProvider ? localProvider : larkProvider ?? localProvider;
+  const loginProviderIsLocal = loginProvider?.id === "local";
 
   async function login(nextProvider = provider) {
     setProvider(nextProvider);
@@ -64,7 +65,7 @@ export function LoginView(props: { providers: AuthProvider[]; error: string; onL
           <p className="auth-hint">{L("登录 OpenMaple。你只能进入已被授权的工作区。", "Sign in to OpenMaple. You can only enter workspaces you have access to.")}</p>
           {error ? <div className="warning-box">{error}</div> : null}
           <button className="sso-btn" onClick={() => login(loginProvider?.id ?? "lark_sso")} disabled={busy || !loginProvider || loginProvider.configured === false}>
-            <span className="lark-mark"><Icon name={localProvider ? "i-terminal" : "i-lark"} size={14} /></span>{localProvider ? L("本地开发登录", "Local dev login") : L("使用 Lark 登录", "Continue with Lark")}
+            <span className="lark-mark"><Icon name={loginProviderIsLocal ? "i-terminal" : "i-lark"} size={14} /></span>{loginProviderIsLocal ? L("本地开发登录", "Local dev login") : L("使用 Lark 登录", "Continue with Lark")}
           </button>
           {loginProvider?.configured === false ? <div className="warning-box">{t("login.providerMissing")}</div> : null}
         </div>

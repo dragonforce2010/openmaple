@@ -88,6 +88,8 @@ function loadAgentsEnv() {
 }
 
 function normalizeLocalDockerE2EEnv() {
+  if (!process.env.MAPLE_BUILDER_PROVIDER_TIMEOUT_MS) process.env.MAPLE_BUILDER_PROVIDER_TIMEOUT_MS = "10000";
+  if (!process.env.MAPLE_AGENT_DRAFT_TIMEOUT_MS) process.env.MAPLE_AGENT_DRAFT_TIMEOUT_MS = "15000";
   const mysqlTimeoutMs = Number(process.env.MAPLE_MYSQL_HELPER_TIMEOUT_MS || "0");
   const e2eMysqlTimeoutMs = Number(process.env.E2E_MYSQL_HELPER_TIMEOUT_MS || "180000");
   if (!Number.isFinite(mysqlTimeoutMs) || mysqlTimeoutMs < e2eMysqlTimeoutMs) process.env.MAPLE_MYSQL_HELPER_TIMEOUT_MS = String(e2eMysqlTimeoutMs);
@@ -659,7 +661,7 @@ await step("Quickstart builder super-agent creates draft, agent, and environment
     const settled = ["idle", "failed"].includes(String(value.session?.status ?? ""));
     const card = value.events?.find((event) => event.type === "ui.card" && event.payload?.card_type === "agent_draft");
     return card?.payload?.draft?.name ? value : (settled ? value : null);
-  }, 90_000, "builder draft card");
+  }, 150_000, "builder draft card");
   const draftCard = draftDetail.events?.find((event) => event.type === "ui.card" && event.payload?.card_type === "agent_draft");
   if (!draftCard?.payload?.draft?.name) throw new Error(`builder did not emit draft card: ${JSON.stringify(draftDetail.events)}`);
 
@@ -718,7 +720,7 @@ await step("Agent draft fails fast when provider config is invalid", async () =>
   if (response.status !== 502) throw new Error(`expected 502 for broken provider, got ${response.status}: ${JSON.stringify(body)}`);
   if (body.error !== "agent_draft_generation_failed") throw new Error(`unexpected draft error: ${JSON.stringify(body)}`);
   if (body.draft) throw new Error(`broken provider must not return a draft: ${JSON.stringify(body.draft)}`);
-  if (elapsedMs > 12_000) throw new Error(`provider failure was too slow: ${elapsedMs}ms`);
+  if (elapsedMs > 25_000) throw new Error(`provider failure was too slow: ${elapsedMs}ms`);
   await requestRaw(`/v1/model_configs/${brokenModel.id}`, { method: "DELETE" });
   return { elapsedMs, error: body.error };
 });

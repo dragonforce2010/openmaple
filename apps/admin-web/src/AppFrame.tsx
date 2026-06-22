@@ -1,4 +1,4 @@
-import { credentialRouteId, currentCredentialDetailReturnPath, currentQuickstartReturnPath, EntityNavContext, I18nContext, NAV_GROUPS, NAV_META, TENANT_ADMIN_ONLY_VIEWS, WORKSPACE_ADMIN_ONLY_VIEWS } from "./appConfig";
+import { currentCredentialDetailReturnPath, currentQuickstartReturnPath, EntityNavContext, I18nContext, NAV_GROUPS, NAV_META, TENANT_ADMIN_ONLY_VIEWS, WORKSPACE_ADMIN_ONLY_VIEWS } from "./appConfig";
 import { ConsoleRouteSync } from "./app/ConsoleRouteSync";
 import { markQuickstartOAuthPending } from "./app/quickstartOAuthState";
 import {
@@ -49,7 +49,7 @@ import {
 import { DrawerStackViewport, Icon } from "./ui";
 
 export function AppFrame(props: Record<string, any>) {
-  const { authChecked, i18n, entityNav, language, currentUser, authProviders, error, routeAfterAuth, collapsed, setCollapsed, L, tenantWorkspaces, selectedWorkspaceId, workspaceSearch, setWorkspaceSearch, workspacePickerOpen, setWorkspacePickerOpen, setSelectedWorkspaceId, switchWorkspace, setModal, onboardingRequired, view, canAdminWorkspace, isTenantAdmin, openEntity, navigateToView, navCount, userMenuOpen, setUserMenuOpen, setSettingsOpen, logout, accessibleTenants, enterTenant, switchingTenant, switchingWorkspace, resourceLoading, selectedWorkspace, agents, deployments, sessions, environments, modelConfigs, setMetric, wizardStep, draftPrompt, quickSubmittedPrompt, setDraftPrompt, draft, currentYaml, quickBuilderDetail, busy, busyAction, busyLabel, quickAgent, quickEnvironment, quickVault, quickSessionId, selectedDraftModelId, selectDraftModel, selectedAgentLoop, selectAgentLoop, buildDraft, createDraftAgent, createEnvironmentFromWizard, reuseEnvironment, setQuickEnvironment, createQuickVault, createQuickSession, sessionDetail, sendQuickPreview, setWizardStep, setSessionAgentLock, routeId, routeEdit, vaults, setModalVaultId, setModalVaultName, refresh, refreshModelConfigs, selectedSession, setSelectedSession, selectedEvent, selectedEventId, setSelectedEventId, eventMode, setEventMode, message, setMessage, sendMessage, setAskMapleOpen, deleteSessionRecord, deleteWorkspaceRecord, onboardingModelConfigs, issuedWorkspaceKey, completeOnboarding, workspaceKeys, issuedWorkspaceApiKey, createWorkspaceApiKey, renameWorkspaceApiKey, toggleWorkspaceApiKey, deleteWorkspaceApiKeyRecord, memoryStores, seedMemory, users, removeWorkspaceUser, modal, modalVaultId, modalVaultName, refreshSessionDetail, detailLoadStatus, sessionAgentLock, setIssuedWorkspaceApiKey, settingsOpen, askMapleOpen, metric, goView, setOnboardingRequired, setView } = props;
+  const { authChecked, i18n, entityNav, language, currentUser, authProviders, error, routeAfterAuth, collapsed, setCollapsed, L, tenantWorkspaces, selectedWorkspaceId, workspaceSearch, setWorkspaceSearch, workspacePickerOpen, setWorkspacePickerOpen, setSelectedWorkspaceId, switchWorkspace, setModal, onboardingRequired, view, canAdminWorkspace, isTenantAdmin, openEntity, navigateToView, navCount, userMenuOpen, setUserMenuOpen, setSettingsOpen, logout, accessibleTenants, enterTenant, switchingTenant, switchingWorkspace, resourceLoading, selectedWorkspace, agents, deployments, sessions, environments, modelConfigs, setMetric, wizardStep, draftPrompt, quickSubmittedPrompt, setDraftPrompt, draft, currentYaml, quickBuilderDetail, busy, busyAction, busyLabel, quickAgent, quickEnvironment, quickVault, quickSessionId, selectedDraftModelId, selectDraftModel, selectedAgentLoop, selectAgentLoop, buildDraft, createDraftAgent, createEnvironmentFromWizard, reuseEnvironment, setQuickEnvironment, createQuickVault, createQuickSession, sessionDetail, sendQuickPreview, setWizardStep, setSessionAgentLock, routeId, routeEdit, vaults, setModalVaultId, setModalVaultName, modalMcpServer, setModalMcpServer, refresh, refreshModelConfigs, selectedSession, setSelectedSession, selectedEvent, selectedEventId, setSelectedEventId, eventMode, setEventMode, message, setMessage, sendMessage, setAskMapleOpen, deleteSessionRecord, deleteWorkspaceRecord, onboardingModelConfigs, issuedWorkspaceKey, completeOnboarding, workspaceKeys, issuedWorkspaceApiKey, createWorkspaceApiKey, renameWorkspaceApiKey, toggleWorkspaceApiKey, deleteWorkspaceApiKeyRecord, memoryStores, seedMemory, users, removeWorkspaceUser, modal, modalVaultId, modalVaultName, refreshSessionDetail, detailLoadStatus, sessionAgentLock, setIssuedWorkspaceApiKey, settingsOpen, askMapleOpen, metric, goView, setOnboardingRequired, setView } = props;
   const credentialModalVaultId = modalVaultId || quickVault?.id || vaults[0]?.id || "";
   const credentialFromQuickstart = view === "quickstart" && Boolean(quickVault?.id) && credentialModalVaultId === quickVault.id;
   const switchingTarget = switchingTenant
@@ -304,25 +304,17 @@ export function AppFrame(props: Record<string, any>) {
       </main>
 
       {modal === "environment" ? <EnvironmentModal workspaceId={selectedWorkspaceId} sandboxProvider={selectedWorkspace?.sandbox_provider} onClose={() => setModal(null)} onCreated={() => refresh(selectedWorkspaceId)} /> : null}
-      {modal === "vault" ? <VaultModal workspaceId={selectedWorkspaceId} onClose={() => setModal(null)} onCreated={async (vault) => { await refresh(selectedWorkspaceId); setModalVaultId(vault.id); setModalVaultName(vault.display_name); setModal("credential"); }} /> : null}
+      {modal === "vault" ? <VaultModal workspaceId={selectedWorkspaceId} onClose={() => setModal(null)} onCreated={async (vault) => { await refresh(selectedWorkspaceId); setModalVaultId(vault.id); setModalVaultName(vault.display_name); setModalMcpServer(""); setModal("credential"); }} /> : null}
       {modal === "mcp_connect" ? <McpConnectModal workspaceId={selectedWorkspaceId} onClose={() => setModal(null)} onConnected={() => refresh(selectedWorkspaceId)} /> : null}
       {modal === "agent_create" ? <AgentCreateModal workspaceId={selectedWorkspaceId} modelConfigs={modelConfigs} onClose={() => setModal(null)} onCreated={async (agentId) => { await refresh(selectedWorkspaceId); goView("agent", agentId); }} /> : null}
       {modal === "credential" ? (
         <CredentialModal
           vaultId={credentialModalVaultId}
           vaultName={modalVaultName || vaults.find((vault: any) => vault.id === modalVaultId)?.display_name || ""}
-          onClose={() => setModal(null)}
+          initialMcpServer={modalMcpServer}
+          onClose={() => { setModal(null); setModalMcpServer(""); }}
           oauthReturnTo={(credential: any) => credentialFromQuickstart ? currentQuickstartReturnPath() : currentCredentialDetailReturnPath(String(credential.vault_id || credentialModalVaultId), credential.id)}
           onOAuthRedirect={() => { if (credentialFromQuickstart) markQuickstartOAuthPending(selectedWorkspaceId); }}
-          onCreated={async (credential: any) => {
-            await refresh();
-            setModal(null);
-            if (credentialFromQuickstart) {
-              setWizardStep("session");
-            } else {
-              goView("credential", credentialRouteId(String(credential.vault_id || credentialModalVaultId), credential.id));
-            }
-          }}
         />
       ) : null}
       {modal === "session" ? (
@@ -370,7 +362,7 @@ export function AppFrame(props: Record<string, any>) {
         />
       ) : null}
       {modal === "workspace_create" && isTenantAdmin ? (
-        <WorkspaceCreateModal onClose={() => setModal(null)} onCreated={(id, apiKey) => { setModal(null); setSelectedWorkspaceId(id); setIssuedWorkspaceApiKey(apiKey); setView("api_keys"); refresh(id); }} modelConfigs={onboardingModelConfigs.length ? onboardingModelConfigs : modelConfigs} tenantId={selectedWorkspace?.tenant_id} />
+        <WorkspaceCreateModal onClose={() => setModal(null)} onOpenTenantCloudAccess={() => { setModal(null); navigateToView("tenant"); }} onCreated={(id, apiKey) => { setModal(null); setSelectedWorkspaceId(id); setIssuedWorkspaceApiKey(apiKey); setView("api_keys"); refresh(id); }} modelConfigs={onboardingModelConfigs.length ? onboardingModelConfigs : modelConfigs} tenantId={selectedWorkspace?.tenant_id} />
       ) : null}
       {askMapleOpen ? <AskMapleDrawer detail={sessionDetail} sessionId={selectedSession} onClose={() => setAskMapleOpen(false)} /> : null}
       {settingsOpen ? <SettingsModal currentUser={currentUser} onClose={() => setSettingsOpen(false)} /> : null}

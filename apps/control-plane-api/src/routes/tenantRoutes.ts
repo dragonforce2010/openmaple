@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { validateVolcengineCredentials } from "../cloud/volcengineOpenApi";
 import type { AuthenticatedRequest } from "./routeDeps";
 import {
   addTenantAdminByEmail,
@@ -12,6 +13,7 @@ import {
   removeTenantAdmin,
   removeTenantMember,
   tenantApiKeySchema,
+  tenantCloudProviderCredentials,
   tenantCloudProviders,
   updateTenantApiKey,
   upsertTenantCloudProvider,
@@ -102,16 +104,21 @@ export function registerTenantRoutes(app: Express) {
     }) });
   });
 
-  app.post("/v1/tenants/:tenantId/cloud_providers/:provider", (request: AuthenticatedRequest, response) => {
+  app.post("/v1/tenants/:tenantId/cloud_providers/:provider", async (request: AuthenticatedRequest, response) => {
     const tenantId = routeParam(request.params.tenantId);
     const provider = routeParam(request.params.provider);
     if (!canAdminTenant(currentUser(request).id, tenantId)) return response.status(403).json({ error: "tenant_admin_required" });
     if (provider !== "volcengine") return response.status(400).json({ error: "cloud_provider_coming_soon" });
-    const parsed = z.object({ access_key: z.string().min(1), secret_key: z.string().min(1), region: z.string().min(1).default("cn-beijing") }).safeParse(request.body);
+    const parsed = z.object({ access_key: z.string().min(1), secret_key: z.string().optional(), region: z.string().min(1).default("cn-beijing") }).safeParse(request.body);
     if (!parsed.success) return response.status(400).json(parsed.error.flatten());
+    const existing = tenantCloudProviderCredentials(tenantId, provider);
+    const secretKey = parsed.data.secret_key?.trim() || String(existing.VOLCENGINE_SECRET_KEY || existing.secret_key || "");
+    if (!secretKey) return response.status(400).json({ error: "secret_key_required" });
+    const validation = await validateVolcengineCredentials({ accessKey: parsed.data.access_key, secretKey, region: parsed.data.region });
+    if (!validation.ok) return response.status(400).json(validation);
     const saved = upsertTenantCloudProvider(tenantId, provider, {
       VOLCENGINE_ACCESS_KEY: parsed.data.access_key,
-      VOLCENGINE_SECRET_KEY: parsed.data.secret_key,
+      VOLCENGINE_SECRET_KEY: secretKey,
       VEFAAS_REGION: parsed.data.region
     });
     if (!saved) return response.status(404).json({ error: "tenant_not_found" });

@@ -74,6 +74,7 @@ export function ConsoleRouteSync(props: Record<string, any>) {
     props.setSelectedEventId(route.selectedEventId);
     props.setEventMode(route.eventMode);
     props.setModalVaultId(route.modalVaultId);
+    props.setModalMcpServer(route.modalMcpServer);
     props.setSessionAgentLock(route.sessionAgentLock);
     props.setModal(route.modal);
     props.setAskMapleOpen(route.askMapleOpen);
@@ -95,6 +96,7 @@ export function ConsoleRouteSync(props: Record<string, any>) {
       eventMode: props.eventMode,
       modal: props.modal,
       modalVaultId: props.modalVaultId,
+      modalMcpServer: props.modalMcpServer,
       sessionAgentLock: props.sessionAgentLock,
       askMapleOpen: props.askMapleOpen,
       settingsOpen: props.settingsOpen,
@@ -106,7 +108,7 @@ export function ConsoleRouteSync(props: Record<string, any>) {
     }
   }, [
     enabled, props.selectedWorkspace, props.view, props.routeId, props.routeEdit, props.selectedSession,
-    props.selectedEventId, props.eventMode, props.modal, props.modalVaultId, props.sessionAgentLock,
+    props.selectedEventId, props.eventMode, props.modal, props.modalVaultId, props.modalMcpServer, props.sessionAgentLock,
     props.askMapleOpen, props.settingsOpen, props.metric, drawerStack.stack
   ]);
 

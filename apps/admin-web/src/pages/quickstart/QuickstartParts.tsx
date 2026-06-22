@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type MutableRefObject } from "react";
-import { templateCards, useL, type WizardStep } from "../../appConfig";
+import { templateCards, useL, type TemplateCard, type WizardStep } from "../../appConfig";
 import { HighlightedCode } from "../../components/shared/code";
 import { MarkdownText } from "../../components/shared/events";
 import { Select } from "../../components/shared/forms";
@@ -146,7 +146,7 @@ export function QuickstartSidePanel(props: {
   setRtab: (value: QuickstartTab) => void;
   viewTpl: number | null;
   setViewTpl: (value: number | null) => void;
-  filteredTemplates: Array<readonly [string[], number]>;
+  filteredTemplates: Array<readonly [TemplateCard, number]>;
   query: string;
   setQuery: (value: string) => void;
   tplDetailCode: string;
@@ -177,7 +177,7 @@ export function QuickstartSidePanel(props: {
           <div className="qs-tpld">
             <div className="qs-tpld-head">
               <button className="icon-btn" onClick={() => props.setViewTpl(null)} aria-label={L("返回", "Back")}><Icon name="i-arrow-left" size={16} /></button>
-              <div className="qs-tpld-title"><b>{templateCards[props.viewTpl][0]}</b><span>· {L("模板", "Template")}</span></div>
+              <div className="qs-tpld-title"><b>{L(templateCards[props.viewTpl][2], templateCards[props.viewTpl][0])}</b><span>· {L("模板", "Template")}</span></div>
               <div className="qs-tpld-actions">
                 <div className="seg sm">
                   <button className={props.fmt === "yaml" ? "on" : ""} onClick={() => props.setFmt("yaml")}>YAML</button>
@@ -197,8 +197,8 @@ export function QuickstartSidePanel(props: {
               <input value={props.query} onChange={(event) => props.setQuery(event.target.value)} placeholder={L("搜索模板", "Search templates")} />
             </div>
             <div className="tpl-grid2">
-              {props.filteredTemplates.length ? props.filteredTemplates.map(([[name, description], index]) => (
-                <button key={name} className="tpl2" onClick={() => props.setViewTpl(index)}><b>{name}</b><span>{description}</span></button>
+              {props.filteredTemplates.length ? props.filteredTemplates.map(([card, index]) => (
+                <button key={card[0]} className="tpl2" onClick={() => props.setViewTpl(index)}><b>{L(card[2], card[0])}</b><span>{L(card[3], card[1])}</span></button>
               )) : <div className="hint" style={{ gridColumn: "1 / -1" }}>{L("无匹配模板", "No matching template")}</div>}
             </div>
           </div>

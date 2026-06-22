@@ -57,31 +57,59 @@ async function directVefaasRuntimeProvisioning(workspaceId: string, index: numbe
   if (e2bCreds.E2B_API_KEY) credEnv.E2B_API_KEY = String(e2bCreds.E2B_API_KEY);
   const region = String(vefaasCreds.VEFAAS_REGION || defaults.vefaas.region || "cn-beijing");
   const deployScript = process.env.MAPLE_VEFAAS_RUNTIME_DEPLOY_SCRIPT || "infra/vefaas/deploy_vefaas_runtime.py";
-  try {
+  const configuredImage = String(process.env.MAPLE_VEFAAS_IMAGE || "").trim();
+  const baseEnv = {
+    ...process.env,
+    ...credEnv,
+    MAPLE_VEFAAS_MEMORY_MB: String(poolConfig.memory_mb),
+    MAPLE_VEFAAS_REGION: region,
+    MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
+    MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function),
+    MAPLE_VEFAAS_RUNTIME_ENVS: JSON.stringify({
+      ...runtimePoolMemberEnvs(defaults.vefaas.envs, workspaceId, index),
+      MAPLE_RUNTIME_FUNCTION_MEMORY_MB: String(poolConfig.memory_mb),
+      MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
+      MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function),
+      MAPLE_RUNTIME_FUNCTION_MAX_CONCURRENCY: String(poolConfig.max_concurrency_per_instance)
+    })
+  };
+  const runDeploy = async (nextAppName: string, envOverrides: Record<string, string> = {}) => {
     const { stdout } = await execFileAsync("python3", [deployScript], {
       cwd: process.cwd(),
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
       timeout: Number(process.env.MAPLE_VEFAAS_RELEASE_TIMEOUT_MS || 5 * 60 * 1000),
       env: {
-        ...process.env,
-        ...credEnv,
-        MAPLE_VEFAAS_APP_NAME: appName,
-        MAPLE_VEFAAS_MEMORY_MB: String(poolConfig.memory_mb),
-        MAPLE_VEFAAS_REGION: region,
-        MAPLE_VEFAAS_RUNTIME_ENVS: JSON.stringify({
-          ...runtimePoolMemberEnvs(defaults.vefaas.envs, workspaceId, index),
-          MAPLE_RUNTIME_FUNCTION_MEMORY_MB: String(poolConfig.memory_mb),
-          MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
-          MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function),
-          MAPLE_RUNTIME_FUNCTION_MAX_CONCURRENCY: String(poolConfig.max_concurrency_per_instance)
-        })
+        ...baseEnv,
+        ...envOverrides,
+        MAPLE_VEFAAS_APP_NAME: nextAppName
       }
     });
     const payload = JSON.parse(stdout) as JsonRecord;
     if (!payload.invoke_url || !payload.function_id) {
       throw new Error(`deploy_vefaas_runtime.py returned incomplete payload: ${stdout}`);
     }
+    return payload;
+  };
+  try {
+    let payload: JsonRecord;
+    let imageFallbackError = "";
+    if (configuredImage) {
+      try {
+        payload = await runDeploy(appName);
+      } catch (error) {
+        imageFallbackError = error instanceof Error ? error.message : String(error);
+        try {
+          payload = await runDeploy(`${appName}-src`, { MAPLE_VEFAAS_IMAGE: "" });
+        } catch (sourceError) {
+          const sourceMessage = sourceError instanceof Error ? sourceError.message : String(sourceError);
+          throw new Error(`image deploy failed: ${imageFallbackError}; source fallback failed: ${sourceMessage}`);
+        }
+      }
+    } else {
+      payload = await runDeploy(appName, { MAPLE_VEFAAS_IMAGE: "" });
+    }
+    const sourceType = payload.image ? "image" : "source_zip";
     return {
       cloud_function_id: String(payload.function_id || ""),
       cloud_app_id: String(payload.app_id || ""),
@@ -93,7 +121,10 @@ async function directVefaasRuntimeProvisioning(workspaceId: string, index: numbe
         envs: publicRuntimePoolMemberEnvs(runtimePoolMemberEnvs(defaults.vefaas.envs, workspaceId, index)),
         app_name: payload.app_name,
         function_name: payload.function_name,
-        gateway: payload.gateway
+        gateway: payload.gateway,
+        source_type: sourceType,
+        image: payload.image || "",
+        image_fallback_error: imageFallbackError
       }
     };
   } catch (error) {
@@ -120,25 +151,37 @@ function updateRuntimePoolMember(memberId: string, fields: { cloud_function_id?:
 
 // background, non-blocking runtime pool provisioning — keeps the Node event loop free so the API stays responsive
 export async function provisionPoolMembersBackground(workspaceId: string, members: Array<{ memberId: string; index: number }>, poolConfig: RuntimePoolConfig, providerCredentials?: JsonRecord) {
-  for (const { memberId, index } of members) {
-    try {
-      const provisioned = await runtimePoolMemberProvisioning(workspaceId, index, poolConfig, providerCredentials);
-      updateRuntimePoolMember(memberId, {
-        cloud_function_id: provisioned.cloud_function_id,
-        cloud_app_id: provisioned.cloud_app_id,
-        invoke_url: provisioned.invoke_url,
-        region: provisioned.region,
-        status: "active",
-        config: provisioned.config as JsonRecord
-      });
-    } catch (error) {
-      updateRuntimePoolMember(memberId, { status: "failed", config: { provisioning_error: error instanceof Error ? error.message : String(error) } });
+  const rawConcurrency = Number(process.env.MAPLE_VEFAAS_RUNTIME_PROVISION_CONCURRENCY || "4");
+  const concurrency = Math.max(1, Math.min(members.length || 1, Number.isFinite(rawConcurrency) ? Math.floor(rawConcurrency) : 4));
+  let cursor = 0;
+  const provisionNext = async () => {
+    while (cursor < members.length) {
+      const current = members[cursor++];
+      await provisionPoolMember(workspaceId, current, poolConfig, providerCredentials);
     }
-  }
+  };
+  await Promise.all(Array.from({ length: concurrency }, provisionNext));
   if (runtimePoolProvider(workspaceId) !== "local_docker") {
     // Provision the tenant's TOS bucket alongside cloud runtime pools (best-effort; the upload path
     // re-ensures it, so a failure here is non-fatal — it just defers creation to first upload).
     await ensureWorkspaceBucket(workspaceId).catch((error) => console.warn("[provision] ensureWorkspaceBucket failed", workspaceId, error));
+  }
+}
+
+async function provisionPoolMember(workspaceId: string, member: { memberId: string; index: number }, poolConfig: RuntimePoolConfig, providerCredentials?: JsonRecord) {
+  const { memberId, index } = member;
+  try {
+    const provisioned = await runtimePoolMemberProvisioning(workspaceId, index, poolConfig, providerCredentials);
+    updateRuntimePoolMember(memberId, {
+      cloud_function_id: provisioned.cloud_function_id,
+      cloud_app_id: provisioned.cloud_app_id,
+      invoke_url: provisioned.invoke_url,
+      region: provisioned.region,
+      status: "active",
+      config: provisioned.config as JsonRecord
+    });
+  } catch (error) {
+    updateRuntimePoolMember(memberId, { status: "failed", config: { provisioning_error: error instanceof Error ? error.message : String(error) } });
   }
 }
 

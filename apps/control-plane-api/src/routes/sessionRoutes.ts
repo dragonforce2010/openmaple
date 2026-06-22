@@ -4,19 +4,19 @@ import type { AuthenticatedRequest, JsonRecord, SessionEvent } from "./routeDeps
 import {
   WorkspaceRuntimePoolUnavailableError,
   addStreamClient,
-  askMapleSessionStats,
   canAccessWorkspace,
   createSession,
   createSessionEvent,
+  createAskMapleSession,
   currentUser,
   emitSessionEvent,
   enqueueSessionTurn,
-  ensureAskMapleSession,
   getSession,
   isHiddenSession,
   isQuickstartBuilderSession,
   listSessionEvents,
   listSessions,
+  listToolCalls,
   nanoid,
   runAskMapleTurn,
   runQuickstartBuilderTurn,
@@ -146,14 +146,16 @@ app.post("/v1/ask_maple/sessions/:sessionId/message", (request: AuthenticatedReq
   // answer over SSE. Create the hidden ask session synchronously so the client gets an id to
   // subscribe to, then run the turn on the background queue and return 202 immediately.
   const context = { userId: user.id, workspaceId, targetSessionId: sessionId };
-  const askSession = ensureAskMapleSession(context) as (JsonRecord & { id?: unknown }) | null;
+  const askSession = createAskMapleSession(context) as (JsonRecord & { id?: unknown }) | null;
   if (!askSession?.id) return response.status(500).json({ error: "ask_maple_session_create_failed" });
   const askSessionId = String(askSession.id);
-  const detail = sessionDetailPayload(sessionId) as JsonRecord & { session: JsonRecord };
+  const stats = askMapleAckStats(sessionId);
   enqueueSessionTurn(askSessionId, async () => {
-    await runAskMapleTurn(context, detail, question);
+    const detail = sessionDetailPayload(sessionId, { session }) as (JsonRecord & { session: JsonRecord }) | null;
+    if (!detail) throw new Error("ask_maple_target_session_detail_missing");
+    await runAskMapleTurn(context, detail, question, askSessionId);
   });
-  response.status(202).json({ ask_session: askSession, ask_session_id: askSessionId, stats: askMapleSessionStats(detail), events: listSessionEvents(askSessionId) });
+  response.status(202).json({ ask_session: askSession, ask_session_id: askSessionId, stats, events: [] });
 });
 
 app.get("/v1/sessions/:sessionId/events", (request: AuthenticatedRequest, response) => {
@@ -232,4 +234,15 @@ app.get("/v1/sessions/:sessionId/events/stream", (request: AuthenticatedRequest,
     compat: Boolean(request.header("x-api-key") || request.header("anthropic-version") || request.header("anthropic-beta"))
   });
 });
+}
+
+function askMapleAckStats(sessionId: string) {
+  const toolCalls = listToolCalls(sessionId) as JsonRecord[];
+  const completed = toolCalls.filter((call) => call.status === "completed").length;
+  return {
+    events: 0,
+    tool_calls: toolCalls.length,
+    completed_tool_calls: completed,
+    non_completed_tool_calls: toolCalls.length - completed
+  };
 }

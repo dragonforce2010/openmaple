@@ -76,6 +76,14 @@
 .del-env-row .mono{margin-left:auto;flex-shrink:0;font-size:11px;}
 .modal-note{display:flex;gap:9px;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:11px;color:#e8d09a;font-size:13px;line-height:1.5;}
 .modal-note svg{color:#d2a93f;flex:none;margin-top:1px;}
+.modal-note .inline-action{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:0;border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;cursor:pointer;}
+.modal-note .inline-action:hover{text-decoration:underline;}
+.modal-note .inline-action svg{margin-top:0;color:currentColor;}
+.field-label-inline{position:relative;display:inline-flex;align-items:center;gap:6px;}
+.field-help{display:inline-flex;align-items:center;padding:0;border:0;background:transparent;color:var(--muted);cursor:help;}
+.field-help:hover,.field-help:focus{color:var(--accent);outline:none;}
+.field-help-popover{position:absolute;left:100%;top:50%;z-index:4;width:min(360px,calc(100vw - 48px));margin-left:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font-size:12px;line-height:1.45;box-shadow:0 16px 36px rgba(0,0,0,.28);transform:translateY(-50%);}
+.readonly-field{min-height:42px;display:flex;align-items:center;padding:0 14px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text);font-weight:700;}
 .modal-foot{display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:16px 20px 18px;}
 
 /* ---------- toast ---------- */

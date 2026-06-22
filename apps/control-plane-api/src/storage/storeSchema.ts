@@ -247,20 +247,20 @@ export const storeSchemaSql = `
       UNIQUE(session_id, path),
       FOREIGN KEY(session_id) REFERENCES sessions(id)
     );
-    CREATE INDEX idx_sessions_status ON sessions(status);
-    CREATE INDEX idx_events_session_created ON session_events(session_id, created_at);
-    CREATE INDEX idx_tool_calls_session_created ON tool_calls(session_id, created_at);
-    CREATE INDEX idx_memories_store_path ON memories(memory_store_id, path);
-    CREATE INDEX idx_auth_sessions_hash ON auth_sessions(token_hash);
-    CREATE UNIQUE INDEX idx_users_email_unique ON users(email);
-    CREATE INDEX idx_model_configs_owner ON model_configs(owner_user_id);
-    CREATE INDEX idx_agent_deployments_user ON agent_deployments(user_id, created_at);
-    CREATE INDEX idx_deployment_runs_deployment ON deployment_runs(deployment_id, created_at);
-    CREATE INDEX idx_deployment_runs_session ON deployment_runs(session_id);
-    CREATE INDEX idx_managed_files_created ON managed_files(created_at);
-    CREATE INDEX idx_session_artifacts_session ON session_artifacts(session_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+    CREATE INDEX IF NOT EXISTS idx_events_session_created ON session_events(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_tool_calls_session_created ON tool_calls(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_memories_store_path ON memories(memory_store_id, path);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_hash ON auth_sessions(token_hash);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_model_configs_owner ON model_configs(owner_user_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_deployments_user ON agent_deployments(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_deployment_runs_deployment ON deployment_runs(deployment_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_deployment_runs_session ON deployment_runs(session_id);
+    CREATE INDEX IF NOT EXISTS idx_managed_files_created ON managed_files(created_at);
     CREATE TABLE IF NOT EXISTS tenant_cloud_provider_credentials (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, provider TEXT NOT NULL, secret_cipher TEXT NOT NULL, metadata_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(tenant_id, provider));
-    CREATE INDEX idx_tenant_cloud_provider_credentials_tenant ON tenant_cloud_provider_credentials(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_tenant_cloud_provider_credentials_tenant ON tenant_cloud_provider_credentials(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_session_artifacts_session ON session_artifacts(session_id, updated_at);
     CREATE TABLE IF NOT EXISTS tenants (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
