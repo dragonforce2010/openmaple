@@ -78,6 +78,25 @@ try {
   assert.equal(onboardingStatusText.includes("tenant-sk-5678"), false, "tenant metadata response must not include plaintext cloud secret");
   assert.equal(onboardingStatusText.includes("aes-256-gcm"), false, "tenant metadata response must not include cloud secret ciphertext");
 
+  const aliyunUser = await login(`aliyun-cloud-${stamp}@example.com`);
+  const aliyunOnly = await postJson("/v1/workspace_onboarding", aliyunUser.cookie, {
+    tenant: { name: `Aliyun ${stamp}` },
+    workspace: { name: `Aliyun ${stamp}`, slug: `aliyun-${stamp}` },
+    runtime_provider: "aliyun_fc",
+    sandbox_provider: "aliyun_fc",
+    runtime_pool: { desired_size: 1, min_instances_per_function: 0, max_instances_per_function: 1, max_concurrency_per_instance: 1, cpu_milli: 250, memory_mb: 512 },
+    sandbox_config: { aliyun_fc: { region: "cn-hangzhou" } },
+    sandbox_pool: { desired_size: 1, standby_ttl_ms: 60_000 },
+    model_config_ids: [],
+    custom_model_configs: customModelConfigs,
+    api_key: { display_name: "aliyun", scopes: ["control_plane"] },
+    provider_credentials: { aliyun: { ALIYUN_ACCESS_KEY_ID: "aliyun-ak-lazy", ALIYUN_ACCESS_KEY_SECRET: "aliyun-sk-lazy", ALIYUN_REGION: "cn-hangzhou" } }
+  });
+  assert.equal(aliyunOnly.workspace.runtime_provider, "aliyun_fc", "Aliyun FC runtime should accept AK/SK provisioning without a pre-created invoke URL");
+  assert.equal(aliyunOnly.workspace.sandbox_provider, "aliyun_fc", "Aliyun FC sandbox should accept AK/SK provisioning without a pre-created invoke URL");
+  assert.equal(aliyunOnly.workspace.config.cloud_provider_identities.aliyun.services.includes("runtime:aliyun_fc"), true);
+  assert.equal(aliyunOnly.workspace.config.cloud_provider_identities.aliyun.services.includes("sandbox:aliyun_fc"), true);
+
   const created = await postJson("/v1/workspaces", user.cookie, {
     tenant_id: tenantId,
     workspace: { name: `Second ${stamp}`, slug: `cloud-${stamp}-second` },

@@ -214,7 +214,15 @@ export function createAliyunFcClient(config) {
     regionId: config.region
   });
   if (config.endpoint) clientConfig.endpoint = config.endpoint;
-  return new FCClient(clientConfig);
+  const ClientCtor = aliyunFcClientConstructor();
+  return new ClientCtor(clientConfig);
+}
+
+function aliyunFcClientConstructor() {
+  const candidates = [FCClient, FCClient?.default, FCClient?.default?.default];
+  const ctor = candidates.find((candidate) => typeof candidate === "function");
+  if (!ctor) throw new Error("Aliyun FC SDK client constructor not found.");
+  return ctor;
 }
 
 export async function resolveFcEndpointConfig(config) {

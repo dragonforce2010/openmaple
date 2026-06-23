@@ -60,8 +60,10 @@ export function vefaasLoopAgentConfig(session: JsonRecord) {
 
 export function vefaasLoopAgentEnv(runtime: VefaasRuntimeInfo, sessionId: string, agentConfig: JsonRecord) {
   const agentLoop = asRecord(agentConfig.agent_loop);
+  const agentLoopConfig = asRecord(agentLoop.config);
   return stringifyRecord({
     ...asRecord(runtime.envs),
+    ...asRecord(agentLoopConfig.env),
     MAPLE_SESSION_ID: sessionId,
     MAPLE_AGENT_TEMPLATE: JSON.stringify(agentConfig),
     MAPLE_AGENT_LOOP_TYPE: String(agentLoop.type || "anthropic_claude_code"),
