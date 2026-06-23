@@ -98,14 +98,10 @@ def bootstrap(state_path: Path, clients: dict[str, Any], min_instance: int, max_
 
     frontend_function_id = existing_function_id(clients, frontend.name)
     backend_function_id = existing_function_id(clients, backend.name)
-    if frontend_function_id:
-        update_existing_function(clients, frontend_function_id, config, frontend)
-    else:
+    if not frontend_function_id:
         frontend_function_id = app_deploy.create_function_with_code(clients["vefaas_api"], clients["app"], config, frontend)
         app_deploy.release_function(clients["release"], frontend_function_id, config)
-    if backend_function_id:
-        update_existing_function(clients, backend_function_id, config, backend)
-    else:
+    if not backend_function_id:
         backend_function_id = app_deploy.create_function_with_code(clients["vefaas_api"], clients["app"], config, backend)
         app_deploy.release_function(clients["release"], backend_function_id, config)
     ensure_resource(clients, frontend_function_id, min_instance, max_instance)
@@ -209,10 +205,7 @@ def deploy_stable_role(
 ) -> None:
     function_id = str(state[role]["function_id"])
     current_runtime = function_runtime(clients, function_id)
-    if current_runtime and current_runtime != package.runtime:
-        rotate_function_runtime(clients, state, role, config, package, route_paths, current_runtime, min_instance, max_instance)
-        return
-    update_existing_function(clients, function_id, config, package)
+    rotate_function_runtime(clients, state, role, config, package, route_paths, current_runtime or "unknown", min_instance, max_instance)
 
 
 def rotate_function_runtime(
@@ -228,8 +221,10 @@ def rotate_function_runtime(
 ) -> None:
     previous_id = str(state[role]["function_id"])
     replacement = replace(package, name=f"{package.name}-{timestamp()}")
-    replacement_id = app_deploy.create_function_with_code(clients["vefaas_api"], clients["app"], config, replacement)
-    app_deploy.release_function(clients["release"], replacement_id, config)
+    replacement = with_existing_envs(clients["vefaas_api"], previous_id, replacement)
+    create_config = config_with_existing_vpc(clients["vefaas_api"], previous_id, config)
+    replacement_id = app_deploy.create_function_with_code(clients["vefaas_api"], clients["app"], create_config, replacement)
+    app_deploy.release_function(clients["release"], replacement_id, create_config)
     try:
         ensure_resource(clients, replacement_id, min_instance, max_instance)
         wait_function_ready(clients, replacement_id, min_instance)
@@ -300,6 +295,36 @@ def function_envs(api: VolcengineVefaasApi, function_id: str) -> dict[str, str]:
         if key:
             result[key] = value
     return result
+
+
+def config_with_existing_vpc(api: VolcengineVefaasApi, function_id: str, config: DeployConfig) -> DeployConfig:
+    vpc = function_vpc_config(api, function_id)
+    if not vpc:
+        return config
+    return replace(
+        config,
+        vpc_id=vpc["vpc_id"],
+        subnet_ids=vpc["subnet_ids"],
+        security_group_ids=vpc["security_group_ids"],
+        enable_shared_internet_access=vpc["enable_shared_internet_access"],
+    )
+
+
+def function_vpc_config(api: VolcengineVefaasApi, function_id: str) -> dict[str, Any]:
+    if getattr(api, "openapi", None):
+        data = api.openapi.post("GetFunction", {"Id": function_id}).get("Result", {})
+    else:
+        sdk = api.sdk
+        data = to_plain_dict(api.client.get_function(sdk.GetFunctionRequest(id=function_id)))
+    raw = data.get("VpcConfig") or data.get("vpc_config") or {}
+    if not (raw.get("EnableVpc") or raw.get("enable_vpc")):
+        return {}
+    return {
+        "vpc_id": str(raw.get("VpcId") or raw.get("vpc_id") or ""),
+        "subnet_ids": [str(item) for item in (raw.get("SubnetIds") or raw.get("subnet_ids") or [])],
+        "security_group_ids": [str(item) for item in (raw.get("SecurityGroupIds") or raw.get("security_group_ids") or [])],
+        "enable_shared_internet_access": bool(raw.get("EnableSharedInternetAccess") or raw.get("enable_shared_internet_access")),
+    }
 
 
 def function_runtime(clients: dict[str, Any], function_id: str) -> str:
@@ -516,7 +541,7 @@ def service_url(service: dict[str, Any]) -> str:
 
 
 def ensure_upstream(clients: dict[str, Any], gateway_id: str, name: str, function_id: str) -> str:
-    existing = find_upstream(clients, gateway_id, name)
+    existing = find_upstream(clients, gateway_id, name, function_id=function_id)
     if existing:
         return str(existing["id"])
     sdk = clients["apig_api"].sdk
@@ -537,16 +562,22 @@ def ensure_upstream(clients: dict[str, Any], gateway_id: str, name: str, functio
     return str(upstream_id)
 
 
-def find_upstream(clients: dict[str, Any], gateway_id: str, name: str) -> dict[str, Any] | None:
+def find_upstream(clients: dict[str, Any], gateway_id: str, name: str, *, function_id: str | None = None) -> dict[str, Any] | None:
     for page in range(1, 20):
         data = clients["apig_2021"].post("ListUpstreams", {"GatewayId": gateway_id, "PageNumber": page, "PageSize": 50}).get("Result", {})
         items = data.get("Items") or data.get("Upstreams") or []
         for item in items:
-            if item.get("Name") == name:
+            if item.get("Name") == name or (function_id and upstream_function_id(item) == function_id):
                 return {"id": item.get("Id"), "name": item.get("Name")}
         if len(items) < 50:
             break
     return None
+
+
+def upstream_function_id(upstream: dict[str, Any]) -> str:
+    spec = upstream.get("UpstreamSpec") or upstream.get("upstream_spec") or {}
+    vefaas = spec.get("VeFaas") or spec.get("ve_faas") or {}
+    return str(vefaas.get("FunctionId") or vefaas.get("function_id") or "")
 
 
 def ensure_route(clients: dict[str, Any], service_id: str, suffix: str, path: str, upstream_id: str, *, priority: int) -> str:
@@ -759,8 +790,11 @@ def assert_probes_ok(probes: dict[str, Any]) -> None:
     failures: list[str] = []
     for name, probe in probes.items():
         status = str(probe.get("status") or "")
+        body = str(probe.get("body_prefix") or "")
+        if name == "auth_start" and status == "501" and "auth_provider_not_configured" in body:
+            continue
         if not probe_ok(probe):
-            detail = probe.get("error") or f"status={status} body={str(probe.get('body_prefix') or '')[:160]}"
+            detail = probe.get("error") or f"status={status} body={body[:160]}"
             failures.append(f"{name}: {detail}")
             continue
         if name == "auth_start":

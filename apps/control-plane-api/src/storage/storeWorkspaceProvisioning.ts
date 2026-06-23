@@ -140,8 +140,8 @@ async function directAliyunFcRuntimeProvisioning(workspaceId: string, index: num
   const functionName = `maple-ws-${workspaceId.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase().slice(0, 20)}-${index + 1}-${Date.now()}`;
   const creds = aliyunCredentials((providerCredentials?.aliyun ?? providerCredentials?.alibaba_cloud) as JsonRecord | undefined);
   const region = creds.region || defaults.aliyun_fc.region || "cn-hangzhou";
-  const deployScript = process.env.MAPLE_ALIYUN_FC_RUNTIME_DEPLOY_SCRIPT || "";
   const configuredInvokeUrl = String(process.env.MAPLE_ALIYUN_FC_INVOKE_URL || defaults.aliyun_fc.invoke_url || "");
+  const deployScript = process.env.MAPLE_ALIYUN_FC_RUNTIME_DEPLOY_SCRIPT || (configuredInvokeUrl ? "" : "infra/aliyun/deploy_aliyun_fc_runtime.mjs");
   const configuredFunctionName = String(process.env.MAPLE_ALIYUN_FC_FUNCTION_NAME || defaults.aliyun_fc.function_name || functionName);
   const envs = publicRuntimePoolMemberEnvs(runtimePoolMemberEnvs(defaults.aliyun_fc.envs, workspaceId, index, "managed-agents-platform-aliyun-fc"));
   if (!deployScript) {
@@ -169,6 +169,10 @@ async function directAliyunFcRuntimeProvisioning(workspaceId: string, index: num
     ALIYUN_REGION: region,
     MAPLE_ALIYUN_FC_FUNCTION_NAME: functionName,
     MAPLE_ALIYUN_FC_MEMORY_MB: String(poolConfig.memory_mb),
+    MAPLE_ALIYUN_FC_CPU_MILLI: String(poolConfig.cpu_milli),
+    MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
+    MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function),
+    MAPLE_RUNTIME_FUNCTION_MAX_CONCURRENCY: String(poolConfig.max_concurrency_per_instance),
     MAPLE_ALIYUN_FC_RUNTIME_ENVS: JSON.stringify({
       ...runtimeEnvOverrides(process.env.MAPLE_ALIYUN_FC_RUNTIME_ENVS),
       ...runtimePoolMemberEnvs(defaults.aliyun_fc.envs, workspaceId, index, "managed-agents-platform-aliyun-fc"),
