@@ -139,17 +139,18 @@ async function runHostBash(workspacePath: string, command: string) {
 }
 
 async function runToolWithRuntime(session: JsonRecord, runtime: RuntimeInfo, name: string, input: JsonRecord) {
+  const sessionId = String(session.id || "");
   switch (name) {
     case "bash":
-      return runBash(runtime, String(input.command || ""));
+      return runBash(runtime, String(input.command || ""), sessionId);
     case "read_file":
-      return readWorkspaceFile(String(session.workspace_path), String(input.path || ""), runtime);
+      return readWorkspaceFile(String(session.workspace_path), String(input.path || ""), runtime, sessionId);
     case "write_file":
-      return writeWorkspaceFile(String(session.workspace_path), String(input.path || ""), String(input.content || ""), runtime);
+      return writeWorkspaceFile(String(session.workspace_path), String(input.path || ""), String(input.content || ""), runtime, sessionId);
     case "list_files":
-      return listFiles(String(session.workspace_path), runtime, String(input.path || "."));
+      return listFiles(String(session.workspace_path), runtime, String(input.path || "."), sessionId);
     case "grep":
-      return grep(String(session.workspace_path), runtime, String(input.pattern || ""), String(input.path || "."));
+      return grep(String(session.workspace_path), runtime, String(input.pattern || ""), String(input.path || "."), sessionId);
     case "memory_search":
       return memorySearch(input);
     case "memory_write":
@@ -165,10 +166,14 @@ function shouldRetryVefaasSandboxTool(runtime: RuntimeInfo, error: unknown) {
   return /veFaaS sandbox gateway error|fetch failed|Failed to prepare veFaaS sandbox workspace/i.test(message);
 }
 
-async function runBash(runtime: RuntimeInfo, command: string) {
+function cloudToolPayload(sessionId: string, tool: string, input: JsonRecord) {
+  return { ...(sessionId ? { session_id: sessionId } : {}), tool, input };
+}
+
+async function runBash(runtime: RuntimeInfo, command: string, sessionId = "") {
   if (!command.trim()) throw new Error("Missing bash command");
-  if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "bash", input: { command } });
-  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "bash", input: { command } });
+  if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", cloudToolPayload(sessionId, "bash", { command }));
+  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", cloudToolPayload(sessionId, "bash", { command }));
   if (runtime.type === "vefaas_sandbox") {
     const result = await runVefaasSandboxCommand(runtime, command, 120_000);
     await syncVefaasSandboxWorkspaceToHost(runtime);
@@ -195,9 +200,9 @@ function isReadOnlyBashCommand(command: string) {
   return readOnlyBashCommands.has(commandName);
 }
 
-async function readWorkspaceFile(workspacePath: string, path: string, runtime?: RuntimeInfo) {
-  if (runtime?.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "read_file", input: { path } });
-  if (runtime?.type === "aliyun_fc" || runtime?.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "read_file", input: { path } });
+async function readWorkspaceFile(workspacePath: string, path: string, runtime?: RuntimeInfo, sessionId = "") {
+  if (runtime?.type === "vefaas") return invokeVefaas(runtime, "tool", cloudToolPayload(sessionId, "read_file", { path }));
+  if (runtime?.type === "aliyun_fc" || runtime?.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", cloudToolPayload(sessionId, "read_file", { path }));
   if (runtime?.type === "vefaas_sandbox") {
     try {
       const content = await readVefaasSandboxFile(runtime, path);
@@ -230,12 +235,12 @@ async function readWorkspaceFile(workspacePath: string, path: string, runtime?: 
   return { path, content };
 }
 
-async function writeWorkspaceFile(workspacePath: string, path: string, content: string, runtime?: RuntimeInfo) {
+async function writeWorkspaceFile(workspacePath: string, path: string, content: string, runtime?: RuntimeInfo, sessionId = "") {
   const target = assertSafeWorkspacePath(workspacePath, path);
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, content, "utf8");
-  if (runtime?.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "write_file", input: { path, content } });
-  if (runtime?.type === "aliyun_fc" || runtime?.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "write_file", input: { path, content } });
+  if (runtime?.type === "vefaas") return invokeVefaas(runtime, "tool", cloudToolPayload(sessionId, "write_file", { path, content }));
+  if (runtime?.type === "aliyun_fc" || runtime?.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", cloudToolPayload(sessionId, "write_file", { path, content }));
   if (runtime?.type === "vefaas_sandbox") {
     await writeVefaasSandboxFile(runtime, path, content);
     return { path, bytes: Buffer.byteLength(content), basename: basename(path) };
@@ -244,9 +249,9 @@ async function writeWorkspaceFile(workspacePath: string, path: string, content: 
   return { path, bytes: Buffer.byteLength(content), basename: basename(path) };
 }
 
-async function listFiles(_workspacePath: string, runtime: RuntimeInfo, path: string) {
-  if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "list_files", input: { path } });
-  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "list_files", input: { path } });
+async function listFiles(_workspacePath: string, runtime: RuntimeInfo, path: string, sessionId = "") {
+  if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", cloudToolPayload(sessionId, "list_files", { path }));
+  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", cloudToolPayload(sessionId, "list_files", { path }));
   if (runtime.type === "vefaas_sandbox") {
     const safePath = toVefaasSandboxMountedPath(runtime, safeSandboxReadPath(runtime, path));
     const sandboxPath = isSandboxAbsolutePath(safePath) ? safePath : `${runtime.sandbox_workspace_path}/${safePath === "." ? "" : safePath}`.replace(/\/$/, "");
@@ -268,10 +273,10 @@ async function listHostFiles(workspacePath: string, path: string) {
   return { path, files: files.sort().slice(0, 200) };
 }
 
-async function grep(_workspacePath: string, runtime: RuntimeInfo, pattern: string, path: string) {
+async function grep(_workspacePath: string, runtime: RuntimeInfo, pattern: string, path: string, sessionId = "") {
   if (!pattern.trim()) throw new Error("Missing grep pattern");
-  if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", { tool: "grep", input: { pattern, path } });
-  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", { tool: "grep", input: { pattern, path } });
+  if (runtime.type === "vefaas") return invokeVefaas(runtime, "tool", cloudToolPayload(sessionId, "grep", { pattern, path }));
+  if (runtime.type === "aliyun_fc" || runtime.type === "aliyun_fc_sandbox") return invokeAliyunFc(runtime, "tool", cloudToolPayload(sessionId, "grep", { pattern, path }));
   const quotedPattern = pattern.replace(/'/g, "'\\''");
   if (runtime.type === "vefaas_sandbox") {
     const quotedPath = toVefaasSandboxMountedPath(runtime, safeSandboxReadPath(runtime, path)).replace(/'/g, "'\\''");

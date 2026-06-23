@@ -26,6 +26,7 @@ try {
   await import("../../apps/control-plane-api/src/env");
   const store = await import("../../apps/control-plane-api/src/store");
   const runtime = await import("../../apps/control-plane-api/src/runtime");
+  const runner = await import("../../apps/control-plane-api/src/runtime/runner");
   const artifacts = await import("../../apps/control-plane-api/src/files/artifacts");
   const workspaceStorage = await import("../../apps/control-plane-api/src/files/workspaceStorage");
   const objectStorage = await import("../../apps/control-plane-api/src/files/objectStorage");
@@ -92,6 +93,12 @@ try {
   assert.equal((sandboxRuntime as Record<string, unknown>).pooled, true);
   assert.ok((sandboxRuntime as Record<string, unknown>).pool_member_id);
   assert.equal(fcRequests.some((item) => item.action === "bootstrap"), true);
+
+  await runner.runRuntimeToolCall(String(session.id), "bash", { command: "pwd" });
+  const toolRequest = fcRequests.find((item) => item.action === "tool" && item.body.tool === "bash");
+  assert.equal(toolRequest?.body.session_id, session.id);
+  assert.deepEqual(toolRequest?.body.input, { command: "pwd" });
+
   const claimedAliyunMembers = (store.listWorkspaceSandboxPoolMembers(workspaceId, "aliyun_fc") as Array<Record<string, unknown>>).filter((member) => member.status === "claimed");
   assert.equal(claimedAliyunMembers.length, 1);
   assert.equal(claimedAliyunMembers[0].claimed_session_id, session.id);

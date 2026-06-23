@@ -405,7 +405,7 @@ def backend_envs() -> dict[str, str]:
     # the public apigateway host, not the faas-internal request host or a local .env URL.
     public_base = (
         os.environ.get("MAPLE_VEFAAS_PUBLIC_BASE_URL")
-        or "https://sd8ihq8v316pc5mf9c1j0.apigateway-cn-beijing.volceapi.com"
+        or "https://sd8t0ln1jtbcjjsjsmb80.apigateway-cn-beijing.volceapi.com"
     ).rstrip("/")
     envs = {
         "NODE_ENV": "production",
