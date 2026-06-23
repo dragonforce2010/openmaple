@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AliyunFcRuntimeDeployer,
+  createAliyunFcClient,
   createHttpTriggerRequest,
   resolveFcEndpointConfig,
   resolveDeployConfig
@@ -43,6 +44,7 @@ assert.equal(config.envs.MAPLE_SKIP_CLAUDE_AGENT_SDK_INSTALL, "true");
 
 const endpointConfig = await resolveFcEndpointConfig({ ...config, accountId: "1234567890123456", endpoint: "" });
 assert.equal(endpointConfig.endpoint, "1234567890123456.cn-hangzhou.fc.aliyuncs.com");
+assert.equal(typeof createAliyunFcClient(endpointConfig).createFunction, "function");
 
 const calls: Array<Record<string, unknown>> = [];
 const fakeClient = {
@@ -116,6 +118,7 @@ assert.deepEqual(calls.slice(-2).map((call) => call.type), ["deleteTrigger", "de
 const provisioningSource = readFileSync("apps/control-plane-api/src/storage/storeWorkspaceProvisioning.ts", "utf8");
 assert.match(provisioningSource, /infra\/aliyun\/deploy_aliyun_fc_runtime\.mjs/);
 assert.match(provisioningSource, /MAPLE_ALIYUN_FC_CPU_MILLI/);
+assert.match(provisioningSource, /MAPLE_SKIP_CLAUDE_AGENT_SDK_INSTALL/);
 const sandboxPoolSource = readFileSync("apps/control-plane-api/src/runtime/sandboxPoolManager.ts", "utf8");
 assert.match(sandboxPoolSource, /MAPLE_ALIYUN_FC_SANDBOX_DEPLOY_SCRIPT/);
 assert.match(sandboxPoolSource, /ensureAliyunFcSandboxProviderReady/);

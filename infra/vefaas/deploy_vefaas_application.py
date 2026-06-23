@@ -197,6 +197,8 @@ def build_backend_package(app_name: str) -> FunctionPackage:
     run([*backend_build, "--outfile", str(package_dir / "app.js"), str(ROOT / "apps/control-plane-api/src/index.ts")])
     run([*backend_build, "--outfile", str(package_dir / "mysql_child.mjs"), str(ROOT / "apps/control-plane-api/src/infra/mysql_child.mjs")])
     run([*backend_build, "--outfile", str(package_dir / "mysql_worker.mjs"), str(ROOT / "apps/control-plane-api/src/infra/mysql_worker.mjs")])
+    (package_dir / "infra/aliyun").mkdir(parents=True, exist_ok=False)
+    run([*backend_build, "--outfile", str(package_dir / "infra/aliyun/deploy_aliyun_fc_runtime.mjs"), str(ROOT / "infra/aliyun/deploy_aliyun_fc_runtime.mjs")])
     copy_backend_source(package_dir / "source")
     copy_source_dir(ROOT / "infra/vefaas", package_dir / "infra/vefaas")
     if (ROOT / "sandbox.config.json").exists():

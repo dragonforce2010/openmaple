@@ -228,7 +228,7 @@ async function validateWorkspaceAliyunCredentials(providerCredentials: Record<st
 
 type RuntimeProviderInput = "vefaas" | "local_docker" | "aliyun_fc";
 type SandboxProviderInput = "e2b" | "vefaas" | "local_docker" | "daytona" | "aliyun_fc";
-type ProviderPoolInput = Array<{ provider?: string }>;
+type ProviderPoolInput = Array<{ provider?: string; config?: Record<string, unknown> }>;
 
 function missingTenantCloudProviderAccess(tenantId: string, runtimeProvider: RuntimeProviderInput, sandboxProvider: SandboxProviderInput, runtimePools: ProviderPoolInput = [], sandboxPools: ProviderPoolInput = [], artifactProvider?: "tos" | "oss") {
   if (!tenantId) return [];
@@ -262,6 +262,15 @@ function missingWorkspaceProvisioningCredentials(
   const required: Array<[string, unknown]> = [];
   const runtimeProviders = providerSet(runtimeProvider, runtimePools);
   const sandboxProviders = providerSet(sandboxProvider, sandboxPools);
+  const aliyunSandboxInvokeUrl = String(
+    aliyunSandboxConfig.invoke_url ??
+    aliyunSandboxConfig.invokeUrl ??
+    aliyunCreds.ALIYUN_FC_INVOKE_URL ??
+    aliyunCreds.invoke_url ??
+    aliyunCreds.invokeUrl ??
+    sandboxPools.find((pool) => pool.provider === "aliyun_fc" && String(asRecord(pool.config).invoke_url ?? "").trim())?.config?.invoke_url ??
+    ""
+  );
   if (runtimeProviders.has("vefaas") || artifactProvider === "tos") {
     required.push(
       ["VOLCENGINE_ACCESS_KEY", vefaasCreds.VOLCENGINE_ACCESS_KEY],
@@ -284,12 +293,13 @@ function missingWorkspaceProvisioningCredentials(
     );
   }
   if (sandboxProviders.has("aliyun_fc")) {
-    required.push(
-      ["ALIYUN_ACCESS_KEY_ID", aliyunCreds.ALIYUN_ACCESS_KEY_ID ?? aliyunCreds.access_key_id ?? aliyunCreds.ak],
-      ["ALIYUN_ACCESS_KEY_SECRET", aliyunCreds.ALIYUN_ACCESS_KEY_SECRET ?? aliyunCreds.access_key_secret ?? aliyunCreds.sk],
-      ["ALIYUN_REGION", aliyunCreds.ALIYUN_REGION ?? aliyunCreds.region],
-      ["ALIYUN_FC_INVOKE_URL", aliyunSandboxConfig.invoke_url ?? aliyunCreds.ALIYUN_FC_INVOKE_URL]
-    );
+    if (!aliyunSandboxInvokeUrl.trim()) {
+      required.push(
+        ["ALIYUN_ACCESS_KEY_ID", aliyunCreds.ALIYUN_ACCESS_KEY_ID ?? aliyunCreds.access_key_id ?? aliyunCreds.ak],
+        ["ALIYUN_ACCESS_KEY_SECRET", aliyunCreds.ALIYUN_ACCESS_KEY_SECRET ?? aliyunCreds.access_key_secret ?? aliyunCreds.sk],
+        ["ALIYUN_REGION", aliyunCreds.ALIYUN_REGION ?? aliyunCreds.region]
+      );
+    }
   }
   if (sandboxProviders.has("daytona")) {
     required.push(

@@ -143,7 +143,8 @@ async function directAliyunFcRuntimeProvisioning(workspaceId: string, index: num
   const configuredInvokeUrl = String(process.env.MAPLE_ALIYUN_FC_INVOKE_URL || defaults.aliyun_fc.invoke_url || "");
   const deployScript = process.env.MAPLE_ALIYUN_FC_RUNTIME_DEPLOY_SCRIPT || (configuredInvokeUrl ? "" : "infra/aliyun/deploy_aliyun_fc_runtime.mjs");
   const configuredFunctionName = String(process.env.MAPLE_ALIYUN_FC_FUNCTION_NAME || defaults.aliyun_fc.function_name || functionName);
-  const envs = publicRuntimePoolMemberEnvs(runtimePoolMemberEnvs(defaults.aliyun_fc.envs, workspaceId, index, "managed-agents-platform-aliyun-fc"));
+  const aliyunRuntimeBaseEnvs = { MAPLE_SKIP_CLAUDE_AGENT_SDK_INSTALL: "true", ...defaults.aliyun_fc.envs };
+  const envs = publicRuntimePoolMemberEnvs(runtimePoolMemberEnvs(aliyunRuntimeBaseEnvs, workspaceId, index, "managed-agents-platform-aliyun-fc"));
   if (!deployScript) {
     if (!configuredInvokeUrl) throw new Error("workspace runtime pool Aliyun FC provisioning requires MAPLE_ALIYUN_FC_RUNTIME_DEPLOY_SCRIPT or MAPLE_ALIYUN_FC_INVOKE_URL.");
     return {
@@ -175,7 +176,7 @@ async function directAliyunFcRuntimeProvisioning(workspaceId: string, index: num
     MAPLE_RUNTIME_FUNCTION_MAX_CONCURRENCY: String(poolConfig.max_concurrency_per_instance),
     MAPLE_ALIYUN_FC_RUNTIME_ENVS: JSON.stringify({
       ...runtimeEnvOverrides(process.env.MAPLE_ALIYUN_FC_RUNTIME_ENVS),
-      ...runtimePoolMemberEnvs(defaults.aliyun_fc.envs, workspaceId, index, "managed-agents-platform-aliyun-fc"),
+      ...runtimePoolMemberEnvs(aliyunRuntimeBaseEnvs, workspaceId, index, "managed-agents-platform-aliyun-fc"),
       MAPLE_RUNTIME_FUNCTION_MEMORY_MB: String(poolConfig.memory_mb),
       MAPLE_RUNTIME_FUNCTION_MIN_INSTANCES: String(poolConfig.min_instances_per_function),
       MAPLE_RUNTIME_FUNCTION_MAX_INSTANCES: String(poolConfig.max_instances_per_function),
