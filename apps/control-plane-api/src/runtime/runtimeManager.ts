@@ -14,7 +14,7 @@ import {
 } from "./sandboxConfig";
 import { installSessionPackages } from "./sandboxPackageInstall";
 import { ensureAliyunFcRuntime, ensureAliyunFcSandboxRuntime, invokeAliyunFc, aliyunFcLoopAgentEnv } from "./aliyunFcRuntime";
-import { claimPooledAliyunFcSandboxRuntime, claimPooledDockerRuntime, claimPooledSandboxRuntime, replenishWorkspaceSandboxPool } from "./sandboxPoolManager";
+import { claimPooledAliyunFcSandboxRuntime, claimPooledDockerRuntime, claimPooledSandboxRuntime, ensureAliyunFcSandboxProviderReady, replenishWorkspaceSandboxPool } from "./sandboxPoolManager";
 import { ensureVefaasRuntime, invokeVefaas, vefaasLoopAgentConfig, vefaasLoopAgentEnv } from "./vefaasAgentRuntime";
 import { ensureVefaasSandboxRuntime, killVefaasSandbox } from "./vefaasSandboxRuntime";
 
@@ -214,9 +214,10 @@ async function ensureSingleConfiguredSandboxRuntime(session: JsonRecord & { id: 
   }
   if (config.provider === "aliyun_fc") {
     const canClaimPool = process.env.MAPLE_SANDBOX_POOL_CLAIM !== "false";
-    const runtime = await ensureAliyunFcSandboxRuntime(session, config, { acquireRuntime: canClaimPool ? () => claimPooledAliyunFcSandboxRuntime(session, config) : undefined });
-    if (config.packages.length) console.warn("[runtime] Aliyun FC sandbox package installation is not implemented; packages are expected in the FC image.", { session_id: session.id });
     const workspaceId = String(session.workspace_id || asRecord(session.metadata).workspace_id || "");
+    const activeConfig = workspaceId ? await ensureAliyunFcSandboxProviderReady(workspaceId, config) : config;
+    const runtime = await ensureAliyunFcSandboxRuntime(session, activeConfig, { acquireRuntime: canClaimPool ? () => claimPooledAliyunFcSandboxRuntime(session, activeConfig) : undefined });
+    if (config.packages.length) console.warn("[runtime] Aliyun FC sandbox package installation is not implemented; packages are expected in the FC image.", { session_id: session.id });
     if (workspaceId && process.env.MAPLE_SANDBOX_POOL_AUTOREPLENISH !== "false") void replenishWorkspaceSandboxPool(workspaceId).catch(() => undefined);
     return runtime;
   }

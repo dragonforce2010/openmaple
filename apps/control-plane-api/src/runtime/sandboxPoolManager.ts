@@ -1,16 +1,24 @@
+/* eslint-disable max-lines */
+import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { sessionsDir } from "../paths";
 import {
   countSandboxPoolStandbyCapacity,
   createSandboxPoolMember,
+  db,
   expireSandboxPoolMembers,
+  fromJson,
   getWorkspace,
   getWorkspaceSandboxPool,
+  hashString,
   listWorkspaceSandboxPools,
   markSandboxPoolMemberClaimed,
   markSandboxPoolMemberFailed,
   markSandboxPoolMemberReady,
+  now,
+  toJson,
   updateSandboxPoolMemberRuntime
 } from "../store";
 import type { JsonRecord } from "../types";
@@ -29,6 +37,8 @@ import {
 type VefaasSandboxConfig = Extract<NormalizedSandboxRuntimeConfig, { provider: "vefaas" }>;
 type LocalDockerSandboxConfig = Extract<NormalizedSandboxRuntimeConfig, { provider: "local_docker" }>;
 type AliyunFcSandboxConfig = Extract<NormalizedSandboxRuntimeConfig, { provider: "aliyun_fc" }>;
+
+const execFileAsync = promisify(execFile);
 
 export async function replenishWorkspaceSandboxPool(workspaceId: string) {
   const pools = listWorkspaceSandboxPools(workspaceId);
@@ -71,12 +81,46 @@ async function replenishLocalDockerSandboxPool(workspaceId: string, desiredSize:
 }
 
 async function replenishAliyunFcSandboxPool(workspaceId: string, desiredSize: number, ttlMs: number) {
-  const config = workspaceSandboxRuntimeConfig(workspaceId, "aliyun_fc");
-  if (config.provider !== "aliyun_fc") return { workspace_id: workspaceId, provider: "aliyun_fc", created: 0, reason: "provider_config_missing" };
+  const rawConfig = workspaceSandboxRuntimeConfig(workspaceId, "aliyun_fc");
+  if (rawConfig.provider !== "aliyun_fc") return { workspace_id: workspaceId, provider: "aliyun_fc", created: 0, reason: "provider_config_missing" };
+  const config = await ensureAliyunFcSandboxProviderReady(workspaceId, rawConfig);
   const current = countSandboxPoolStandbyCapacity(workspaceId, "aliyun_fc");
   const missing = Math.max(0, desiredSize - current);
   const created = await runLimited(Array.from({ length: missing }), 10, () => provisionAliyunFcStandby(workspaceId, config, ttlMs));
   return { workspace_id: workspaceId, provider: "aliyun_fc", desired_size: desiredSize, created: created.filter(Boolean).length };
+}
+
+export async function ensureAliyunFcSandboxProviderReady(workspaceId: string, config: AliyunFcSandboxConfig): Promise<AliyunFcSandboxConfig> {
+  if (config.invoke_url) return config;
+  const deployScript = process.env.MAPLE_ALIYUN_FC_SANDBOX_DEPLOY_SCRIPT || process.env.MAPLE_ALIYUN_FC_RUNTIME_DEPLOY_SCRIPT || "infra/aliyun/deploy_aliyun_fc_runtime.mjs";
+  const functionName = config.function_name || `maple-sbx-${workspaceId.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase().slice(0, 24)}-${Date.now()}`;
+  const payload = await runAliyunFcDeployScript(deployScript, {
+    ...process.env,
+    ALIYUN_ACCESS_KEY_ID: config.access_key_id,
+    ALIYUN_ACCESS_KEY_SECRET: config.access_key_secret,
+    ALIYUN_REGION: config.region || "cn-hangzhou",
+    MAPLE_ALIYUN_FC_COMPONENT: "agent-sandbox",
+    MAPLE_ALIYUN_FC_FUNCTION_NAME: functionName,
+    MAPLE_ALIYUN_FC_MEMORY_MB: String(Number(process.env.MAPLE_ALIYUN_FC_SANDBOX_MEMORY_MB || 1024)),
+    MAPLE_RUNTIME_FUNCTION_MAX_CONCURRENCY: String(Number(process.env.MAPLE_ALIYUN_FC_SANDBOX_CONCURRENCY || 20)),
+    MAPLE_ALIYUN_FC_RUNTIME_ENVS: JSON.stringify({
+      ...config.envs,
+      MAPLE_WORKSPACE_ID: workspaceId,
+      MAPLE_AGENT_RUNTIME_ROLE: "sandbox",
+      MAPLE_AGENT_LOOP_RUNTIME: "managed-agents-platform-aliyun-fc-sandbox",
+      MAPLE_SKIP_CLAUDE_AGENT_SDK_INSTALL: "true"
+    })
+  });
+  const invokeUrl = String(payload.invoke_url || "").replace(/\/+$/, "");
+  if (!invokeUrl) throw new Error(`Aliyun FC sandbox deploy script returned incomplete payload: ${JSON.stringify(payload)}`);
+  const nextConfig = {
+    ...config,
+    function_name: String(payload.function_name || payload.function_id || functionName),
+    invoke_url: invokeUrl,
+    region: String(payload.region || config.region || "cn-hangzhou")
+  };
+  updateWorkspaceAliyunFcSandboxConfig(workspaceId, nextConfig);
+  return nextConfig;
 }
 
 export async function claimPooledDockerRuntime(
@@ -311,6 +355,60 @@ function vefaasRuntimeFromSandbox(
     expires_at: input.expires_at,
     lifecycle: { on_timeout: "pause_or_expire", resume_strategy: "ResumeSandbox", timeout_strategy: "SetSandboxTimeout" }
   };
+}
+
+async function runAliyunFcDeployScript(script: string, env: NodeJS.ProcessEnv) {
+  const command = script.endsWith(".py") ? "python3" : (script.endsWith(".mjs") || script.endsWith(".js")) ? process.execPath : script;
+  const args = command === script ? [] : [script];
+  const { stdout } = await execFileAsync(command, args, {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: Number(process.env.MAPLE_ALIYUN_FC_RELEASE_TIMEOUT_MS || 10 * 60 * 1000),
+    env
+  });
+  return JSON.parse(stdout) as JsonRecord;
+}
+
+function updateWorkspaceAliyunFcSandboxConfig(workspaceId: string, config: AliyunFcSandboxConfig) {
+  const row = db.prepare("SELECT config_json FROM workspaces WHERE id = ?").get(workspaceId) as JsonRecord | undefined;
+  if (!row) return;
+  const workspaceConfig = fromJson<JsonRecord>(String(row.config_json), {});
+  const sandboxConfig = asRecord(workspaceConfig.sandbox_config);
+  const currentAliyun = asRecord(sandboxConfig.aliyun_fc ?? sandboxConfig.aliyun);
+  const aliyunPatch = {
+    function_name: config.function_name,
+    invoke_url: config.invoke_url,
+    region: config.region,
+    workspace_path: config.workspace_path,
+    timeout_ms: config.timeout_ms
+  };
+  const sandboxPools = Array.isArray(workspaceConfig.sandbox_pools)
+    ? workspaceConfig.sandbox_pools.map((pool) => {
+      const poolRecord = asRecord(pool);
+      if (String(poolRecord.provider) !== "aliyun_fc") return pool;
+      return {
+        ...poolRecord,
+        config: {
+          ...asRecord(poolRecord.config),
+          ...aliyunPatch
+        }
+      };
+    })
+    : workspaceConfig.sandbox_pools;
+  const nextConfig = {
+    ...workspaceConfig,
+    sandbox_config: {
+      ...sandboxConfig,
+      aliyun_fc: {
+        ...currentAliyun,
+        ...aliyunPatch
+      }
+    },
+    sandbox_pools: sandboxPools
+  };
+  const configJson = toJson(nextConfig);
+  db.prepare("UPDATE workspaces SET config_json = ?, config_hash = ?, updated_at = ? WHERE id = ?").run(configJson, hashString(configJson), now(), workspaceId);
 }
 
 async function prepareStandby(runtime: VefaasSandboxRuntimeInfo) {
