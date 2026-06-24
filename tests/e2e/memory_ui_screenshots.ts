@@ -146,6 +146,7 @@ try {
   await page.locator(".memory-detail .btn", { hasText: /添加记忆|Add memory/ }).click();
   await page.getByRole("dialog", { name: /添加记忆|Add memory/ }).waitFor({ timeout: 10_000 });
   await page.getByText(/目录由路径里的斜杠自动派生|folders are derived/).waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(300);
   await page.screenshot({ path: join(outDir, "02-memory-add-modal.png"), fullPage: true });
   await page.keyboard.press("Escape");
 
