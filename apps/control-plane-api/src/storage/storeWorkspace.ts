@@ -214,6 +214,12 @@ export function deleteWorkspaceCascade(workspaceId: string) {
     { key: "session_threads", table: "session_threads", where: "workspace_id = ? OR session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", params: [workspaceId, workspaceId] },
     { key: "session_artifacts", table: "session_artifacts", where: "workspace_id = ? OR session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)", params: [workspaceId, workspaceId] },
     {
+      key: "deployment_runs",
+      table: "deployment_runs",
+      where: "workspace_id = ? OR deployment_id IN (SELECT id FROM agent_deployments WHERE workspace_id = ?) OR session_id IN (SELECT id FROM sessions WHERE workspace_id = ?)",
+      params: [workspaceId, workspaceId, workspaceId]
+    },
+    {
       key: "agent_deployments",
       table: "agent_deployments",
       where: "workspace_id = ? OR agent_id IN (SELECT id FROM agents WHERE workspace_id = ?) OR environment_id IN (SELECT id FROM environments WHERE workspace_id = ?)",

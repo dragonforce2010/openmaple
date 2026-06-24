@@ -270,6 +270,10 @@ try {
   assert.deepEqual(runSession.metadata.resources, [
     { type: "memory_store", memory_store_id: localStoreId, access: "read_write", instructions: "deployment memory" }
   ]);
+  const deletedWorkspace = await request(`/v1/workspaces/${workspaceId}`, { method: "DELETE" });
+  assert.equal(deletedWorkspace.ok, true);
+  assert.equal(deletedWorkspace.counts.deployment_runs, 1);
+  assert.equal(deletedWorkspace.counts.agent_deployments, 1);
 
   console.log("memory store contract passed");
 } finally {
