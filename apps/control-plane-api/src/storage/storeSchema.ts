@@ -1,3 +1,5 @@
+import { memorySchemaSql } from "./storeSchemaMemory";
+
 export const storeSchemaSql = `
     CREATE TABLE IF NOT EXISTS agents (
       id TEXT PRIMARY KEY,
@@ -105,33 +107,10 @@ export const storeSchemaSql = `
       archived_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    );
-    CREATE INDEX idx_mcp_servers_workspace ON mcp_servers(workspace_id);
-    CREATE TABLE IF NOT EXISTS memory_stores (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT NOT NULL,
-      metadata_json TEXT NOT NULL,
-      archived_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS memories (
-      id TEXT PRIMARY KEY,
-      memory_store_id TEXT NOT NULL,
-      path TEXT NOT NULL,
-      content TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE(memory_store_id, path)
-    );
-    CREATE TABLE IF NOT EXISTS memory_versions (
-      id TEXT PRIMARY KEY,
-      memory_id TEXT NOT NULL,
-      content TEXT NOT NULL,
-      actor TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS skills (
+	    );
+	    CREATE INDEX idx_mcp_servers_workspace ON mcp_servers(workspace_id);
+	    ${memorySchemaSql}
+	    CREATE TABLE IF NOT EXISTS skills (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       source_type TEXT NOT NULL,
@@ -247,11 +226,10 @@ export const storeSchemaSql = `
       UNIQUE(session_id, path),
       FOREIGN KEY(session_id) REFERENCES sessions(id)
     );
-    CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
-    CREATE INDEX IF NOT EXISTS idx_events_session_created ON session_events(session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_tool_calls_session_created ON tool_calls(session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_memories_store_path ON memories(memory_store_id, path);
-    CREATE INDEX IF NOT EXISTS idx_auth_sessions_hash ON auth_sessions(token_hash);
+	    CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+	    CREATE INDEX IF NOT EXISTS idx_events_session_created ON session_events(session_id, created_at);
+	    CREATE INDEX IF NOT EXISTS idx_tool_calls_session_created ON tool_calls(session_id, created_at);
+	    CREATE INDEX IF NOT EXISTS idx_auth_sessions_hash ON auth_sessions(token_hash);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email);
     CREATE INDEX IF NOT EXISTS idx_model_configs_owner ON model_configs(owner_user_id);
     CREATE INDEX IF NOT EXISTS idx_agent_deployments_user ON agent_deployments(user_id, created_at);

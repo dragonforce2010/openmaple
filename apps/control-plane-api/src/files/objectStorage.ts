@@ -1,5 +1,8 @@
 import { TosClient } from "@volcengine/tos-sdk";
 import OSS from "ali-oss";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve, sep } from "node:path";
 
 // Low-level, stateless TOS ops. Credentials are passed in per call (sourced per-workspace from the
 // tenant's veFaaS AK/SK — see workspaceStorage.ts), never read from global env. TOS and veFaaS are
@@ -48,6 +51,13 @@ export function ossEndpoint(creds: Pick<OssCreds, "region" | "endpoint">) {
 }
 
 export async function putObject(creds: ObjectStorageCreds, input: { key: string; body: Buffer; contentType?: string; metadata?: Record<string, string> }): Promise<StoredObject> {
+  if (fakeObjectStorage()) {
+    await createFakeBucket(creds.bucket);
+    const target = fakeObjectPath(creds.bucket, input.key);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, input.body);
+    return { provider: creds.provider === "oss" ? "oss" : "tos", bucket: creds.bucket, key: input.key, public_url: objectUrl(creds, input.key) };
+  }
   if (creds.provider === "oss") {
     await ossClient(creds).put(input.key, input.body, {
       headers: {
@@ -69,6 +79,9 @@ export async function putObject(creds: ObjectStorageCreds, input: { key: string;
 }
 
 export async function readObject(creds: ObjectStorageCreds, key: string) {
+  if (fakeObjectStorage()) {
+    return readFile(fakeObjectPath(creds.bucket, key));
+  }
   if (creds.provider === "oss") {
     const result = await ossClient(creds).get(key);
     return Buffer.isBuffer(result.content) ? result.content : Buffer.from(result.content);
@@ -78,6 +91,10 @@ export async function readObject(creds: ObjectStorageCreds, key: string) {
 }
 
 export async function deleteObject(creds: ObjectStorageCreds, key: string) {
+  if (fakeObjectStorage()) {
+    await unlink(fakeObjectPath(creds.bucket, key)).catch(() => {});
+    return;
+  }
   if (creds.provider === "oss") {
     await ossClient(creds).delete(key);
     return;
@@ -86,11 +103,20 @@ export async function deleteObject(creds: ObjectStorageCreds, key: string) {
 }
 
 export async function presignedObjectUrl(creds: ObjectStorageCreds, key: string, expires = 1800) {
+  if (fakeObjectStorage()) return objectUrl(creds, key);
   if (creds.provider === "oss") return ossClient(creds).signatureUrl(key, { expires, method: "GET" });
   return tosClient(creds).getPreSignedUrl({ bucket: creds.bucket, key, method: "GET", expires });
 }
 
 export async function bucketExists(creds: ObjectStorageCreds) {
+  if (fakeObjectStorage()) {
+    try {
+      await mkdir(fakeBucketPath(creds.bucket), { recursive: false });
+      return true;
+    } catch {
+      return true;
+    }
+  }
   if (creds.provider === "oss") {
     try {
       await ossClient(creds).getBucketInfo(creds.bucket);
@@ -104,6 +130,10 @@ export async function bucketExists(creds: ObjectStorageCreds) {
 }
 
 export async function createBucket(creds: ObjectStorageCreds) {
+  if (fakeObjectStorage()) {
+    await createFakeBucket(creds.bucket);
+    return;
+  }
   if (creds.provider === "oss") {
     await ossClient(creds).putBucket(creds.bucket);
     return;
@@ -135,6 +165,26 @@ function tosClient(creds: TosCreds) {
     clients.set(cacheKey, instance);
   }
   return instance;
+}
+
+function fakeObjectStorage() {
+  return process.env.MAPLE_OBJECT_STORAGE_FAKE === "true";
+}
+
+async function createFakeBucket(bucket: string) {
+  await mkdir(fakeBucketPath(bucket), { recursive: true });
+}
+
+function fakeObjectPath(bucket: string, key: string) {
+  const target = resolve(fakeBucketPath(bucket), ...key.split("/").filter(Boolean));
+  const root = fakeBucketPath(bucket);
+  if (target !== root && !target.startsWith(`${root}${sep}`)) throw new Error("fake_object_path_outside_root");
+  return target;
+}
+
+function fakeBucketPath(bucket: string) {
+  const safeBucket = bucket.replace(/[^a-zA-Z0-9._=-]+/g, "-") || "bucket";
+  return resolve(join(process.env.MAPLE_OBJECT_STORAGE_FAKE_DIR || join(tmpdir(), "maple-object-storage-fake"), safeBucket));
 }
 
 function ossClient(creds: OssCreds) {

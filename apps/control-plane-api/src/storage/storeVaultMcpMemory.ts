@@ -1,8 +1,9 @@
 import { nanoid } from "nanoid";
 import type { JsonRecord } from "../types";
-import { decryptSecret, readSecret } from "../secrets";
+import { decryptSecret, encryptSecret, readSecret } from "../secrets";
 import { db, fromJson, now, toJson } from "./storeCore";
-import { hydrateMetadataRow, hydrateVaultCredential } from "./storeHydrators";
+import { hydrateMemoryRow, hydrateVaultCredential } from "./storeHydrators";
+import { assertMemoryContent, hashMemoryContent, normalizeMemoryPath, normalizeMemoryProvider, record, secretHint } from "./storeMemoryUtils";
 import { scopeForParent, scopeForWorkspace } from "./storeAgentsEnvironments";
 
 export function createVault(input: { display_name: string; metadata?: JsonRecord; workspace_id?: string | null }) {
@@ -205,14 +206,58 @@ export function analyticsOverview(workspaceIds: string[]) {
   return { sessions, agents, environments, vaults, events, recent };
 }
 
-export function createMemoryStore(input: { name: string; description: string; metadata?: JsonRecord; workspace_id?: string | null }) {
+export function createMemoryStore(input: {
+  name: string;
+  description: string;
+  provider?: string | null;
+  status?: string | null;
+  external_ref?: string | null;
+  config?: JsonRecord;
+  openviking?: JsonRecord;
+  api_key?: string | null;
+  api_key_ciphertext?: string | null;
+  api_key_hint?: string | null;
+  metadata?: JsonRecord;
+  workspace_id?: string | null;
+}) {
   const stamp = now();
   const id = `mem_${nanoid(10)}`;
   const scope = scopeForWorkspace(input.workspace_id);
+  const provider = normalizeMemoryProvider(input.provider);
+  const openviking = record(input.openviking);
+  const config = {
+    ...record(input.config),
+    ...(provider === "openviking"
+      ? {
+          base_url: String(openviking.base_url || record(input.config).base_url || process.env.OPENVIKING_BASE_URL || ""),
+          target_uri: String(openviking.target_uri || record(input.config).target_uri || input.external_ref || `viking://user/memories/${id}`)
+        }
+      : {})
+  };
+  const apiKey = String(input.api_key || openviking.api_key || "");
+  const apiKeyCiphertext = input.api_key_ciphertext ?? (apiKey ? encryptSecret(apiKey) : null);
+  const apiKeyHint = input.api_key_hint ?? (apiKey ? secretHint(apiKey) : null);
+  const externalRef = input.external_ref ?? (provider === "openviking" ? String(config.target_uri || `viking://user/memories/${id}`) : null);
   db.prepare(`
-    INSERT INTO memory_stores (id, name, description, metadata_json, workspace_id, tenant_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, input.name, input.description, toJson(input.metadata), scope.workspace_id, scope.tenant_id, stamp, stamp);
+    INSERT INTO memory_stores
+    (id, name, description, provider, status, external_ref, config_json, api_key_ciphertext, api_key_hint, metadata_json, workspace_id, tenant_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    input.name,
+    input.description,
+    provider,
+    input.status || "active",
+    externalRef,
+    toJson(config),
+    apiKeyCiphertext,
+    apiKeyHint,
+    toJson(input.metadata),
+    scope.workspace_id,
+    scope.tenant_id,
+    stamp,
+    stamp
+  );
   return getMemoryStore(id);
 }
 
@@ -220,39 +265,77 @@ export function listMemoryStores(workspaceId?: string | null) {
   const rows = (workspaceId
     ? db.prepare("SELECT * FROM memory_stores WHERE archived_at IS NULL AND workspace_id = ? ORDER BY created_at DESC").all(workspaceId)
     : db.prepare("SELECT * FROM memory_stores WHERE archived_at IS NULL ORDER BY created_at DESC").all()) as JsonRecord[];
-  return rows.map(hydrateMetadataRow);
+  const ids = rows.map((row) => String(row.id));
+  const counts = ids.length
+    ? db
+        .prepare(`SELECT memory_store_id, COUNT(*) AS count FROM memories WHERE memory_store_id IN (${ids.map(() => "?").join(",")}) GROUP BY memory_store_id`)
+        .all(...ids) as Array<{ memory_store_id: string; count: number }>
+    : [];
+  const countByStore = new Map(counts.map((entry) => [entry.memory_store_id, Number(entry.count)]));
+  return rows.map((row) => hydrateMemoryStoreRow(row, countByStore.get(String(row.id)) ?? 0));
 }
 
 export function getMemoryStore(id: string) {
-  const row = db.prepare("SELECT * FROM memory_stores WHERE id = ?").get(id) as JsonRecord | undefined;
-  return row ? hydrateMetadataRow(row) : null;
+  const row = db.prepare("SELECT * FROM memory_stores WHERE id = ? AND archived_at IS NULL").get(id) as JsonRecord | undefined;
+  return row ? hydrateMemoryStoreRow(row) : null;
 }
 
-export function upsertMemory(input: { memory_store_id: string; path: string; content: string; actor: string }) {
+export function getRawMemoryStore(id: string) {
+  const row = db.prepare("SELECT * FROM memory_stores WHERE id = ? AND archived_at IS NULL").get(id) as JsonRecord | undefined;
+  return row ? { ...row, metadata: fromJson(String(row.metadata_json), {}), config: fromJson(String(row.config_json), {}) } : null;
+}
+
+export function upsertMemory(input: { memory_store_id: string; path: string; content: string; actor: string; metadata?: JsonRecord; session_id?: string | null }) {
   const stamp = now();
+  const path = normalizeMemoryPath(input.path);
+  const content = assertMemoryContent(input.content);
+  const contentSha = hashMemoryContent(content);
   const existing = db
     .prepare("SELECT * FROM memories WHERE memory_store_id = ? AND path = ?")
-    .get(input.memory_store_id, input.path) as JsonRecord | undefined;
+    .get(input.memory_store_id, path) as JsonRecord | undefined;
   const memoryId = existing ? String(existing.id) : `memory_${nanoid(10)}`;
   const scope = scopeForParent("memory_stores", input.memory_store_id);
   const tx = db.transaction(() => {
     if (existing) {
-      db.prepare("UPDATE memories SET content = ?, updated_at = ? WHERE id = ?").run(input.content, stamp, memoryId);
+      db.prepare("UPDATE memories SET content = ?, metadata_json = ?, content_sha256 = ?, updated_at = ? WHERE id = ?").run(
+        content,
+        toJson(input.metadata ?? fromJson(String(existing.metadata_json), {})),
+        contentSha,
+        stamp,
+        memoryId
+      );
     } else {
-      db.prepare("INSERT INTO memories (id, memory_store_id, path, content, workspace_id, tenant_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+      db.prepare(`
+        INSERT INTO memories
+        (id, memory_store_id, path, content, metadata_json, content_sha256, workspace_id, tenant_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
         memoryId,
         input.memory_store_id,
-        input.path,
-        input.content,
+        path,
+        content,
+        toJson(input.metadata ?? {}),
+        contentSha,
         scope.workspace_id,
         scope.tenant_id,
+        stamp,
         stamp
       );
     }
-    db.prepare("INSERT INTO memory_versions (id, memory_id, content, actor, workspace_id, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+    db.prepare(`
+      INSERT INTO memory_versions
+      (id, memory_id, memory_store_id, path, operation, content, content_sha256, metadata_json, session_id, actor, workspace_id, tenant_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
       `memver_${nanoid(10)}`,
       memoryId,
-      input.content,
+      input.memory_store_id,
+      path,
+      existing ? "update" : "create",
+      content,
+      contentSha,
+      toJson(input.metadata ?? {}),
+      input.session_id ?? null,
       input.actor,
       scope.workspace_id,
       scope.tenant_id,
@@ -263,10 +346,34 @@ export function upsertMemory(input: { memory_store_id: string; path: string; con
   return listMemories(input.memory_store_id).find((item) => item.id === memoryId);
 }
 
-export function listMemories(memoryStoreId: string, query?: string) {
+export function listMemories(memoryStoreId: string, query?: string): JsonRecord[] {
   const rows = db.prepare("SELECT * FROM memories WHERE memory_store_id = ? ORDER BY path ASC").all(memoryStoreId) as JsonRecord[];
   const filtered = query
     ? rows.filter((row) => `${row.path}\n${row.content}`.toLowerCase().includes(query.toLowerCase()))
     : rows;
-  return filtered;
+  return filtered.map(hydrateMemoryRow);
+}
+
+export function getMemory(memoryStoreId: string, path: string) {
+  const row = db.prepare("SELECT * FROM memories WHERE memory_store_id = ? AND path = ?").get(memoryStoreId, normalizeMemoryPath(path)) as JsonRecord | undefined;
+  return row ? hydrateMemoryRow(row) : null;
+}
+
+export function readMemoryStoreApiKey(row: { api_key_ciphertext?: unknown }) {
+  const cipher = typeof row.api_key_ciphertext === "string" ? row.api_key_ciphertext : "";
+  if (cipher) return decryptSecret(cipher);
+  return process.env.OPENVIKING_API_KEY || "";
+}
+
+function hydrateMemoryStoreRow(row: JsonRecord, memoryCount?: number) {
+  const { api_key_ciphertext: _apiKeyCiphertext, metadata_json: _metadataJson, config_json: _configJson, ...safe } = row;
+  return {
+    ...safe,
+    provider: String(row.provider || "local"),
+    status: String(row.status || "active"),
+    external_ref: row.external_ref ?? null,
+    config: fromJson(String(row.config_json), {}),
+    metadata: fromJson(String(row.metadata_json), {}),
+    memory_count: memoryCount ?? Number((db.prepare("SELECT COUNT(*) AS count FROM memories WHERE memory_store_id = ?").get(row.id) as { count?: unknown } | undefined)?.count || 0)
+  };
 }

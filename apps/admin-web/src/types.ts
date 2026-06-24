@@ -231,13 +231,7 @@ export type VaultCredential = {
   updated_at: string;
 };
 
-export type MemoryStore = {
-  id: string;
-  name: string;
-  description: string;
-  workspace_id?: string | null;
-  metadata: JsonRecord;
-};
+export type { MemoryRecord, MemoryStore } from "./memoryTypes";
 
 export type Skill = {
   id: string;

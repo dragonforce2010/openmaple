@@ -35,7 +35,7 @@ export const NAV_META: Record<View, { icon: string; zh: string; en: string }> = 
 
 export const NAV_GROUPS: Array<{ title?: [string, string]; badge?: [string, string]; items: View[] }> = [
   { items: ["dashboard"] },
-  { title: ["托管 Agent", "Managed Agents"], badge: ["新", "New"], items: ["quickstart", "agents", "deployments", "sessions", "environments", "vaults"] },
+  { title: ["托管 Agent", "Managed Agents"], badge: ["新", "New"], items: ["quickstart", "agents", "deployments", "sessions", "memory", "environments", "vaults"] },
   { title: ["管理", "Manage"], items: ["tenant", "users", "models", "api_keys"] },
   { items: ["docs"] }
 ];

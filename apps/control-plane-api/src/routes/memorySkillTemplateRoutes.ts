@@ -1,4 +1,6 @@
 import type { Express } from "express";
+import { responseStatusForMemoryError } from "../memory/memoryResources";
+import { writeMemoryStorePath } from "../memory/sessionMemoryTools";
 import type { AuthenticatedRequest } from "./routeDeps";
 import {
   canAccessWorkspace,
@@ -7,6 +9,7 @@ import {
   createTemplate,
   currentUser,
   getMemoryStore,
+  getMemory,
   getSkill,
   getSkillTree,
   getTemplate,
@@ -18,7 +21,6 @@ import {
   readSkillFile,
   templateSchema,
   updateTemplate,
-  upsertMemory,
   writeSkillFile,
   z
 } from "./routeDeps";
@@ -37,6 +39,8 @@ app.post("/v1/memory_stores", (request: AuthenticatedRequest, response) => {
     workspace_id: z.string().optional(),
     name: z.string().min(1),
     description: z.string().default(""),
+    provider: z.enum(["local", "openviking"]).default("local"),
+    openviking: z.record(z.string(), z.unknown()).default({}),
     metadata: z.record(z.string(), z.unknown()).default({})
   });
   const parsed = schema.safeParse(request.body);
@@ -54,6 +58,19 @@ app.get("/v1/memory_stores/:memoryStoreId/memories", (request: AuthenticatedRequ
   response.json({ data: listMemories(routeParam(request.params.memoryStoreId), String(request.query.query ?? "")) });
 });
 
+app.get("/v1/memory_stores/:memoryStoreId/memories/*path", (request: AuthenticatedRequest, response) => {
+  const store = getMemoryStore(routeParam(request.params.memoryStoreId));
+  if (!store) return response.status(404).json({ error: "memory_store_not_found" });
+  if (!canAccessScopedRecord(currentUser(request).id, store)) return response.status(403).json({ error: "workspace_forbidden" });
+  try {
+    const memory = getMemory(routeParam(request.params.memoryStoreId), routeParam(request.params.path));
+    if (!memory) return response.status(404).json({ error: "memory_not_found" });
+    response.json(memory);
+  } catch (error) {
+    response.status(memoryErrorStatus(error)).json({ error: memoryErrorCode(error), message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.put("/v1/memory_stores/:memoryStoreId/memories/*path", (request: AuthenticatedRequest, response) => {
   const store = getMemoryStore(routeParam(request.params.memoryStoreId));
   if (!store) return response.status(404).json({ error: "memory_store_not_found" });
@@ -65,14 +82,9 @@ app.put("/v1/memory_stores/:memoryStoreId/memories/*path", (request: Authenticat
   const parsed = schema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json(parsed.error.flatten());
   const path = Array.isArray(request.params.path) ? request.params.path.join("/") : request.params.path;
-  response.json(
-    upsertMemory({
-      memory_store_id: routeParam(request.params.memoryStoreId),
-      path,
-      content: parsed.data.content,
-      actor: parsed.data.actor
-    })
-  );
+  void writeMemoryStorePath(routeParam(request.params.memoryStoreId), path, parsed.data.content, parsed.data.actor)
+    .then((memory) => response.json(memory))
+    .catch((error) => response.status(memoryErrorStatus(error)).json({ error: memoryErrorCode(error), message: error instanceof Error ? error.message : String(error) }));
 });
 
 app.get("/v1/skills", (_request, response) => response.json({ data: listSkills() }));
@@ -159,4 +171,17 @@ app.patch("/v1/templates/:templateId", (request, response) => {
   if (!parsed.success) return response.status(400).json(parsed.error.flatten());
   response.json(updateTemplate(routeParam(request.params.templateId), parsed.data));
 });
+}
+
+function memoryErrorCode(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message || "memory_write_failed";
+}
+
+function memoryErrorStatus(error: unknown) {
+  const direct = responseStatusForMemoryError(error);
+  if (direct !== 400) return direct;
+  const code = memoryErrorCode(error);
+  if (code === "memory_store_not_found" || code === "memory_not_found") return 404;
+  return 400;
 }

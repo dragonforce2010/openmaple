@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost } from "../../api";
-import type { Agent, Environment, Session, Vault } from "../../types";
+import type { Agent, Environment, MemoryStore, Session, Vault } from "../../types";
 import { DrawerLayer, Icon } from "../../ui";
 import { useL } from "../../appConfig";
 import { Select } from "../../components/shared/forms";
@@ -9,7 +9,13 @@ import { ModalShell } from "../../components/shared/layout";
 import { errorMessage } from "../../components/shared/misc";
 import { EnvironmentForm } from "./EnvironmentForm";
 
-export function SessionModal(props: { agents: Agent[]; environments: Environment[]; vaults: Vault[]; workspaceId?: string; sandboxProvider?: string; lockedAgentId?: string; onClose: () => void; onCreated: (session: Session) => void }) {
+type MemoryResourceDraft = {
+  memory_store_id: string;
+  access: "read_write" | "read_only";
+  instructions: string;
+};
+
+export function SessionModal(props: { agents: Agent[]; environments: Environment[]; vaults: Vault[]; memoryStores: MemoryStore[]; workspaceId?: string; sandboxProvider?: string; lockedAgentId?: string; onClose: () => void; onCreated: (session: Session) => void }) {
   const L = useL();
   const locked = Boolean(props.lockedAgentId); // opened from an agent detail — agent is fixed, keep the form minimal
   const [envs, setEnvs] = useState<Environment[]>(props.environments);
@@ -18,6 +24,7 @@ export function SessionModal(props: { agents: Agent[]; environments: Environment
   const [agentId, setAgentId] = useState(props.lockedAgentId ?? props.agents[0]?.id ?? "");
   const [environmentId, setEnvironmentId] = useState(productionEnvironments[0]?.id ?? "");
   const [vaultId, setVaultId] = useState("");
+  const [memoryResources, setMemoryResources] = useState<MemoryResourceDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [creatingEnv, setCreatingEnv] = useState(false);
@@ -51,7 +58,14 @@ export function SessionModal(props: { agents: Agent[]; environments: Environment
         environment_id: environmentId,
         title: title || undefined,
         vault_ids: vaultId ? [vaultId] : [],
-        resources: []
+        resources: memoryResources
+          .filter((resource) => resource.memory_store_id)
+          .map((resource) => ({
+            type: "memory_store",
+            memory_store_id: resource.memory_store_id,
+            access: resource.access,
+            ...(resource.instructions.trim() ? { instructions: resource.instructions.trim() } : {})
+          }))
       });
       props.onClose();
       await props.onCreated(session);
@@ -108,6 +122,34 @@ export function SessionModal(props: { agents: Agent[]; environments: Environment
           ) : null}
         </Fragment>
       ) : null}
+      <div className="form">
+        <span className="flabel-in flabel-row">{L("资源", "Resources")}
+          <button type="button" className="flabel-action" onClick={() => addMemoryResource()} disabled={!props.memoryStores.length || memoryResources.length >= 8}><Icon name="i-plus" size={13} /> {L("添加记忆库", "Add memory store")}</button>
+        </span>
+        <div className="memory-resource-list">
+          {memoryResources.map((resource, index) => (
+            <div className="memory-resource-row" key={index}>
+              <div className="form memory-resource-store">
+                <span>{L("记忆库", "Memory store")}</span>
+                <Select value={resource.memory_store_id} options={props.memoryStores.map((store) => ({ value: store.id, label: `${store.name} · ${store.id}` }))} onChange={(value) => updateMemoryResource(index, { memory_store_id: value })} searchable forceSearch />
+              </div>
+              <div className="form">
+                <span>{L("权限", "Access")}</span>
+                <Select value={resource.access} options={[{ value: "read_write", label: L("读写", "Read & write") }, { value: "read_only", label: L("只读", "Read only") }]} onChange={(value) => updateMemoryResource(index, { access: value === "read_only" ? "read_only" : "read_write" })} />
+              </div>
+              <label className="form memory-resource-instructions">
+                <span>Instructions</span>
+                <textarea value={resource.instructions} onChange={(event) => updateMemoryResource(index, { instructions: event.target.value })} placeholder={L("可选：告诉 Agent 何时使用该记忆库", "Optional: tell the agent when to use this store")} />
+              </label>
+              <button type="button" className="row-del" title={L("移除", "Remove")} onClick={() => setMemoryResources((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Icon name="i-trash" size={14} /></button>
+            </div>
+          ))}
+          {!memoryResources.length ? <em className="fhint">{L("可选。最多挂载 8 个记忆库。", "Optional. Attach up to 8 memory stores.")}</em> : null}
+        </div>
+        {memoryResources.some((resource) => resource.access === "read_write") ? (
+          <div className="modal-note warn"><Icon name="i-alert" size={16} /> {L("读写记忆库会让 Agent 持久化新内容；请只挂载你信任的记忆库。", "Read/write memory lets the agent persist new content. Attach only stores you trust.")}</div>
+        ) : null}
+      </div>
       <div className="modal-foot">
         <button className="btn secondary" onClick={props.onClose}>{L("取消", "Cancel")}</button>
         <button className="btn primary" disabled={saving || !agentId || !environmentId} onClick={save}>
@@ -130,4 +172,14 @@ export function SessionModal(props: { agents: Agent[]; environments: Environment
       ) : null}
     </ModalShell>
   );
+
+  function addMemoryResource() {
+    const firstUnused = props.memoryStores.find((store) => !memoryResources.some((resource) => resource.memory_store_id === store.id)) ?? props.memoryStores[0];
+    if (!firstUnused || memoryResources.length >= 8) return;
+    setMemoryResources((current) => [...current, { memory_store_id: firstUnused.id, access: "read_write", instructions: "" }]);
+  }
+
+  function updateMemoryResource(index: number, patch: Partial<MemoryResourceDraft>) {
+    setMemoryResources((current) => current.map((resource, itemIndex) => itemIndex === index ? { ...resource, ...patch } : resource));
+  }
 }

@@ -6,13 +6,14 @@ import { errorMessage, formatTime } from "../../components/shared/misc";
 import { Select } from "../../components/shared/forms";
 import { DataTable, PageFrame } from "../../components/shared/layout";
 import { statusPill } from "../../components/shared/labels";
-import type { Agent, AgentDeployment, DeploymentRun, Environment } from "../../types";
+import type { Agent, AgentDeployment, DeploymentRun, Environment, MemoryStore } from "../../types";
 import { Icon, useToast } from "../../ui";
 
 export function DeploymentsView(props: {
   deployments: AgentDeployment[];
   agents: Agent[];
   environments: Environment[];
+  memoryStores: MemoryStore[];
   selectedWorkspaceId: string;
   refresh: (workspaceId?: string) => Promise<void> | void;
   goView: (view: View, id?: string) => void;
@@ -69,6 +70,7 @@ export function DeploymentsView(props: {
       <DeploymentCreatePanel
         agents={props.agents}
         environments={props.environments}
+        memoryStores={props.memoryStores}
         agentOptions={agentOptions}
         environmentOptions={environmentOptions}
         workspaceId={props.selectedWorkspaceId}
@@ -104,6 +106,7 @@ export function DeploymentsView(props: {
           <DeploymentDetail
             deployment={selected}
             runs={runs}
+            memoryStores={props.memoryStores}
             busy={busy}
             L={L}
             onRun={runDeployment}
@@ -159,6 +162,7 @@ export function DeploymentsView(props: {
 function DeploymentCreatePanel(props: {
   agents: Agent[];
   environments: Environment[];
+  memoryStores: MemoryStore[];
   agentOptions: Array<{ value: string; label: string }>;
   environmentOptions: Array<{ value: string; label: string }>;
   workspaceId: string;
@@ -171,6 +175,7 @@ function DeploymentCreatePanel(props: {
   const [environmentId, setEnvironmentId] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
+  const [memoryResources, setMemoryResources] = useState<Array<{ memory_store_id: string; access: "read_write" | "read_only"; instructions: string }>>([]);
   const [scheduleOn, setScheduleOn] = useState(false);
   const [cron, setCron] = useState("0 9 * * 1-5");
   const [timezone, setTimezone] = useState("UTC");
@@ -190,10 +195,20 @@ function DeploymentCreatePanel(props: {
         name: name.trim() || `${selectedAgentName(props.agents, agentId)} deployment`,
         version: "1",
         initial_events: [{ type: "user.message", payload: { content: [{ type: "text", text: message.trim() }] } }],
-        schedule: scheduleOn ? { type: "cron", expression: cron.trim(), timezone: timezone.trim() || "UTC" } : null
+        schedule: scheduleOn ? { type: "cron", expression: cron.trim(), timezone: timezone.trim() || "UTC" } : null,
+        memory_store_ids: memoryResources.filter((resource) => resource.memory_store_id).map((resource) => resource.memory_store_id),
+        resources: memoryResources
+          .filter((resource) => resource.memory_store_id)
+          .map((resource) => ({
+            type: "memory_store",
+            memory_store_id: resource.memory_store_id,
+            access: resource.access,
+            ...(resource.instructions.trim() ? { instructions: resource.instructions.trim() } : {})
+          }))
       });
       setName("");
       setMessage("");
+      setMemoryResources([]);
       await props.onCreated(deployment.id);
     });
   }
@@ -229,6 +244,31 @@ function DeploymentCreatePanel(props: {
           <span>Timezone</span>
           <input className="fld mono" value={timezone} onChange={(event) => setTimezone(event.target.value)} disabled={!scheduleOn} />
         </label>
+        <div className="form deployment-memory-stores">
+          <span className="flabel-in flabel-row">{props.L("记忆库", "Memory stores")}
+            <button type="button" className="flabel-action" onClick={() => addMemoryResource()} disabled={!props.memoryStores.length || memoryResources.length >= 8}><Icon name="i-plus" size={13} /> {props.L("添加记忆库", "Add memory store")}</button>
+          </span>
+          <div className="memory-resource-list">
+            {memoryResources.map((resource, index) => (
+              <div className="memory-resource-row compact" key={index}>
+                <div className="form memory-resource-store">
+                  <span>{props.L("记忆库", "Memory store")}</span>
+                  <Select value={resource.memory_store_id} options={props.memoryStores.map((store) => ({ value: store.id, label: `${store.name} · ${store.id}` }))} onChange={(value) => updateMemoryResource(index, { memory_store_id: value })} searchable forceSearch />
+                </div>
+                <div className="form">
+                  <span>{props.L("权限", "Access")}</span>
+                  <Select value={resource.access} options={[{ value: "read_write", label: props.L("读写", "Read & write") }, { value: "read_only", label: props.L("只读", "Read only") }]} onChange={(value) => updateMemoryResource(index, { access: value === "read_only" ? "read_only" : "read_write" })} />
+                </div>
+                <label className="form memory-resource-instructions">
+                  <span>Instructions</span>
+                  <textarea value={resource.instructions} onChange={(event) => updateMemoryResource(index, { instructions: event.target.value })} />
+                </label>
+                <button type="button" className="row-del" title={props.L("移除", "Remove")} onClick={() => setMemoryResources((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Icon name="i-trash" size={14} /></button>
+              </div>
+            ))}
+            {!memoryResources.length ? <em className="fhint">{props.L("可选。运行时会挂载到新 Session。", "Optional. Attached to every run session.")}</em> : null}
+          </div>
+        </div>
       </div>
       <div className="deployment-create-actions">
         <button className="btn primary" onClick={create} disabled={!canCreate || Boolean(props.busy)}>
@@ -237,11 +277,22 @@ function DeploymentCreatePanel(props: {
       </div>
     </div>
   );
+
+  function addMemoryResource() {
+    const firstUnused = props.memoryStores.find((store) => !memoryResources.some((resource) => resource.memory_store_id === store.id)) ?? props.memoryStores[0];
+    if (!firstUnused || memoryResources.length >= 8) return;
+    setMemoryResources((current) => [...current, { memory_store_id: firstUnused.id, access: "read_write", instructions: "" }]);
+  }
+
+  function updateMemoryResource(index: number, patch: Partial<{ memory_store_id: string; access: "read_write" | "read_only"; instructions: string }>) {
+    setMemoryResources((current) => current.map((resource, itemIndex) => itemIndex === index ? { ...resource, ...patch } : resource));
+  }
 }
 
 function DeploymentDetail(props: {
   deployment: AgentDeployment | null;
   runs: DeploymentRun[];
+  memoryStores: MemoryStore[];
   busy: string;
   L: (zh: string, en: string) => string;
   onRun: (deployment: AgentDeployment) => Promise<void>;
@@ -264,6 +315,13 @@ function DeploymentDetail(props: {
         <div><span>{props.L("最近运行", "Last run")}</span><b>{formatTime(props.deployment.last_run_at || "") || "-"}</b></div>
         <div><span>Schedule</span><b>{scheduleLabel(props.deployment, props.L)}</b></div>
       </div>
+      {props.deployment.resources?.some((resource) => resource.type === "memory_store") ? (
+        <div className="deployment-memory-pills">
+          {props.deployment.resources.filter((resource) => resource.type === "memory_store").map((resource, index) => (
+            <span className="chip" key={`${resource.memory_store_id}:${index}`}><Icon name="i-memory" size={13} /> {memoryStoreName(props.memoryStores, String(resource.memory_store_id || ""))} · {String(resource.access || "read_write")}</span>
+          ))}
+        </div>
+      ) : null}
       <div className="action-row deployment-detail-actions">
         <button className="btn primary compact" onClick={() => props.onRun(props.deployment!)} disabled={Boolean(props.busy)}><Icon name="i-play" size={13} /> {props.L("运行", "Run")}</button>
         {paused ? (
@@ -299,4 +357,8 @@ function agentName(agents: Agent[], id: string) {
 
 function selectedAgentName(agents: Agent[], id: string) {
   return agents.find((agent) => agent.id === id)?.name || "Agent";
+}
+
+function memoryStoreName(stores: MemoryStore[], id: string) {
+  return stores.find((store) => store.id === id)?.name ?? id;
 }

@@ -107,6 +107,7 @@ function ensureWorkspaceColumns() {
   // survives a non-persistent secretsDir (veFaaS /tmp). secret_ref stays as a local-file fallback.
   ensureColumn("vault_credentials", "secret_cipher", "TEXT");
   ensureMysqlColumnType("vault_credentials", "secret_cipher", "LONGTEXT");
+  ensureMemoryColumns();
   ensureColumn("workspace_runtime_pools", "min_instances_per_function", "INTEGER NOT NULL DEFAULT 0");
   ensureDeploymentColumns();
   db.exec(`
@@ -157,6 +158,33 @@ function ensureTenantApiKeysTable() {
   ensureColumn("tenant_api_keys", "key_ciphertext", "TEXT");
   ensureColumn("tenant_api_keys", "created_by_user_id", "TEXT");
   ensureColumn("tenant_api_keys", "last_used_at", "TEXT");
+}
+
+function ensureMemoryColumns() {
+  ensureColumn("memory_stores", "provider", "TEXT NOT NULL DEFAULT 'local'");
+  ensureColumn("memory_stores", "status", "TEXT NOT NULL DEFAULT 'active'");
+  ensureColumn("memory_stores", "external_ref", "TEXT");
+  ensureColumn("memory_stores", "config_json", "TEXT");
+  ensureColumn("memory_stores", "api_key_ciphertext", "TEXT");
+  ensureColumn("memory_stores", "api_key_hint", "TEXT");
+  ensureMysqlColumnType("memory_stores", "config_json", "LONGTEXT");
+  ensureMysqlColumnType("memory_stores", "api_key_ciphertext", "LONGTEXT");
+
+  ensureColumn("memories", "metadata_json", "TEXT");
+  ensureColumn("memories", "content_sha256", "TEXT");
+  ensureColumn("memories", "created_at", "TEXT");
+  ensureMysqlColumnType("memories", "metadata_json", "LONGTEXT");
+
+  ensureColumn("memory_versions", "memory_store_id", "TEXT");
+  ensureColumn("memory_versions", "path", "TEXT");
+  ensureColumn("memory_versions", "operation", "TEXT");
+  ensureColumn("memory_versions", "content_sha256", "TEXT");
+  ensureColumn("memory_versions", "metadata_json", "TEXT");
+  ensureColumn("memory_versions", "session_id", "TEXT");
+  ensureMysqlColumnType("memory_versions", "metadata_json", "LONGTEXT");
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_memory_versions_store_path ON memory_versions(memory_store_id, path);
+  `);
 }
 
 function ensureDeploymentColumns() {

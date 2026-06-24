@@ -36,6 +36,9 @@ const sources = {
   layout: readFileSync("apps/admin-web/src/components/shared/layout.tsx", "utf8"),
   vaultDetail: readFileSync("apps/admin-web/src/pages/agents/VaultDetailView.tsx", "utf8"),
   modelGateway: readFileSync("apps/admin-web/src/pages/admin/ModelGatewayView.tsx", "utf8"),
+  memoryView: readFileSync("apps/admin-web/src/pages/admin/MemoryView.tsx", "utf8"),
+  sessionModal: readFileSync("apps/admin-web/src/pages/modals/SessionModal.tsx", "utf8"),
+  deploymentsView: readFileSync("apps/admin-web/src/pages/deployments/DeploymentsView.tsx", "utf8"),
   askMaple: readFileSync("apps/admin-web/src/pages/sessions/AskMapleDrawer.tsx", "utf8"),
   workspaceTabs: readFileSync("apps/admin-web/src/pages/workspaces/WorkspaceSettingsTabs.tsx", "utf8"),
   workspaceDetail: readFileSync("apps/admin-web/src/pages/agents/EntityDetailBody.tsx", "utf8"),
@@ -118,6 +121,19 @@ assert.match(sources.vaultDetail, /clickable-row/, "Vault credential rows must b
 assert.match(sources.modelGateway, /model-detail-card/, "Model gateway row click must reveal model endpoint detail");
 assert.match(sources.modelGateway, /selectedModel/, "Model gateway must track the selected endpoint");
 assert.match(sources.modelGateway, /addEventListener\("click"/, "Model gateway action menu must close on outside click");
+assert.match(sources.memoryView, /Create memory store|创建记忆库/, "Memory stores page must expose a create-memory-store modal action");
+assert.match(sources.memoryView, /OpenViking|openviking/, "Memory stores page must expose OpenViking-backed stores");
+assert.match(sources.memoryView, /Memory store select|memory-store-select|selectedStoreId/, "Memory stores page must expose detail selection state");
+assert.match(sources.memoryView, /Add memory|添加记忆/, "Memory stores page must expose add-memory flow");
+assert.match(sources.memoryView, /folders are derived|目录由路径|derived from slashes/, "Add-memory flow must explain slash-derived folders");
+assert.match(sources.sessionModal, /Resources|资源/, "Session create modal must expose Resources");
+assert.match(sources.sessionModal, /memoryResources|memory_store/, "Session create modal must attach memory store resources");
+assert.match(sources.sessionModal, /read_write|Read & write|读写/, "Session memory resource must support read/write access");
+assert.match(sources.sessionModal, /read_only|Read only|只读/, "Session memory resource must support read-only access");
+assert.match(sources.sessionModal, /instructions/i, "Session memory resource must support per-store instructions");
+assert.match(sources.deploymentsView, /Memory stores|记忆库/, "Deployment create must expose memory stores");
+assert.match(sources.deploymentsView, /memoryResources|memory_store/, "Deployment create must persist memory store resources");
+assert.match(sources.deploymentsView, /memory_store_ids/, "Deployment create must derive memory_store_ids for compatibility");
 
 for (const source of [sources.agentPanels, sources.workspaceTabs, sources.workspaceDetail]) {
   assert.match(source, /RuntimePoolDetails|SandboxPoolDetails/, "runtime pool pages must use the shared deep runtime details component");

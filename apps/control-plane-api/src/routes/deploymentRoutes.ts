@@ -1,6 +1,12 @@
 import type { Express, Response } from "express";
 import { runDeployment } from "../deployments/runDeployment";
 import {
+  legacyMemoryResources,
+  memoryStoreIdsFromResources,
+  resourcesWithNormalizedMemoryStores,
+  responseStatusForMemoryError
+} from "../memory/memoryResources";
+import {
   deploymentHasUserMessage,
   deploymentUpcomingRuns,
   nextDeploymentRunAt
@@ -137,6 +143,8 @@ function createLegacyDeployment(request: AuthenticatedRequest, response: Respons
     const agent = createAgent({ config: { ...body.manifest.agent, agent_loop: normalizeAgentLoop(body.manifest.agent.agent_loop) }, workspace_id: workspaceId });
     const environment = createEnvironment({ ...body.manifest.environment, workspace_id: workspaceId });
     if (!agent || !environment) return response.status(500).json({ error: "deployment_resource_create_failed" });
+    const normalizedResources = normalizeDeploymentResources(body.resources ?? body.manifest.resources ?? [], body.memory_store_ids ?? body.manifest.memory_store_ids ?? [], workspaceId);
+    if ("error" in normalizedResources) return response.status(normalizedResources.status).json({ error: normalizedResources.error });
     const deployment = createAgentDeployment({
       user_id: user.id,
       agent_id: String((agent as JsonRecord).id),
@@ -148,8 +156,8 @@ function createLegacyDeployment(request: AuthenticatedRequest, response: Respons
       initial_events: initialEvents,
       schedule: body.schedule ?? null,
       vault_ids: body.vault_ids ?? body.manifest.vault_ids,
-      memory_store_ids: body.memory_store_ids ?? body.manifest.memory_store_ids,
-      resources: body.resources ?? body.manifest.resources,
+      memory_store_ids: memoryStoreIdsFromResources(normalizedResources.resources),
+      resources: normalizedResources.resources,
       metadata: body.metadata ?? body.manifest.metadata,
       workspace_id: workspaceId,
       next_run_at: nextRunAt.next_run_at
@@ -168,6 +176,8 @@ function createDeploymentFromExistingResources(request: AuthenticatedRequest, re
   if (!canAccessWorkspace(user.id, workspaceId)) return response.status(403).json({ error: "workspace_forbidden" });
   const resourceError = resourceAccessError(body.agent_id, body.environment_id, workspaceId);
   if (resourceError) return response.status(resourceError.status).json({ error: resourceError.error });
+  const normalizedResources = normalizeDeploymentResources(body.resources, body.memory_store_ids, workspaceId);
+  if ("error" in normalizedResources) return response.status(normalizedResources.status).json({ error: normalizedResources.error });
   const nextRunAt = scheduleNextRun(body.schedule ?? null, body.initial_events);
   if ("error" in nextRunAt) return response.status(400).json({ error: nextRunAt.error });
   const deployment = createAgentDeployment({
@@ -181,8 +191,8 @@ function createDeploymentFromExistingResources(request: AuthenticatedRequest, re
     initial_events: body.initial_events,
     schedule: body.schedule ?? null,
     vault_ids: body.vault_ids,
-    memory_store_ids: body.memory_store_ids,
-    resources: body.resources,
+    memory_store_ids: memoryStoreIdsFromResources(normalizedResources.resources),
+    resources: normalizedResources.resources,
     metadata: body.metadata,
     workspace_id: workspaceId,
     next_run_at: nextRunAt.next_run_at
@@ -197,6 +207,9 @@ async function invokeDeployment(request: AuthenticatedRequest, response: Respons
   const parsed = deploymentRunCreateSchema.safeParse(request.body);
   if (!parsed.success) return response.status(400).json(parsed.error.flatten());
   try {
+    const deploymentWorkspaceId = String(deployment.workspace_id || "");
+    const normalizedResources = normalizeDeploymentResources(parsed.data.resources ?? [], parsed.data.memory_store_ids ?? [], deploymentWorkspaceId);
+    if ("error" in normalizedResources) return response.status(normalizedResources.status).json({ error: normalizedResources.error });
     const run = await runDeployment({
       deployment,
       triggered_by: triggeredBy,
@@ -205,8 +218,8 @@ async function invokeDeployment(request: AuthenticatedRequest, response: Respons
       message: parsed.data.message,
       initial_events: parsed.data.initial_events,
       vault_ids: parsed.data.vault_ids,
-      memory_store_ids: parsed.data.memory_store_ids,
-      resources: parsed.data.resources,
+      memory_store_ids: normalizedResources.overridden ? memoryStoreIdsFromResources(normalizedResources.resources) : parsed.data.memory_store_ids,
+      resources: normalizedResources.overridden ? normalizedResources.resources : parsed.data.resources,
       trigger_context: parsed.data.trigger_context,
       await_turn: awaitTurn
     });
@@ -215,6 +228,21 @@ async function invokeDeployment(request: AuthenticatedRequest, response: Respons
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     response.status(deploymentRunErrorStatus(message)).json({ error: "deployment_run_failed", message });
+  }
+}
+
+type NormalizedDeploymentResources =
+  | { resources: JsonRecord[]; overridden: boolean }
+  | { status: number; error: string };
+
+function normalizeDeploymentResources(resources: JsonRecord[], memoryStoreIds: string[], workspaceId?: string | null): NormalizedDeploymentResources {
+  try {
+    const normalized = resourcesWithNormalizedMemoryStores(resources, workspaceId);
+    const hasMemoryResources = normalized.some((resource) => resource.type === "memory_store");
+    const legacy = hasMemoryResources || !memoryStoreIds.length ? [] : legacyMemoryResources(memoryStoreIds, workspaceId);
+    return { resources: [...normalized, ...legacy], overridden: resources.length > 0 || memoryStoreIds.length > 0 };
+  } catch (error) {
+    return { status: responseStatusForMemoryError(error), error: error instanceof Error ? error.message : String(error) };
   }
 }
 

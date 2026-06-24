@@ -52,6 +52,28 @@ jobs:
     needs: quality
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_contracts == 'true'
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "1"
+          MYSQL_DATABASE: maple
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -uroot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+    env:
+      MAPLE_MYSQL_HOST: 127.0.0.1
+      MAPLE_MYSQL_PORT: "3306"
+      MAPLE_MYSQL_DATABASE: maple
+      MAPLE_MYSQL_USER: root
+      MAPLE_MYSQL_PASSWORD: ""
+      MAPLE_MYSQL_HELPER_TIMEOUT_MS: "30000"
+      MAPLE_VOLCENGINE_CREDENTIAL_VALIDATION: "off"
+      MAPLE_ALIYUN_CREDENTIAL_VALIDATION: "off"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -62,6 +84,8 @@ jobs:
           bun-version: 1.3.14
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
       - run: bun run ci:contracts
       - uses: actions/upload-artifact@v4
         if: always()

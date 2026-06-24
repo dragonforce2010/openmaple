@@ -222,7 +222,7 @@ export function AppFrame(props: Record<string, any>) {
         )}
 
         {view === "agents" && <AgentsView agents={agents} loading={resourceLoading} openSession={() => { setSessionAgentLock(""); setModal("session"); }} openCreate={() => setModal("agent_create")} />}
-        {view === "deployments" && <DeploymentsView deployments={deployments} agents={agents} environments={environments} selectedWorkspaceId={selectedWorkspaceId} refresh={refresh} goView={goView} loading={resourceLoading} />}
+        {view === "deployments" && <DeploymentsView deployments={deployments} agents={agents} environments={environments} memoryStores={memoryStores} selectedWorkspaceId={selectedWorkspaceId} refresh={refresh} goView={goView} loading={resourceLoading} />}
         {view === "environments" && <EnvironmentsView environments={environments} loading={resourceLoading} openCreate={() => setModal("environment")} />}
         {view === "vaults" && (
           <VaultsView
@@ -282,7 +282,7 @@ export function AppFrame(props: Record<string, any>) {
           />
         )}
         {view === "docs" && <DocumentationView />}
-        {view === "memory" && <MemoryView memoryStores={memoryStores} seedMemory={seedMemory} loading={resourceLoading} />}
+        {view === "memory" && <MemoryView memoryStores={memoryStores} workspaceId={selectedWorkspaceId} onChanged={() => refresh(selectedWorkspaceId)} loading={resourceLoading} />}
         {view === "users" && canAdminWorkspace && <UsersView currentUser={currentUser} users={users} providers={authProviders} onRemoveUser={removeWorkspaceUser} scope="workspace" loading={resourceLoading} />}
         {view === "skills" && <SkillsView />}
         {view === "usage" && <UsageView />}
@@ -322,6 +322,7 @@ export function AppFrame(props: Record<string, any>) {
           agents={agents}
           environments={environments}
           vaults={vaults}
+          memoryStores={memoryStores}
           workspaceId={selectedWorkspaceId}
           sandboxProvider={selectedWorkspace?.sandbox_provider}
           lockedAgentId={sessionAgentLock || undefined}

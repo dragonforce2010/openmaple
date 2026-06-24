@@ -544,8 +544,11 @@ def ensure_upstream(clients: dict[str, Any], gateway_id: str, name: str, functio
     existing = find_upstream(clients, gateway_id, name, function_id=function_id)
     if existing:
         return str(existing["id"])
-    sdk = clients["apig_api"].sdk
-    response = clients["apig_api"].client.create_upstream(
+    apig_api = clients["apig_api"]
+    if hasattr(apig_api, "create_vefaas_upstream"):
+        return str(apig_api.create_vefaas_upstream(gateway_id, name, function_id))
+    sdk = apig_api.sdk
+    response = apig_api.client.create_upstream(
         sdk.CreateUpstreamRequest(
             gateway_id=gateway_id,
             name=name,

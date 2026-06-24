@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { memoryStoreIdsFromResources, resourcesWithNormalizedMemoryStores, responseStatusForMemoryError } from "../memory/memoryResources";
 import { killSessionSandboxRuntime } from "../runtime/runtimeManager";
 import type { AuthenticatedRequest, JsonRecord, SessionEvent } from "./routeDeps";
 import {
@@ -73,10 +74,17 @@ app.post("/v1/sessions", (request: AuthenticatedRequest, response) => {
   if (parsed.data.workspace_id && !canAccessWorkspace(user.id, parsed.data.workspace_id)) {
     return response.status(403).json({ error: "workspace_forbidden" });
   }
+  const workspaceId = fallbackWorkspaceId(user, parsed.data.workspace_id ?? null);
+  let resources: JsonRecord[];
+  try {
+    resources = resourcesWithNormalizedMemoryStores(parsed.data.resources, workspaceId);
+  } catch (error) {
+    return response.status(responseStatusForMemoryError(error)).json({ error: error instanceof Error ? error.message : String(error) });
+  }
   let session;
   try {
     session = createSession({
-      workspace_id: fallbackWorkspaceId(user, parsed.data.workspace_id ?? null),
+      workspace_id: workspaceId,
       agent_id: agentReferenceId(parsed.data.agent),
       environment_id: parsed.data.environment_id,
       title: parsed.data.title,
@@ -84,7 +92,8 @@ app.post("/v1/sessions", (request: AuthenticatedRequest, response) => {
         ...parsed.data.metadata,
         owner_user_id: user.id,
         vault_ids: parsed.data.vault_ids,
-        resources: parsed.data.resources
+        memory_store_ids: memoryStoreIdsFromResources(resources),
+        resources
       }
     });
   } catch (error) {

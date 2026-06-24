@@ -302,6 +302,39 @@ class FakeApigServiceOpenApi:
         raise AssertionError(f"unexpected APIG service action: {action}")
 
 
+class FakeListUpstreamsOpenApi:
+    def __init__(self):
+        self.calls = []
+
+    def post(self, action, body):
+        self.calls.append({"action": action, "body": body})
+        if action == "ListUpstreams":
+            return {"Result": {"Items": []}}
+        raise AssertionError(f"unexpected APIG upstream action: {action}")
+
+
+class FakeCreateUpstreamOpenApi:
+    def __init__(self):
+        self.calls = []
+
+    def post(self, action, body):
+        self.calls.append({"action": action, "body": body})
+        if action == "CreateUpstream":
+            return {"Result": {"Id": "upstream_openapi"}}
+        raise AssertionError(f"unexpected APIG upstream action: {action}")
+
+
+class FakeNoSdkApigApi:
+    def __init__(self, module):
+        self.sdk = None
+        self.client = None
+        self.openapi = FakeCreateUpstreamOpenApi()
+        self._module = module
+
+    def create_vefaas_upstream(self, gateway_id, name, function_id):
+        return self._module.VolcengineApigApi.create_vefaas_upstream(self, gateway_id, name, function_id)
+
+
 class FakeSdk:
     class TlsConfigForCreateFunctionInput:
         def __init__(self, **kwargs):
@@ -384,6 +417,34 @@ def test_stable_runtime_rotation_waits_for_ready_instance():
 
     assert len(release.calls) == 2
     assert release.calls[-1] == {"action": "ListFunctionInstances", "body": {"FunctionId": "fn_contract"}}
+
+
+def test_stable_upstream_creation_uses_openapi_fallback_without_apig_sdk():
+    module = load_stable_module()
+    apig_api = FakeNoSdkApigApi(module)
+    list_upstreams = FakeListUpstreamsOpenApi()
+
+    upstream_id = module.ensure_upstream(
+        {"apig_api": apig_api, "apig_2021": list_upstreams},
+        "gw_contract",
+        "maple-frontend-us",
+        "fn_contract",
+    )
+
+    assert upstream_id == "upstream_openapi"
+    assert list_upstreams.calls == [{"action": "ListUpstreams", "body": {"GatewayId": "gw_contract", "PageNumber": 1, "PageSize": 50}}]
+    assert apig_api.openapi.calls == [
+        {
+            "action": "CreateUpstream",
+            "body": {
+                "GatewayId": "gw_contract",
+                "Name": "maple-frontend-us",
+                "Protocol": "HTTP",
+                "SourceType": "VeFaas",
+                "UpstreamSpec": {"VeFaas": {"FunctionId": "fn_contract"}},
+            },
+        }
+    ]
 
 
 def test_stable_can_drop_preserved_envs():

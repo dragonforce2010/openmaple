@@ -46,7 +46,7 @@
     "test:workspace-runtime-pool": "bun tests/contracts/workspace_runtime_pool_contract.ts",
     "test:agent-builder": "bun tests/contracts/agent_builder_contract.ts",
     "test:platform-sdk-cli": "bun tests/contracts/platform_sdk_cli_contract.ts",
-    "test:api-storage": "bun tests/contracts/api_storage_contract.ts",
+    "test:api-storage": "MAPLE_OBJECT_STORAGE_FAKE=true bun tests/contracts/api_storage_contract.ts",
     "test:prototype-console": "bun tests/contracts/prototype_console_contract.ts",
     "test:auth-tenant-flow": "bun tests/contracts/auth_tenant_flow_contract.ts",
     "test:maple-ui-interaction": "bun tests/contracts/maple_ui_interaction_contract.ts",

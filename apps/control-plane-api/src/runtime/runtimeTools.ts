@@ -5,13 +5,11 @@ import { promisify } from "node:util";
 import { traceAsync } from "../perfTrace";
 import {
   getSession,
-  listMemories,
-  listMemoryStores,
   updateSessionMetadata,
   updateSessionStatus,
-  upsertMemory
 } from "../store";
 import type { JsonRecord } from "../types";
+import { executeSessionMemoryTool } from "../memory/sessionMemoryTools";
 import { runDockerCommand } from "./dockerRuntime";
 import { readE2BFile, runE2BCommand, syncE2BWorkspaceToHost, writeE2BFile } from "./e2bRuntime";
 import { asRecord, assertSafeWorkspacePath, isSandboxAbsolutePath, safeSandboxReadPath } from "./runtimeCommon";
@@ -101,9 +99,9 @@ async function runToolWithHostWorkspace(session: JsonRecord, name: string, input
     case "grep":
       return grepHostFiles(workspacePath, String(input.pattern || ""), String(input.path || "."));
     case "memory_search":
-      return memorySearch(input);
+      return executeSessionMemoryTool(String(session.id || ""), "memory_search", input);
     case "memory_write":
-      return memoryWrite(input);
+      return executeSessionMemoryTool(String(session.id || ""), "memory_write", input);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -152,9 +150,9 @@ async function runToolWithRuntime(session: JsonRecord, runtime: RuntimeInfo, nam
     case "grep":
       return grep(String(session.workspace_path), runtime, String(input.pattern || ""), String(input.path || "."), sessionId);
     case "memory_search":
-      return memorySearch(input);
+      return executeSessionMemoryTool(sessionId, "memory_search", input);
     case "memory_write":
-      return memoryWrite(input);
+      return executeSessionMemoryTool(sessionId, "memory_write", input);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -326,29 +324,4 @@ async function collectHostFiles(root: string, workspacePath: string, maxDepth: n
     }
   }
   return files;
-}
-
-async function memorySearch(input: JsonRecord) {
-  const query = String(input.query || "").toLowerCase();
-  const storeId = input.memory_store_id ? String(input.memory_store_id) : undefined;
-  const stores = (storeId ? listMemoryStores().filter((store) => String((store as JsonRecord).id) === storeId) : listMemoryStores()) as JsonRecord[];
-  const results = stores.flatMap((store) =>
-    listMemories(String(store.id), query).map((memory) => ({
-      memory_store_id: store.id,
-      memory_store_name: store.name,
-      path: memory.path,
-      preview: String(memory.content).slice(0, 1000)
-    }))
-  );
-  return { query, results: results.slice(0, 20) };
-}
-
-async function memoryWrite(input: JsonRecord) {
-  const memoryStoreId = String(input.memory_store_id || "");
-  const path = String(input.path || "");
-  const content = String(input.content || "");
-  if (!memoryStoreId) throw new Error("Missing memory_store_id");
-  if (!path) throw new Error("Missing path");
-  const memory = upsertMemory({ memory_store_id: memoryStoreId, path, content, actor: "agent" });
-  return { memory_store_id: memoryStoreId, path, memory_id: memory?.id };
 }
