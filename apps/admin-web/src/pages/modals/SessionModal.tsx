@@ -83,7 +83,7 @@ export function SessionModal(props: { agents: Agent[]; environments: Environment
   }
 
   return (
-    <ModalShell title={L("新建 Session", "Create session")} onClose={props.onClose}>
+    <ModalShell title={L("新建 Session", "Create session")} onClose={props.onClose} wide>
       <p className="modal-sub">{locked ? L("为该 Agent 启动一个运行实例。", "Spin up a run of this agent.") : L("配置并启动一个 Agent 运行实例。", "Set up an instance of your agent in its environment.")}</p>
       {error ? <div className="modal-note"><Icon name="i-alert" size={16} /> {error}</div> : null}
       <label className="form">{L("标题", "Title")}<input className="fld" placeholder={L("可选 – 命名本次运行", "Optional – name this run")} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
