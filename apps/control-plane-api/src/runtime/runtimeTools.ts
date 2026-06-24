@@ -41,6 +41,9 @@ export async function executeTool(sessionId: string, name: string, input: JsonRe
   return traceAsync("runtime.tool", { session_id: sessionId, tool: name }, async () => {
     const session = getSession(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
+    if (name === "memory_search" || name === "memory_write") {
+      return executeSessionMemoryTool(sessionId, name, input);
+    }
     let runtime: RuntimeInfo;
     try {
       runtime = await ensureSessionSandboxRuntime(sessionId);

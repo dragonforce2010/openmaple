@@ -211,9 +211,16 @@ try {
   });
 
   const { executeSessionMemoryTool } = await import("../../apps/control-plane-api/src/memory/sessionMemoryTools");
+  const { runRuntimeToolCall } = await import("../../apps/control-plane-api/src/runtime/runner");
   const attachedSearch = await executeSessionMemoryTool(readOnlySessionId, "memory_search", { query: "TDD" });
   assert.equal(attachedSearch.results.length, 1);
   assert.equal(attachedSearch.results[0].memory_store_id, localStoreId);
+  const bridgedSearch = await runRuntimeToolCall(readOnlySessionId, "memory_search", { query: "TDD", memory_store_id: localStoreId });
+  assert.equal(bridgedSearch.ok, true);
+  assert.equal((bridgedSearch.output as { results: unknown[] }).results.length, 1);
+  const bridgedWrite = await runRuntimeToolCall(readOnlySessionId, "memory_write", { memory_store_id: localStoreId, path: "projects/agent.md", content: "blocked" });
+  assert.equal(bridgedWrite.ok, false);
+  assert.match(String((bridgedWrite.output as { error?: unknown }).error || ""), /memory_store_read_only/);
   await assert.rejects(
     () => executeSessionMemoryTool(readOnlySessionId, "memory_write", { memory_store_id: localStoreId, path: "projects/agent.md", content: "blocked" }),
     /memory_store_read_only/
