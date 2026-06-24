@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "./config/i18n";
 
 /* ============================================================
@@ -317,7 +318,7 @@ function useEscClose(onClose: () => void) {
 
 export function DrawerLayer({ onClose, className, children }: { onClose: () => void; className?: string; children: React.ReactNode }) {
   useEscClose(onClose);
-  return (
+  return overlayPortal(
     <div className={`drawer-layer open${className ? ` ${className}` : ""}`}>
       <div className="scrim" onClick={onClose} />
       {children}
@@ -327,10 +328,15 @@ export function DrawerLayer({ onClose, className, children }: { onClose: () => v
 
 export function ModalLayer({ onClose, className, children }: { onClose: () => void; className?: string; children: React.ReactNode }) {
   useEscClose(onClose);
-  return (
+  return overlayPortal(
     <div className={`modal-layer open${className ? ` ${className}` : ""}`}>
       <div className="scrim" onClick={onClose} />
       {children}
     </div>
   );
+}
+
+function overlayPortal(children: React.ReactNode) {
+  if (typeof document === "undefined") return children;
+  return createPortal(children, document.body);
 }
